@@ -2,7 +2,7 @@ import { readable } from 'svelte/store'
 import { fetchPrices } from './utils'
 
 /**
- * Shared price store that polls the prices API every 2.5 seconds.
+ * Shared price store that polls the prices API every 10 seconds.
  */
 export const priceStore = readable<Record<string, string>>({}, (set) => {
   let stopped = false
@@ -17,7 +17,7 @@ export const priceStore = readable<Record<string, string>>({}, (set) => {
   }
 
   refresh()
-  const interval = setInterval(refresh, 2500)
+  const interval = setInterval(refresh, 10000)
 
   return () => {
     stopped = true
