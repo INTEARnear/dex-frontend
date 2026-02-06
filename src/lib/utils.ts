@@ -47,17 +47,39 @@ export function humanReadableToRawAmount(
   amountHumanReadable: string | number,
   decimals: number,
 ): string {
-  const num = parseFloat(String(amountHumanReadable));
-  if (isNaN(num) || num <= 0) return "0";
+  let str = String(amountHumanReadable).trim();
 
-  const fixedStr = num.toFixed(decimals);
-  const [intPart, decPart = ""] = fixedStr.split(".");
+  // Reject negative values
+  if (str.startsWith("-")) return "0";
 
-  const cleanInt = intPart.replace(/^0+/, "") || "0";
-  const cleanDec = decPart.slice(0, decimals).padEnd(decimals, "0");
+  // Strip leading plus if present
+  if (str.startsWith("+")) str = str.slice(1);
 
-  const multiplier = BigInt(10) ** BigInt(decimals);
-  return (BigInt(cleanInt) * multiplier + BigInt(cleanDec)).toString();
+  // Validate: only digits and at most one decimal point
+  if (!/^\d*\.?\d*$/.test(str) || str === "" || str === ".") return "0";
+
+  const dotIndex = str.indexOf(".");
+  let intPart: string;
+  let decPart: string;
+
+  if (dotIndex === -1) {
+    intPart = str;
+    decPart = "";
+  } else {
+    intPart = str.slice(0, dotIndex);
+    decPart = str.slice(dotIndex + 1);
+  }
+
+  // Handle empty integer part (e.g. ".5")
+  if (!intPart) intPart = "0";
+
+  // Truncate or pad fractional part to exactly `decimals` digits
+  const paddedDec = decPart.slice(0, decimals).padEnd(decimals, "0");
+
+  // Concatenate integer + padded fractional → raw amount
+  const raw = (intPart + paddedDec).replace(/^0+/, "") || "0";
+
+  return raw;
 }
 
 /**

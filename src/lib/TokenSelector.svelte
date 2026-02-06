@@ -8,9 +8,9 @@
     formatTokenAmount,
     formatCompact,
     formatCompactBalance,
-    fetchPrices,
     PRICES_API,
   } from "./utils";
+  import { priceStore } from "./priceStore";
 
   interface Props {
     isOpen: boolean;
@@ -24,31 +24,14 @@
   let loadingIcons = $state<Set<string>>(new Set());
   let searchResults = $state<Token[]>([]);
   let isSearching = $state(false);
-  let pricesCache = $state<Record<string, string>>({});
+  let searchAbortController: AbortController | null = null;
+  const pricesCache = $derived($priceStore);
 
   $effect(() => {
     if (isOpen && $tokenStore.tokens.length === 0 && !$tokenStore.isLoading) {
       const accountId = $walletStore.accountId;
       tokenStore.fetchTokens(accountId ?? undefined);
     }
-  });
-
-  // Silently refresh prices every second when modal is open
-  $effect(() => {
-    if (!isOpen) return;
-
-    const refreshPrices = async () => {
-      try {
-        pricesCache = await fetchPrices();
-      } catch (error) {
-        // Silently ignore
-      }
-    };
-
-    refreshPrices();
-    const interval = setInterval(refreshPrices, 1000);
-
-    return () => clearInterval(interval);
   });
 
   // Preload icons from tokens with balances
@@ -142,13 +125,20 @@
   });
 
   async function performSearch(query: string) {
+    searchAbortController?.abort();
+    const controller = new AbortController();
+    searchAbortController = controller;
+
     isSearching = true;
     try {
       const response = await fetch(
         `${PRICES_API}/token-search?q=${encodeURIComponent(query)}&n=100`,
+        { signal: controller.signal },
       );
+      if (controller.signal.aborted) return;
       if (response.ok) {
         let results: Token[] = await response.json();
+        if (controller.signal.aborted) return;
 
         // If query matches "NEAR" partially, put NEAR token at top
         if (
@@ -169,10 +159,13 @@
         searchResults = results;
       }
     } catch (error) {
+      if (controller.signal.aborted) return;
       console.error("Search failed:", error);
       searchResults = [];
     } finally {
-      isSearching = false;
+      if (!controller.signal.aborted) {
+        isSearching = false;
+      }
     }
   }
 

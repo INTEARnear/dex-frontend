@@ -7,6 +7,7 @@
   import type { Token } from "./types";
   import { NEAR_TOKEN, tokenStore } from "./tokenStore";
   import { userBalances } from "./balanceStore";
+  import { priceStore } from "./priceStore";
   import {
     formatTokenAmount,
     humanReadableToRawAmount,
@@ -14,7 +15,6 @@
     formatBalance,
     formatUsdValue,
     getTokenIcon,
-    fetchPrices,
     PRICES_API,
     ROUTER_API,
   } from "./utils";
@@ -98,6 +98,7 @@
 
   let currentRoute = $state<Route | null>(null);
   let isFetchingRoute = $state(false);
+  let routeAbortController: AbortController | null = null;
   let quoteRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
   type SwapMode = "exactIn" | "exactOut";
@@ -216,34 +217,23 @@
       : null;
   });
 
-  // Refresh prices every second
+  // Update token prices
   $effect(() => {
-    const refreshPrices = async () => {
-      try {
-        const prices = await fetchPrices();
+    const prices = $priceStore;
 
-        if (inputToken && prices[inputToken.account_id]) {
-          const newPrice = prices[inputToken.account_id];
-          if (inputToken.price_usd !== newPrice) {
-            inputToken = { ...inputToken, price_usd: newPrice };
-          }
-        }
-
-        if (outputToken && prices[outputToken.account_id]) {
-          const newPrice = prices[outputToken.account_id];
-          if (outputToken.price_usd !== newPrice) {
-            outputToken = { ...outputToken, price_usd: newPrice };
-          }
-        }
-      } catch (error) {
-        // Silently ignore price refresh errors
+    if (inputToken && prices[inputToken.account_id]) {
+      const newPrice = prices[inputToken.account_id];
+      if (inputToken.price_usd !== newPrice) {
+        inputToken = { ...inputToken, price_usd: newPrice };
       }
-    };
+    }
 
-    refreshPrices();
-
-    const interval = setInterval(refreshPrices, 2500);
-    return () => clearInterval(interval);
+    if (outputToken && prices[outputToken.account_id]) {
+      const newPrice = prices[outputToken.account_id];
+      if (outputToken.price_usd !== newPrice) {
+        outputToken = { ...outputToken, price_usd: newPrice };
+      }
+    }
   });
 
   const hasInsufficientBalance = $derived.by(() => {
@@ -279,6 +269,10 @@
   }
 
   async function fetchRoute() {
+    routeAbortController?.abort();
+    const controller = new AbortController();
+    routeAbortController = controller;
+
     if (!inputToken || !outputToken) {
       currentRoute = null;
       return;
@@ -347,7 +341,11 @@
         // No public key is available (and it's not needed for DEXes other than Near Intents which is disabled)
       }
 
-      const response = await fetch(`${ROUTER_API}/route?${params}`);
+      const response = await fetch(`${ROUTER_API}/route?${params}`, {
+        signal: controller.signal,
+      });
+
+      if (controller.signal.aborted) return;
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -355,6 +353,7 @@
       }
 
       const routes: Route[] = await response.json();
+      if (controller.signal.aborted) return;
       console.log("Routes:", routes);
 
       // Filter routes to only include those with NearTransaction steps (Near Intents is not supported)
@@ -394,6 +393,7 @@
         }
       }
     } catch (error) {
+      if (controller.signal.aborted) return;
       console.error("Failed to fetch quote:", error);
       currentRoute = null;
       if (swapMode === "exactIn") {
@@ -402,7 +402,9 @@
         inputAmountHumanReadable = "";
       }
     } finally {
-      isFetchingRoute = false;
+      if (!controller.signal.aborted) {
+        isFetchingRoute = false;
+      }
     }
   }
 

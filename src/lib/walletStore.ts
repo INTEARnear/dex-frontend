@@ -18,6 +18,14 @@ function createWalletStore() {
   const connector = new NearConnector()
 
   connector.on('wallet:signIn', async (event) => {
+    if (!event.accounts || event.accounts.length === 0) {
+      set({
+        isConnected: false,
+        accountId: null,
+        wallet: null,
+      })
+      return
+    }
     const wallet = await connector.wallet()
     update(() => ({
       isConnected: true,
