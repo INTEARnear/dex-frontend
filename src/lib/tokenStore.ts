@@ -74,6 +74,8 @@ function createTokenStore() {
         NEAR_TOKEN.volume_usd_24h = wrapNear.volume_usd_24h
         NEAR_TOKEN.total_supply = wrapNear.total_supply
         NEAR_TOKEN.circulating_supply = wrapNear.circulating_supply
+        NEAR_TOKEN.price_usd_raw = wrapNear.price_usd_raw
+        NEAR_TOKEN.price_usd_raw_24h_ago = wrapNear.price_usd_raw_24h_ago
       }
 
       const balanceMap = new Map<string, { balance: string, balanceUsd: number, icon: string | null }>()

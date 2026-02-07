@@ -11,6 +11,7 @@
     PRICES_API,
   } from "./utils";
   import { priceStore } from "./priceStore";
+  import { fade, fly } from "svelte/transition";
 
   interface Props {
     isOpen: boolean;
@@ -26,11 +27,45 @@
   let isSearching = $state(false);
   let searchAbortController: AbortController | null = null;
   const pricesCache = $derived($priceStore);
+  let hoveredToken = $state<Token | null>(null);
+  let tooltipX = $state(0);
+  let tooltipY = $state(0);
+  let mobileTooltipToken = $state<Token | null>(null);
+  let isMobile = $state(false);
+  let hoverSuppressUntil = $state(0);
+  let longPressTimer: number | null = null;
+  let longPressActive = $state(false);
+  let touchStartX = 0;
+  let touchStartY = 0;
 
   $effect(() => {
     if (isOpen && $tokenStore.tokens.length === 0 && !$tokenStore.isLoading) {
       const accountId = $walletStore.accountId;
       tokenStore.fetchTokens(accountId ?? undefined);
+    }
+  });
+
+  $effect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 640px)");
+    const update = () => {
+      isMobile = mediaQuery.matches;
+      if (!isMobile) {
+        mobileTooltipToken = null;
+        longPressActive = false;
+      }
+    };
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  });
+
+  $effect(() => {
+    if (!isOpen) {
+      hoveredToken = null;
+      return;
+    }
+    if (navigator.maxTouchPoints > 0) {
+      hoverSuppressUntil = Date.now() + 500;
     }
   });
 
@@ -226,20 +261,6 @@
     return `$${formatAmount(num)}`;
   }
 
-  function formatMarketCap(token: Token): string {
-    const supply =
-      parseFloat(token.circulating_supply) /
-      Math.pow(10, token.metadata.decimals);
-    const price = parseFloat(getTokenPrice(token));
-    const marketCap = supply * price;
-
-    if (marketCap < 1000) return `$${formatCompact(marketCap)}`;
-    if (marketCap < 1000000) return `$${formatCompact(marketCap / 1000)}K`;
-    if (marketCap < 1000000000)
-      return `$${formatCompact(marketCap / 1000000)}M`;
-    return `$${formatCompact(marketCap / 1000000000)}B`;
-  }
-
   function getTokenIcon(tokenId: string): string | null {
     return tokenIcons[tokenId] ?? null;
   }
@@ -265,6 +286,162 @@
       (token as any).userBalance ?? $userBalances[token.account_id];
     return formatCompactBalance(rawBalance, token.metadata.decimals);
   }
+
+  function formatDollarBalance(token: Token): string | null {
+    const rawBalance =
+      (token as any).userBalance ?? $userBalances[token.account_id];
+    if (rawBalance === undefined || rawBalance === null) return null;
+
+    const decimals = token.metadata.decimals;
+    const amount = Number(rawBalance) / Math.pow(10, decimals);
+    const price = parseFloat(getTokenPrice(token));
+    const usdValue = amount * (Number.isFinite(price) ? price : 0);
+
+    if (!Number.isFinite(usdValue) || usdValue <= 0) return "$0.00";
+    return `$${formatAmount(usdValue)}`;
+  }
+
+  function formatUsdCompact(value: number): string {
+    if (!Number.isFinite(value)) return "N/A";
+    if (value < 0) return "$0.00";
+    if (value < 1000) return `$${formatCompact(value)}`;
+    if (value < 1e6) return `$${formatCompact(value / 1e3)}K`;
+    if (value < 1e9) return `$${formatCompact(value / 1e6)}M`;
+    if (value < 1e12) return `$${formatCompact(value / 1e9)}B`;
+    return `$${formatCompact(value / 1e12)}T`;
+  }
+
+  function getCirculatingSupply(token: Token): number {
+    const supply = parseFloat(token.circulating_supply);
+    if (!Number.isFinite(supply)) return 0;
+    return supply / Math.pow(10, token.metadata.decimals);
+  }
+
+  function getTotalSupply(token: Token): number {
+    const supply = parseFloat(token.total_supply);
+    if (!Number.isFinite(supply)) return 0;
+    return supply / Math.pow(10, token.metadata.decimals);
+  }
+
+  function formatMarketCap(token: Token): string {
+    const marketCap =
+      getCirculatingSupply(token) * parseFloat(getTokenPrice(token));
+    return formatUsdCompact(marketCap);
+  }
+
+  function formatFdv(token: Token): string {
+    const fdv = getTotalSupply(token) * parseFloat(getTokenPrice(token));
+    return formatUsdCompact(fdv);
+  }
+
+  function formatPriceChange24h(token: Token): string {
+    const current = parseFloat(token.price_usd_raw);
+    const previous = parseFloat(token.price_usd_raw_24h_ago ?? "0");
+    if (
+      !Number.isFinite(current) ||
+      !Number.isFinite(previous) ||
+      previous <= 0
+    ) {
+      return "N/A";
+    }
+    const diff = current - previous;
+    const percent = (diff / previous) * 100;
+    const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
+    return `${sign}${formatCompact(Math.abs(percent))}%`;
+  }
+
+  function getPriceChange24hDirection(token: Token): "up" | "down" | "flat" {
+    const current = parseFloat(token.price_usd_raw);
+    const previous = parseFloat(token.price_usd_raw_24h_ago ?? "0");
+    if (
+      !Number.isFinite(current) ||
+      !Number.isFinite(previous) ||
+      previous <= 0
+    ) {
+      return "flat";
+    }
+    if (current > previous) return "up";
+    if (current < previous) return "down";
+    return "flat";
+  }
+
+  function getLiquiditySeverity(token: Token): "low" | "medium" | "normal" {
+    const liquidity = token.liquidity_usd;
+    if (!Number.isFinite(liquidity)) return "normal";
+    if (liquidity < 500) return "low";
+    if (liquidity < 5000) return "medium";
+    return "normal";
+  }
+
+  function getVolumeSeverity(token: Token): "low" | "normal" {
+    const volume = token.volume_usd_24h;
+    if (!Number.isFinite(volume)) return "normal";
+    return volume < 500 ? "low" : "normal";
+  }
+
+  function handleTooltipMove(event: MouseEvent, token: Token) {
+    if (Date.now() < hoverSuppressUntil) return;
+    hoveredToken = token;
+    tooltipX = event.clientX + 12;
+    tooltipY = event.clientY + 12;
+  }
+
+  function handleTooltipLeave() {
+    hoveredToken = null;
+  }
+
+  function handleTokenClick(token: Token) {
+    if (longPressActive || mobileTooltipToken) {
+      longPressActive = false;
+      return;
+    }
+    handleSelectToken(token);
+  }
+
+  function handleTokenTouchStart(event: TouchEvent, token: Token) {
+    if (!isMobile) return;
+    event.preventDefault();
+    longPressActive = false;
+    const touch = event.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+    if (longPressTimer) window.clearTimeout(longPressTimer);
+    longPressTimer = window.setTimeout(() => {
+      hoveredToken = null;
+      mobileTooltipToken = token;
+      longPressActive = true;
+    }, 450);
+  }
+
+  function handleTokenTouchMove(event: TouchEvent) {
+    if (!isMobile) return;
+    if (!longPressTimer) return;
+    event.preventDefault();
+    const touch = event.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartX);
+    const deltaY = Math.abs(touch.clientY - touchStartY);
+    if (deltaX > 10 || deltaY > 10) {
+      window.clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
+
+  function handleTokenTouchEnd() {
+    if (!isMobile) return;
+    if (longPressTimer) window.clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+
+  function handleModalClick(event: MouseEvent) {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest(".token-tooltip")) return;
+    hoveredToken = null;
+  }
+
+  function closeMobileTooltip() {
+    mobileTooltipToken = null;
+    longPressActive = false;
+  }
 </script>
 
 {#if isOpen}
@@ -280,7 +457,10 @@
       aria-modal="true"
       aria-labelledby="modal-title"
       tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
+      onclick={(e) => {
+        e.stopPropagation();
+        handleModalClick(e);
+      }}
       onkeydown={(e) => e.stopPropagation()}
     >
       <div class="modal-header">
@@ -340,7 +520,15 @@
               class="token-item"
               data-token-id={token.account_id}
               use:observeToken
-              onclick={() => handleSelectToken(token)}
+              onclick={() => handleTokenClick(token)}
+              onmouseenter={(event) => handleTooltipMove(event, token)}
+              onmousemove={(event) => handleTooltipMove(event, token)}
+              onmouseleave={handleTooltipLeave}
+              ontouchstart={(event) => handleTokenTouchStart(event, token)}
+              ontouchmove={handleTokenTouchMove}
+              ontouchend={handleTokenTouchEnd}
+              ontouchcancel={handleTokenTouchEnd}
+              oncontextmenu={(event) => event.preventDefault()}
             >
               <div class="token-left">
                 <div class="token-icon-wrapper">
@@ -366,12 +554,154 @@
                 {#if formatBalance(token)}
                   <div class="token-balance-main">{formatBalance(token)}</div>
                 {/if}
-                <div class="token-mcap">Mcap: {formatMarketCap(token)}</div>
+                {#if formatDollarBalance(token)}
+                  <div class="token-balance-secondary">
+                    Balance: {formatDollarBalance(token)}
+                  </div>
+                {/if}
               </div>
             </button>
           {/each}
         {/if}
       </div>
+      {#if hoveredToken && !isMobile}
+        <div
+          class="token-tooltip token-tooltip-floating"
+          role="tooltip"
+          style={`left: ${tooltipX}px; top: ${tooltipY}px;`}
+        >
+          <div class="tooltip-row">
+            <span>Market cap</span>
+            <span>{formatMarketCap(hoveredToken)}</span>
+          </div>
+          <div class="tooltip-row">
+            <span>FDV</span>
+            <span>{formatFdv(hoveredToken)}</span>
+          </div>
+          <div class="tooltip-row">
+            <span>Liquidity</span>
+            <span
+              class:tooltip-low={getLiquiditySeverity(hoveredToken) === "low"}
+              class:tooltip-medium={getLiquiditySeverity(hoveredToken) ===
+                "medium"}
+            >
+              {formatUsdCompact(hoveredToken.liquidity_usd)}
+            </span>
+          </div>
+          <div class="tooltip-row">
+            <span>24h volume</span>
+            <span
+              class:tooltip-medium={getVolumeSeverity(hoveredToken) === "low"}
+            >
+              {formatUsdCompact(hoveredToken.volume_usd_24h)}
+            </span>
+          </div>
+          <div class="tooltip-row">
+            <span>24h price</span>
+            <span
+              class:tooltip-up={getPriceChange24hDirection(hoveredToken) ===
+                "up"}
+              class:tooltip-down={getPriceChange24hDirection(hoveredToken) ===
+                "down"}
+            >
+              {formatPriceChange24h(hoveredToken)}
+            </span>
+          </div>
+        </div>
+      {/if}
+      {#if mobileTooltipToken}
+        <div
+          class="mobile-tooltip-backdrop"
+          role="button"
+          tabindex="0"
+          onclick={closeMobileTooltip}
+          onkeydown={(e) => {
+            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+              closeMobileTooltip();
+            }
+          }}
+          transition:fade={{ duration: 180 }}
+        >
+          <div
+            class="mobile-tooltip-sheet"
+            role="dialog"
+            aria-modal="true"
+            tabindex="0"
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={(e) => e.stopPropagation()}
+            transition:fly={{ y: 24, duration: 220 }}
+          >
+            <div class="mobile-tooltip-header">
+              <div class="mobile-tooltip-title">
+                {mobileTooltipToken.metadata.symbol} stats
+              </div>
+              <button
+                class="mobile-tooltip-close"
+                onclick={closeMobileTooltip}
+                aria-label="Close"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div class="mobile-tooltip-body">
+              <div class="tooltip-row">
+                <span>Market cap</span>
+                <span>{formatMarketCap(mobileTooltipToken)}</span>
+              </div>
+              <div class="tooltip-row">
+                <span>FDV</span>
+                <span>{formatFdv(mobileTooltipToken)}</span>
+              </div>
+              <div class="tooltip-row">
+                <span>Liquidity</span>
+                <span
+                  class:tooltip-low={getLiquiditySeverity(
+                    mobileTooltipToken,
+                  ) === "low"}
+                  class:tooltip-medium={getLiquiditySeverity(
+                    mobileTooltipToken,
+                  ) === "medium"}
+                >
+                  {formatUsdCompact(mobileTooltipToken.liquidity_usd)}
+                </span>
+              </div>
+              <div class="tooltip-row">
+                <span>24h volume</span>
+                <span
+                  class:tooltip-medium={getVolumeSeverity(
+                    mobileTooltipToken,
+                  ) === "low"}
+                >
+                  {formatUsdCompact(mobileTooltipToken.volume_usd_24h)}
+                </span>
+              </div>
+              <div class="tooltip-row">
+                <span>24h price</span>
+                <span
+                  class:tooltip-up={getPriceChange24hDirection(
+                    mobileTooltipToken,
+                  ) === "up"}
+                  class:tooltip-down={getPriceChange24hDirection(
+                    mobileTooltipToken,
+                  ) === "down"}
+                >
+                  {formatPriceChange24h(mobileTooltipToken)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -481,6 +811,9 @@
     border-radius: 0.75rem;
     cursor: pointer;
     transition: background 0.2s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
   }
 
   .token-item:hover {
@@ -612,9 +945,104 @@
     font-family: "JetBrains Mono", monospace;
   }
 
-  .token-mcap {
+  .token-balance-secondary {
     font-size: 0.75rem;
     color: var(--text-muted);
+  }
+
+  .token-tooltip {
+    position: fixed;
+    min-width: 220px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    z-index: 1100;
+  }
+
+  .tooltip-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  .tooltip-up {
+    color: var(--success, #22c55e);
+  }
+
+  .tooltip-down {
+    color: var(--error, #ef4444);
+  }
+
+  .tooltip-medium {
+    color: var(--warning, #eab308);
+  }
+
+  .tooltip-low {
+    color: var(--error, #ef4444);
+  }
+
+  .tooltip-row + .tooltip-row {
+    margin-top: 0.5rem;
+  }
+
+  .mobile-tooltip-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1101;
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .mobile-tooltip-sheet {
+    width: 100%;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    border-radius: 1rem 1rem 0 0;
+    padding: 1rem 1.25rem 1.5rem;
+    box-shadow: 0 -12px 20px -8px rgba(0, 0, 0, 0.5);
+  }
+
+  .mobile-tooltip-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .mobile-tooltip-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .mobile-tooltip-close {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .mobile-tooltip-close:hover {
+    background: var(--bg-input);
+    color: var(--text-primary);
+  }
+
+  .mobile-tooltip-body .tooltip-row {
+    font-size: 0.9rem;
   }
 
   .loading,

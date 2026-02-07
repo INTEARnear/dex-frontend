@@ -12,19 +12,27 @@ export function formatAmount(num: number): string {
   if (num < 1e-6) return "<0.000001";
 
   const absNum = Math.abs(num);
+  const sign = num < 0 ? "-" : "";
+
+  const addThousandsSeparators = (value: string): string => {
+    const [intPart, decPart] = value.split(".");
+    const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return decPart ? `${withCommas}.${decPart}` : withCommas;
+  };
 
   if (absNum >= 1) {
     const wholePart = Math.floor(absNum);
     const wholeDigits = wholePart.toString().length;
 
     if (wholeDigits >= 6) {
-      return num.toFixed(0);
+      return sign + addThousandsSeparators(absNum.toFixed(0));
     }
 
     const decimalsForSigFigs = Math.max(0, 6 - wholeDigits);
     const decimals = Math.min(decimalsForSigFigs, 8);
 
-    return num.toFixed(decimals).replace(/\.?0+$/, "");
+    const formatted = absNum.toFixed(decimals).replace(/\.?0+$/, "");
+    return sign + addThousandsSeparators(formatted);
   }
 
   let decimals = 0;
@@ -37,7 +45,8 @@ export function formatAmount(num: number): string {
 
   const totalDecimals = Math.min(decimals + 6, 8);
 
-  return num.toFixed(totalDecimals).replace(/\.?0+$/, "");
+  const formatted = absNum.toFixed(totalDecimals).replace(/\.?0+$/, "");
+  return sign + addThousandsSeparators(formatted);
 }
 
 /**
