@@ -6,7 +6,7 @@
   import type { SlippageMode } from "./SlippageSelector.svelte";
   import type { Token } from "./types";
   import { NEAR_TOKEN, tokenStore } from "./tokenStore";
-  import { userBalances } from "./balanceStore";
+  import { refreshBalances, userBalances } from "./balanceStore";
   import { priceStore } from "./priceStore";
   import {
     formatAmount,
@@ -879,6 +879,7 @@
         });
 
       const outcomes = await wallet.signAndSendTransactions({ transactions });
+      refreshBalances();
 
       console.log("Transaction results:", outcomes);
 
@@ -1464,7 +1465,7 @@
           <polyline points="9 12 11 14 15 10" />
         </svg>
       </div>
-      <h3>Swap Successful</h3>
+      <h3>You Swapped</h3>
       <div class="transfers-list">
         {#each successTransfers as transfer}
           <div

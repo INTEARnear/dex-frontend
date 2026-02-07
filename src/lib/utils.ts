@@ -1,4 +1,4 @@
-import type { Token, UserTokenBalance, UserTokensResponse } from "./types";
+import type { Token, UserTokenBalance } from "./types";
 
 // API base URLs
 export const PRICES_API = "https://prices.intear.tech";

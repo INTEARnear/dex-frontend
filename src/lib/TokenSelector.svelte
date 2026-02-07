@@ -131,8 +131,11 @@
 
     isSearching = true;
     try {
+      const acc = $walletStore.accountId
+        ? `&acc=${$walletStore.accountId}`
+        : "";
       const response = await fetch(
-        `${PRICES_API}/token-search?q=${encodeURIComponent(query)}&n=100`,
+        `${PRICES_API}/token-search?q=${encodeURIComponent(query)}&n=100${acc}`,
         { signal: controller.signal },
       );
       if (controller.signal.aborted) return;
@@ -169,9 +172,18 @@
     }
   }
 
-  const filteredTokens = $derived(
-    searchQuery.trim().length > 0 ? searchResults : $tokenStore.tokens,
-  );
+  const filteredTokens = $derived.by(() => {
+    if (searchQuery.trim().length > 0) {
+      const balances = $userBalances;
+      return searchResults.map((token) => {
+        const balance = balances[token.account_id];
+        return balance !== undefined
+          ? { ...token, userBalance: balance }
+          : token;
+      });
+    }
+    return $tokenStore.tokens;
+  });
 
   function handleSelectToken(token: Token) {
     // Build updated token with latest price and icon
@@ -205,7 +217,6 @@
   }
 
   function getTokenPrice(token: Token): string {
-    // Use cached price if available, otherwise use token's price
     return pricesCache[token.account_id] ?? token.price_usd;
   }
 
@@ -254,7 +265,6 @@
       (token as any).userBalance ?? $userBalances[token.account_id];
     return formatCompactBalance(rawBalance, token.metadata.decimals);
   }
-
 </script>
 
 {#if isOpen}
