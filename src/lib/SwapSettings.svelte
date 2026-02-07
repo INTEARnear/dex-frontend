@@ -382,6 +382,7 @@
       background 0.15s ease;
     flex-shrink: 0;
     border-radius: 0 0.5rem 0.5rem 0;
+    width: 2rem;
   }
 
   .suffix-toggle:hover {
