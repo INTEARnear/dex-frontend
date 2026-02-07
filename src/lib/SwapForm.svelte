@@ -2,8 +2,11 @@
   import { walletStore } from "./walletStore";
   import TokenSelector from "./TokenSelector.svelte";
   import TokenBadge from "./TokenBadge.svelte";
-  import SlippageSelector from "./SlippageSelector.svelte";
-  import type { SlippageMode } from "./SlippageSelector.svelte";
+  import SwapSettings from "./SwapSettings.svelte";
+  import type {
+    SlippageMode,
+    AmountPreset,
+  } from "./SwapSettings.svelte";
   import type { Token } from "./types";
   import { NEAR_TOKEN, tokenStore } from "./tokenStore";
   import { refreshBalances, userBalances } from "./balanceStore";
@@ -69,29 +72,63 @@
   let inputTokenSelectorOpen = $state(false);
   let outputTokenSelectorOpen = $state(false);
 
-  function loadSlippageConfig(): { mode: SlippageMode; value: number } {
+  function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } {
     try {
       const saved = localStorage.getItem("intear-dex-slippage");
       if (saved) return JSON.parse(saved);
     } catch {}
     return { mode: "auto", value: 0 };
   }
-  const initialSlippage = loadSlippageConfig();
-  let slippageMode = $state<SlippageMode>(initialSlippage.mode);
-  let slippageValue = $state(initialSlippage.value);
-  let slippageSettingsOpen = $state(false);
+  const initialSwapSettings = loadSwapSettingsConfig();
+  let swapSlippageMode = $state<SlippageMode>(initialSwapSettings.mode);
+  let swapSlippageValue = $state(initialSwapSettings.value);
+  let swapSettingsOpen = $state(false);
 
-  const slippageDisplay = $derived(
-    slippageMode === "auto" ? "Auto" : `${slippageValue}%`,
+  const swapSettingsDisplay = $derived(
+    swapSlippageMode === "auto" ? "Auto" : `${swapSlippageValue}%`,
   );
 
   function handleSlippageChange(mode: SlippageMode, value: number) {
-    slippageMode = mode;
-    slippageValue = value;
+    swapSlippageMode = mode;
+    swapSlippageValue = value;
     try {
       localStorage.setItem(
         "intear-dex-slippage",
         JSON.stringify({ mode, value }),
+      );
+    } catch {}
+  }
+
+  const DEFAULT_AMOUNT_PRESETS: AmountPreset[] = [
+    { type: "percent", value: 10 },
+    { type: "percent", value: 25 },
+    { type: "percent", value: 50 },
+    { type: "percent", value: 80 },
+    { type: "dollar", value: 10 },
+    { type: "dollar", value: 100 },
+  ];
+
+  function loadPresetsConfig(): {
+    visible: boolean;
+    presets: AmountPreset[];
+  } {
+    try {
+      const saved = localStorage.getItem("intear-dex-amount-presets");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { visible: true, presets: DEFAULT_AMOUNT_PRESETS };
+  }
+  const initialPresets = loadPresetsConfig();
+  let presetsVisible = $state(initialPresets.visible);
+  let amountPresets = $state<AmountPreset[]>(initialPresets.presets);
+
+  function handlePresetsChange(visible: boolean, presets: AmountPreset[]) {
+    presetsVisible = visible;
+    amountPresets = presets;
+    try {
+      localStorage.setItem(
+        "intear-dex-amount-presets",
+        JSON.stringify({ visible, presets }),
       );
     } catch {}
   }
@@ -312,14 +349,14 @@
         dexes: "Rhea,RheaDcl,Aidols,Wrap,MetaPool,Linear,XRhea,RNear,Plach",
       });
 
-      if (slippageMode === "auto") {
+      if (swapSlippageMode === "auto") {
         // Dynamic slippage from 0% to 10%
         params.set("slippage_type", "Auto");
         params.set("max_slippage", "0.1");
         params.set("min_slippage", "0");
       } else {
         params.set("slippage_type", "Fixed");
-        params.set("slippage", String(slippageValue / 100));
+        params.set("slippage", String(swapSlippageValue / 100));
       }
 
       if (swapMode === "exactIn") {
@@ -413,8 +450,8 @@
     const inToken = inputToken?.account_id;
     const outToken = outputToken?.account_id;
     const mode = swapMode;
-    const _sMode = slippageMode;
-    const _sValue = slippageValue;
+    const _sMode = swapSlippageMode;
+    const _sValue = swapSlippageValue;
 
     // Only read the user-typed amount so that the estimated amount filled in by
     // fetchRoute doesn't re-trigger this effect (avoids double-fetching).
@@ -1005,6 +1042,57 @@
     outputToken = token;
   }
 
+  function getEffectiveBalance(): bigint | null {
+    if (!inputToken || !inputTokenBalance) return null;
+    let balanceRaw = BigInt(inputTokenBalance);
+    if (inputToken.account_id === "near") {
+      const gasReserve = BigInt(
+        humanReadableToRawAmount("0.03", NEAR_TOKEN.metadata.decimals),
+      );
+      balanceRaw = balanceRaw > gasReserve ? balanceRaw - gasReserve : 0n;
+    }
+    return balanceRaw;
+  }
+
+  function computePresetAmount(preset: AmountPreset): string | null {
+    if (!inputToken) return null;
+    if (preset.type === "percent") {
+      const balanceRaw = getEffectiveBalance();
+      if (balanceRaw === null) return null;
+      const scaled = (balanceRaw * BigInt(preset.value)) / 100n;
+      return rawAmountToHumanReadable(
+        scaled.toString(),
+        inputToken.metadata.decimals,
+      );
+    } else {
+      const price = parseFloat(inputToken.price_usd);
+      if (!price || price <= 0) return null;
+      const tokenAmount = preset.value / price;
+      const rawAmount = humanReadableToRawAmount(
+        tokenAmount.toFixed(inputToken.metadata.decimals),
+        inputToken.metadata.decimals,
+      );
+      return rawAmountToHumanReadable(rawAmount, inputToken.metadata.decimals);
+    }
+  }
+
+  function applyPreset(preset: AmountPreset) {
+    const amount = computePresetAmount(preset);
+    if (amount === null) return;
+    inputAmountHumanReadable = amount;
+    swapMode = "exactIn";
+  }
+
+  const activePresetIndex = $derived.by(() => {
+    if (!inputToken || swapMode !== "exactIn") return null;
+    if (!inputAmountHumanReadable) return null;
+    for (let i = 0; i < amountPresets.length; i++) {
+      const expected = computePresetAmount(amountPresets[i]);
+      if (expected !== null && inputAmountHumanReadable === expected) return i;
+    }
+    return null;
+  });
+
   function truncateSymbol(symbol: string): string {
     if (symbol.length >= 8) return symbol.slice(0, 6) + "\u2026";
     return symbol;
@@ -1013,10 +1101,27 @@
 
 <div class="swap-card" class:disabled={!$walletStore.isConnected}>
   <div class="settings-row">
+    {#if presetsVisible && $walletStore.isConnected && inputToken && inputTokenBalance}
+      {@const inputPrice = parseFloat(inputToken.price_usd)}
+      <div class="preset-buttons">
+        {#each amountPresets as preset, i}
+          {#if preset.type === "percent" || inputPrice > 0}
+            <button
+              class="preset-btn"
+              class:active={activePresetIndex === i}
+              onclick={() => applyPreset(preset)}
+              >{preset.type === "dollar"
+                ? `$${preset.value}`
+                : `${preset.value}%`}</button
+            >
+          {/if}
+        {/each}
+      </div>
+    {/if}
     <div class="settings-anchor">
       <button
         class="settings-btn"
-        onclick={() => (slippageSettingsOpen = !slippageSettingsOpen)}
+        onclick={() => (swapSettingsOpen = !swapSettingsOpen)}
       >
         <svg
           width="16"
@@ -1033,28 +1138,31 @@
           />
           <circle cx="12" cy="12" r="3" />
         </svg>
-        <span class="settings-label">{slippageDisplay}</span>
+        <span class="settings-label">{swapSettingsDisplay}</span>
       </button>
 
-      {#if slippageSettingsOpen}
+      {#if swapSettingsOpen}
         <button
-          class="slippage-popup-backdrop"
-          aria-label="Close slippage settings"
-          onclick={() => (slippageSettingsOpen = false)}
+          class="swap-settings-backdrop"
+          aria-label="Close swap settings"
+          onclick={() => (swapSettingsOpen = false)}
         ></button>
         <div
-          class="slippage-popup"
+          class="swap-settings-popup"
           role="dialog"
-          aria-label="Slippage settings"
+          aria-label="Swap settings"
           tabindex="-1"
           onclick={(e) => e.stopPropagation()}
           onkeydown={(e) =>
-            e.key === "Escape" && (slippageSettingsOpen = false)}
+            e.key === "Escape" && (swapSettingsOpen = false)}
         >
-          <SlippageSelector
-            mode={slippageMode}
-            value={slippageValue}
+          <SwapSettings
+            mode={swapSlippageMode}
+            value={swapSlippageValue}
             onchange={handleSlippageChange}
+            presetsVisible={presetsVisible}
+            presets={amountPresets}
+            onPresetsChange={handlePresetsChange}
           />
         </div>
       {/if}
@@ -1516,11 +1624,48 @@
   .settings-row {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     margin-bottom: 0.25rem;
+  }
+
+  .preset-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-right: auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .preset-buttons::-webkit-scrollbar {
+    display: none;
+  }
+
+  .preset-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: "JetBrains Mono", monospace;
+    cursor: pointer;
+    transition: color 0.15s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .preset-btn:hover,
+  .preset-btn.active {
+    color: var(--accent-primary);
   }
 
   .settings-anchor {
     position: relative;
+    flex-shrink: 0;
   }
 
   .settings-btn {
@@ -1548,7 +1693,7 @@
     font-family: "JetBrains Mono", monospace;
   }
 
-  .slippage-popup-backdrop {
+  .swap-settings-backdrop {
     position: fixed;
     inset: 0;
     z-index: 99;
@@ -1561,7 +1706,7 @@
     backdrop-filter: blur(1px);
   }
 
-  .slippage-popup {
+  .swap-settings-popup {
     position: absolute;
     top: calc(100% + 0.5rem);
     right: 0;
@@ -2167,6 +2312,10 @@
 
     .settings-row {
       margin-bottom: 0.125rem;
+    }
+
+    .preset-btn {
+      font-size: 0.75rem;
     }
 
     .swap-fields {
