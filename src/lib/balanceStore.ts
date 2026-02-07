@@ -57,7 +57,7 @@ function createEventSocket(eventName: string, filter: object, accountId: string)
     ws.onmessage = () => {
       setTimeout(() => {
         refreshBalances()
-      }, 500)
+      }, 250)
     }
 
     ws.onerror = (error) => {
