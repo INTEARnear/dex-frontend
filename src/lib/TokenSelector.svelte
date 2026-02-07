@@ -5,7 +5,7 @@
   import TokenBadge from "./TokenBadge.svelte";
   import type { Token } from "./types";
   import {
-    formatTokenAmount,
+    formatAmount,
     formatCompact,
     formatCompactBalance,
     PRICES_API,
@@ -212,7 +212,7 @@
   function formatPrice(token: Token): string {
     const num = parseFloat(getTokenPrice(token));
     if (num === 0) return "$0.00";
-    return `$${formatTokenAmount(num)}`;
+    return `$${formatAmount(num)}`;
   }
 
   function formatMarketCap(token: Token): string {

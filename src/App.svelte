@@ -1,6 +1,8 @@
 <script lang="ts">
-  import SwapForm from './lib/SwapForm.svelte'
-  import WalletButton from './lib/WalletButton.svelte'
+  import SwapForm from "./lib/SwapForm.svelte";
+  import WalletButton from "./lib/WalletButton.svelte";
+  import { BookOpen } from "lucide-svelte";
+  import { siX, siTelegram, siGithub } from "simple-icons";
 
   const phrases = [
     "Swap tokens instantly",
@@ -24,9 +26,70 @@
     <h1>Intear <span class="accent">DEX</span></h1>
     <p class="subtitle">{randomPhrase}</p>
   </header>
-  
+
   <SwapForm />
 </main>
+
+<footer>
+  <div class="footer-links">
+    <a
+      href="https://x.com/intea_rs"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="X"
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        role="img"
+      >
+        <path d={siX.path} />
+      </svg>
+    </a>
+    <a
+      href="https://t.me/intearchat"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Telegram"
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        role="img"
+      >
+        <path d={siTelegram.path} />
+      </svg>
+    </a>
+    <a
+      href="https://github.com/INTEARnear/dex-frontend"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="GitHub"
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        role="img"
+      >
+        <path d={siGithub.path} />
+      </svg>
+    </a>
+    <a
+      href="https://docs.intear.tech/docs/dex-aggregator"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Documentation"
+    >
+      <BookOpen size={20} />
+    </a>
+  </div>
+</footer>
 
 <style>
   main {
@@ -69,10 +132,44 @@
     font-weight: 400;
   }
 
+  footer {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+  }
+
+  .footer-links a {
+    color: var(--text-secondary);
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .footer-links a:hover {
+    color: var(--accent-primary);
+  }
+
   @media (max-width: 640px) {
     .top-bar {
       top: 1rem;
       right: 1rem;
+    }
+
+    footer {
+      bottom: 1rem;
+    }
+
+    .footer-links {
+      gap: 1.25rem;
     }
   }
 
@@ -98,6 +195,14 @@
     .subtitle {
       font-size: 0.875rem;
       margin-top: 0.25rem;
+    }
+
+    footer {
+      bottom: 0.75rem;
+    }
+
+    .footer-links {
+      gap: 1rem;
     }
   }
 </style>

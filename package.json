@@ -19,6 +19,8 @@
     "vite": "^7.2.4"
   },
   "dependencies": {
-    "@hot-labs/near-connect": "^0.8.2"
+    "@hot-labs/near-connect": "^0.8.2",
+    "lucide-svelte": "^0.563.0",
+    "simple-icons": "^16.7.0"
   }
 }

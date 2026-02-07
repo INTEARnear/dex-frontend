@@ -7,7 +7,7 @@ export const ROUTER_API = "https://router.intear.tech";
 /**
  * Format a number with up to 6 significant digits, capped at 8 decimal places.
  */
-export function formatTokenAmount(num: number): string {
+export function formatAmount(num: number): string {
   if (num === 0) return "0";
   if (num < 1e-6) return "<0.000001";
 
@@ -112,7 +112,7 @@ export function formatBalance(
   const balanceHumanReadableNumber =
     parseFloat(balanceRaw) / Math.pow(10, decimals);
   if (balanceHumanReadableNumber === 0) return "0";
-  return formatTokenAmount(balanceHumanReadableNumber);
+  return formatAmount(balanceHumanReadableNumber);
 }
 
 /**

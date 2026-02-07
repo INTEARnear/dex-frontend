@@ -9,7 +9,7 @@
   import { userBalances } from "./balanceStore";
   import { priceStore } from "./priceStore";
   import {
-    formatTokenAmount,
+    formatAmount,
     humanReadableToRawAmount,
     rawAmountToHumanReadable,
     formatBalance,
@@ -476,7 +476,7 @@
         );
         return {
           label: "Min. received",
-          value: formatTokenAmount(parseFloat(raw)),
+          value: formatAmount(parseFloat(raw)),
           symbol: outputToken.metadata.symbol,
         };
       }
@@ -488,7 +488,7 @@
         );
         return {
           label: "Max. paid",
-          value: formatTokenAmount(parseFloat(raw)),
+          value: formatAmount(parseFloat(raw)),
           symbol: inputToken.metadata.symbol,
         };
       }
@@ -502,7 +502,7 @@
     if (swapMode === "exactOut") return outputAmountHumanReadable; // User-entered, show as-is
     const num = parseFloat(outputAmountHumanReadable);
     if (isNaN(num) || num === 0) return "0";
-    return formatTokenAmount(num);
+    return formatAmount(num);
   }
 
   // Get input amount for display (only formatted when it's estimated)
@@ -511,7 +511,7 @@
     if (swapMode === "exactIn") return inputAmountHumanReadable; // User-entered, show as-is
     const num = parseFloat(inputAmountHumanReadable);
     if (isNaN(num) || num === 0) return "0";
-    return formatTokenAmount(num);
+    return formatAmount(num);
   }
 
   const formattedInputBalance = $derived(
@@ -801,7 +801,7 @@
     const humanAmount = rawAmountToHumanReadable(amountRaw, decimals);
     const num = parseFloat(humanAmount);
     if (isNaN(num)) return null;
-    return formatTokenAmount(num);
+    return formatAmount(num);
   }
 
   async function handleSwap() {
