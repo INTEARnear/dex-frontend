@@ -8,7 +8,7 @@
     "Swap tokens instantly",
     "Swap in tears",
     "Best rates across all DEXes",
-    "Swap with fastest DEX router",
+    "Swap with fastest DEX aggregator",
     "Have you tried Intear Wallet?",
     "Trade even faster in Bettear Bot",
     "Trade at the speed of Internet",

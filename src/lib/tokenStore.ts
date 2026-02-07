@@ -8,11 +8,12 @@ interface TokenWithBalance extends Token {
   preloadedIcon?: string | null
 }
 
-// Hardcoded NEAR token (price will be updated from wrap.near)
+// Hardcoded NEAR token (will be updated from wrap.near)
 export const NEAR_TOKEN: Token = {
   account_id: 'near',
   price_usd: '0',
   price_usd_raw: '0',
+  price_usd_hardcoded: '0',
   metadata: {
     name: 'NEAR',
     symbol: 'NEAR',
@@ -70,6 +71,7 @@ function createTokenStore() {
       if (wrapNear) {
         NEAR_TOKEN.price_usd = wrapNear.price_usd
         NEAR_TOKEN.price_usd_raw = wrapNear.price_usd_raw
+        NEAR_TOKEN.price_usd_hardcoded = wrapNear.price_usd_hardcoded
         NEAR_TOKEN.liquidity_usd = wrapNear.liquidity_usd
         NEAR_TOKEN.volume_usd_24h = wrapNear.volume_usd_24h
         NEAR_TOKEN.total_supply = wrapNear.total_supply

@@ -9,6 +9,7 @@ export interface TokenMetadata {
 export interface Token {
   account_id: string
   price_usd: string
+  price_usd_hardcoded: string
   price_usd_raw: string
   price_usd_raw_24h_ago?: string
   metadata: TokenMetadata
