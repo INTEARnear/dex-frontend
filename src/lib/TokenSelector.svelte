@@ -32,6 +32,7 @@
   let tooltipY = $state(0);
   let mobileTooltipToken = $state<Token | null>(null);
   let isMobile = $state(false);
+  let supportsTouch = $state(false);
   let hoverSuppressUntil = $state(0);
   let longPressTimer: number | null = null;
   let longPressActive = $state(false);
@@ -47,16 +48,22 @@
 
   $effect(() => {
     const mediaQuery = window.matchMedia("(max-width: 640px)");
+    const touchQuery = window.matchMedia("(pointer: coarse)");
     const update = () => {
       isMobile = mediaQuery.matches;
-      if (!isMobile) {
+      supportsTouch = navigator.maxTouchPoints > 0 || touchQuery.matches;
+      if (!isMobile || !supportsTouch) {
         mobileTooltipToken = null;
         longPressActive = false;
       }
     };
     update();
     mediaQuery.addEventListener("change", update);
-    return () => mediaQuery.removeEventListener("change", update);
+    touchQuery.addEventListener("change", update);
+    return () => {
+      mediaQuery.removeEventListener("change", update);
+      touchQuery.removeEventListener("change", update);
+    };
   });
 
   $effect(() => {
@@ -64,7 +71,7 @@
       hoveredToken = null;
       return;
     }
-    if (navigator.maxTouchPoints > 0) {
+    if (supportsTouch) {
       hoverSuppressUntil = Date.now() + 500;
     }
   });
@@ -399,7 +406,7 @@
   }
 
   function handleTokenTouchStart(event: TouchEvent, token: Token) {
-    if (!isMobile) return;
+    if (!isMobile || !supportsTouch) return;
     event.preventDefault();
     longPressActive = false;
     const touch = event.touches[0];
@@ -417,7 +424,7 @@
   }
 
   function handleTokenTouchMove(event: TouchEvent) {
-    if (!isMobile) return;
+    if (!isMobile || !supportsTouch) return;
     if (!longPressTimer) return;
     event.preventDefault();
     const touch = event.touches[0];
@@ -430,7 +437,7 @@
   }
 
   function handleTokenTouchEnd() {
-    if (!isMobile) return;
+    if (!isMobile || !supportsTouch) return;
     if (longPressTimer) window.clearTimeout(longPressTimer);
     longPressTimer = null;
   }
@@ -567,7 +574,7 @@
           {/each}
         {/if}
       </div>
-      {#if hoveredToken && !isMobile}
+      {#if hoveredToken && (!isMobile || !supportsTouch)}
         <div
           class="token-tooltip token-tooltip-floating"
           role="tooltip"
