@@ -410,6 +410,9 @@
       hoveredToken = null;
       mobileTooltipToken = token;
       longPressActive = true;
+      if (navigator.vibrate) {
+        navigator.vibrate(10);
+      }
     }, 450);
   }
 
