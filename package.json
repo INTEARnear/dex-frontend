@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@hot-labs/near-connect": "^0.8.2",
+    "@tanstack/svelte-virtual": "^3.13.18",
     "lucide-svelte": "^0.563.0",
     "simple-icons": "^16.7.0"
   }

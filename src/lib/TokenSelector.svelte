@@ -12,6 +12,7 @@
   } from "./utils";
   import { priceStore } from "./priceStore";
   import { fade, fly } from "svelte/transition";
+  import { createVirtualizer } from "./virtualizer.svelte";
 
   interface Props {
     isOpen: boolean;
@@ -38,6 +39,7 @@
   let longPressActive = $state(false);
   let touchStartX = 0;
   let touchStartY = 0;
+  let scrollContainerRef = $state<HTMLDivElement | null>(null);
 
   $effect(() => {
     if (isOpen && $tokenStore.tokens.length === 0 && !$tokenStore.isLoading) {
@@ -226,6 +228,13 @@
     }
     return $tokenStore.tokens;
   });
+
+  const virtual = createVirtualizer<HTMLDivElement>(() => ({
+    count: filteredTokens.length,
+    getScrollElement: () => scrollContainerRef,
+    estimateSize: () => 80,
+    overscan: 15,
+  }));
 
   function handleSelectToken(token: Token) {
     // Build updated token with latest price and icon
@@ -509,7 +518,7 @@
         />
       </div>
 
-      <div class="token-list">
+      <div class="token-list" bind:this={scrollContainerRef}>
         {#if $tokenStore.isLoading || isSearching}
           <div class="loading">
             <div class="spinner"></div>
@@ -525,53 +534,61 @@
             <p>No tokens found</p>
           </div>
         {:else}
-          {#each filteredTokens as token (token.account_id)}
-            <button
-              class="token-item"
-              data-token-id={token.account_id}
-              use:observeToken
-              onclick={() => handleTokenClick(token)}
-              onmouseenter={(event) => handleTooltipMove(event, token)}
-              onmousemove={(event) => handleTooltipMove(event, token)}
-              onmouseleave={handleTooltipLeave}
-              ontouchstart={(event) => handleTokenTouchStart(event, token)}
-              ontouchmove={handleTokenTouchMove}
-              ontouchend={handleTokenTouchEnd}
-              ontouchcancel={handleTokenTouchEnd}
-              oncontextmenu={(event) => event.preventDefault()}
-            >
-              <div class="token-left">
-                <div class="token-icon-wrapper">
-                  {#if getTokenIcon(token.account_id)}
-                    <img
-                      src={getTokenIcon(token.account_id)}
-                      alt={token.metadata.symbol}
-                      class="token-icon"
-                    />
-                  {:else}
-                    <div class="token-icon-placeholder">
-                      {token.metadata.symbol.charAt(0)}
+          <div
+            class="virtual-list-container"
+            style="height: {virtual.totalSize}px; position: relative;"
+          >
+            {#each virtual.items as virtualItem (virtualItem.key)}
+              {@const token = filteredTokens[virtualItem.index]}
+              <button
+                class="token-item"
+                data-token-id={token.account_id}
+                data-index={virtualItem.index}
+                use:observeToken
+                onclick={() => handleTokenClick(token)}
+                onmouseenter={(event) => handleTooltipMove(event, token)}
+                onmousemove={(event) => handleTooltipMove(event, token)}
+                onmouseleave={handleTooltipLeave}
+                ontouchstart={(event) => handleTokenTouchStart(event, token)}
+                ontouchmove={handleTokenTouchMove}
+                ontouchend={handleTokenTouchEnd}
+                ontouchcancel={handleTokenTouchEnd}
+                oncontextmenu={(event) => event.preventDefault()}
+                style="position: absolute; top: 0; left: 0; width: 100%; height: {virtualItem.size}px; transform: translateY({virtualItem.start}px);"
+              >
+                <div class="token-left">
+                  <div class="token-icon-wrapper">
+                    {#if getTokenIcon(token.account_id)}
+                      <img
+                        src={getTokenIcon(token.account_id)}
+                        alt={token.metadata.symbol}
+                        class="token-icon"
+                      />
+                    {:else}
+                      <div class="token-icon-placeholder">
+                        {token.metadata.symbol.charAt(0)}
+                      </div>
+                    {/if}
+                    <TokenBadge {token} />
+                  </div>
+                  <div class="token-info">
+                    <div class="token-symbol">{token.metadata.symbol}</div>
+                    <div class="token-price-secondary">{formatPrice(token)}</div>
+                  </div>
+                </div>
+                <div class="token-stats">
+                  {#if formatBalance(token)}
+                    <div class="token-balance-main">{formatBalance(token)}</div>
+                  {/if}
+                  {#if formatDollarBalance(token)}
+                    <div class="token-balance-secondary">
+                      Balance: {formatDollarBalance(token)}
                     </div>
                   {/if}
-                  <TokenBadge {token} />
                 </div>
-                <div class="token-info">
-                  <div class="token-symbol">{token.metadata.symbol}</div>
-                  <div class="token-price-secondary">{formatPrice(token)}</div>
-                </div>
-              </div>
-              <div class="token-stats">
-                {#if formatBalance(token)}
-                  <div class="token-balance-main">{formatBalance(token)}</div>
-                {/if}
-                {#if formatDollarBalance(token)}
-                  <div class="token-balance-secondary">
-                    Balance: {formatDollarBalance(token)}
-                  </div>
-                {/if}
-              </div>
-            </button>
-          {/each}
+              </button>
+            {/each}
+          </div>
         {/if}
       </div>
       {#if hoveredToken && (!isMobile || !supportsTouch)}
@@ -808,10 +825,14 @@
     overflow-y: auto;
     padding: 0.5rem;
     min-height: 0;
+    contain: strict;
+  }
+
+  .virtual-list-container {
+    width: 100%;
   }
 
   .token-item {
-    width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -824,6 +845,7 @@
     user-select: none;
     -webkit-user-select: none;
     touch-action: manipulation;
+    box-sizing: border-box;
   }
 
   .token-item:hover {
