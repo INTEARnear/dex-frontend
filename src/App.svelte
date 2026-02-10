@@ -103,10 +103,17 @@
   }
 
   .top-bar {
-    position: fixed;
-    top: calc(2rem + env(safe-area-inset-top, 0px));
-    right: 2rem;
-    z-index: 100;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    max-width: 900px;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  @media (max-width: 640px) {
+    .top-bar {
+      max-width: 480px;
+    }
   }
 
   header {
@@ -133,7 +140,6 @@
   }
 
   footer {
-    margin-top: 2rem;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
@@ -156,26 +162,12 @@
   }
 
   @media (max-width: 640px) {
-    .top-bar {
-      top: calc(1rem + env(safe-area-inset-top, 0px));
-      right: 1rem;
-    }
-
     .footer-links {
       gap: 1.25rem;
     }
   }
 
   @media (max-width: 480px) {
-    .top-bar {
-      position: fixed;
-      top: calc(0.75rem + env(safe-area-inset-top, 0px));
-      right: 0.75rem;
-      left: 0.75rem;
-      display: flex;
-      justify-content: flex-end;
-    }
-
     main {
       gap: 1rem;
     }
@@ -194,26 +186,14 @@
       margin-top: 0.25rem;
     }
 
-    footer {
-      margin-top: 1.5rem;
-    }
-
     .footer-links {
       gap: 1rem;
     }
   }
 
   @media (max-height: 600px) {
-    .top-bar {
-      position: absolute;
-    }
-
     main {
       gap: 1rem;
-    }
-
-    footer {
-      margin-top: 1rem;
     }
   }
 
@@ -224,10 +204,6 @@
 
     header {
       display: none;
-    }
-
-    footer {
-      margin-top: 0.75rem;
     }
   }
 </style>

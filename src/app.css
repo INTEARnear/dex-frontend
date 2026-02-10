@@ -49,28 +49,32 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 6rem 2rem 2rem;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 2rem;
   box-sizing: border-box;
-}
-
-@media (min-height: 700px) {
-  #app {
-    justify-content: center;
-  }
 }
 
 @media (max-width: 480px) {
   #app {
-    padding: 4.5rem 0.75rem 1.5rem;
+    padding: 1rem 0.75rem;
   }
 }
 
+/* Ultra compact: short screens */
 @media (max-height: 600px) {
   #app {
     min-height: auto;
-    padding-top: 5rem;
-    padding-bottom: 1rem;
+    padding: 1rem 0.75rem;
+    gap: 1rem;
+  }
+}
+
+/* Landscape mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  #app {
+    gap: 0.75rem;
+    padding: 0.75rem;
   }
 }
 
