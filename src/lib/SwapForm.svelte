@@ -3,10 +3,7 @@
   import TokenSelector from "./TokenSelector.svelte";
   import TokenBadge from "./TokenBadge.svelte";
   import SwapSettings from "./SwapSettings.svelte";
-  import type {
-    SlippageMode,
-    AmountPreset,
-  } from "./SwapSettings.svelte";
+  import type { SlippageMode, AmountPreset } from "./SwapSettings.svelte";
   import type { Token } from "./types";
   import { NEAR_TOKEN, tokenStore } from "./tokenStore";
   import { refreshBalances, userBalances } from "./balanceStore";
@@ -21,6 +18,18 @@
     PRICES_API,
     ROUTER_API,
   } from "./utils";
+
+  const phrases = [
+    "Swap tokens instantly",
+    "Swap in tears",
+    "Best rates across all DEXes",
+    "Swap with fastest DEX aggregator",
+    "Have you tried Intear Wallet?",
+    "Trade even faster in Bettear Bot",
+    "Trade at the speed of Internet",
+  ];
+
+  const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
 
   // Route types from DEX Aggregator API
   interface FunctionCallAction {
@@ -136,7 +145,7 @@
   let currentRoute = $state<Route | null>(null);
   let isFetchingRoute = $state(false);
   let routeAbortController: AbortController | null = null;
-  let quoteRefreshInterval: ReturnType<typeof setInterval> | null = null;
+  let quoteRefreshInterval: number | null = null;
 
   type SwapMode = "exactIn" | "exactOut";
   let swapMode = $state<SwapMode>("exactIn");
@@ -479,7 +488,7 @@
       clearInterval(quoteRefreshInterval);
     }
 
-    quoteRefreshInterval = setInterval(() => {
+    quoteRefreshInterval = window.setInterval(() => {
       const hasValidAmount =
         swapMode === "exactIn"
           ? inputAmountHumanReadable && parseFloat(inputAmountHumanReadable) > 0
@@ -1099,6 +1108,8 @@
   }
 </script>
 
+<p class="subtitle">{randomPhrase}</p>
+
 <div class="swap-card" class:disabled={!$walletStore.isConnected}>
   <div class="settings-row">
     {#if presetsVisible && $walletStore.isConnected && inputToken && inputTokenBalance}
@@ -1153,14 +1164,13 @@
           aria-label="Swap settings"
           tabindex="-1"
           onclick={(e) => e.stopPropagation()}
-          onkeydown={(e) =>
-            e.key === "Escape" && (swapSettingsOpen = false)}
+          onkeydown={(e) => e.key === "Escape" && (swapSettingsOpen = false)}
         >
           <SwapSettings
             mode={swapSlippageMode}
             value={swapSlippageValue}
             onchange={handleSlippageChange}
-            presetsVisible={presetsVisible}
+            {presetsVisible}
             presets={amountPresets}
             onPresetsChange={handlePresetsChange}
           />
@@ -1605,6 +1615,13 @@
 {/if}
 
 <style>
+  .subtitle {
+    margin: 0.5rem 0 0;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 400;
+  }
+
   .swap-card {
     width: 100%;
     background: var(--bg-card);
@@ -2302,8 +2319,20 @@
     border: none;
   }
 
+@media (--short-screen) {
+  .subtitle {
+    display: none;
+  }
+}
+
+  @media (--tablet) {
+    .subtitle {
+      display: none;
+    }
+  }
+
   /* ── Mobile compact layout ── */
-  @media (max-width: 480px) {
+  @media (--mobile) {
     .swap-card {
       padding: 1rem;
       gap: 0.5rem;
@@ -2395,7 +2424,7 @@
   }
 
   /* ── Very short screens: ultra-compact layout ── */
-  @media (max-height: 600px) {
+  @media (--short-screen) {
     .swap-card {
       padding: 0.75rem;
       gap: 0.375rem;
@@ -2435,7 +2464,7 @@
   }
 
   /* ── Landscape mobile: maximize usable space ── */
-  @media (max-height: 500px) and (orientation: landscape) {
+  @media (--landscape-mobile) {
     .swap-card {
       padding: 0.625rem 0.75rem;
       gap: 0.25rem;
@@ -2461,10 +2490,6 @@
 
     .route-info {
       padding: 0.375rem 0.5rem;
-    }
-
-    .preset-buttons {
-      display: none;
     }
   }
 </style>

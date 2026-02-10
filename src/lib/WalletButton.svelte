@@ -67,7 +67,8 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 0.875rem;
+    padding: 0 0.875rem;
+    height: 2.5rem;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 0.75rem;
@@ -93,7 +94,8 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
+    padding: 0 1.25rem;
+    height: 2.5rem;
     background: var(--accent-primary);
     border: none;
     border-radius: 0.75rem;
@@ -118,7 +120,7 @@
     background: transparent;
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
-    padding: 0.5rem 0.875rem;
+    padding: 0 0.875rem;
   }
 
   .disconnect-btn:hover {
@@ -142,13 +144,14 @@
     }
   }
 
-  @media (max-width: 640px) {
+  @media (--tablet) {
     .wallet-connected {
       gap: 0.5rem;
     }
 
     .account-badge {
-      padding: 0.4rem 0.75rem;
+      padding: 0 0.75rem;
+      height: 2.25rem;
     }
 
     .account-id {
@@ -158,16 +161,17 @@
 
     .connect-btn,
     .disconnect-btn {
-      padding: 0.5rem 1rem;
+      padding: 0 1rem;
+      height: 2.25rem;
       font-size: 0.875rem;
     }
 
     .disconnect-btn {
-      padding: 0.4rem 0.75rem;
+      padding: 0 0.75rem;
     }
   }
 
-  @media (max-width: 480px) {
+  @media (--mobile) {
     .wallet-connected {
       flex-wrap: wrap;
       gap: 0.5rem;
@@ -177,7 +181,8 @@
     .account-badge {
       flex: 1;
       min-width: 0;
-      padding: 0.4rem 0.625rem;
+      padding: 0 0.625rem;
+      height: 2rem;
     }
 
     .account-id {
@@ -186,12 +191,14 @@
     }
 
     .connect-btn {
-      padding: 0.625rem 1rem;
+      padding: 0 1rem;
+      height: 2rem;
       font-size: 0.875rem;
     }
 
     .disconnect-btn {
-      padding: 0.4rem 0.625rem;
+      padding: 0 0.625rem;
+      height: 2rem;
       gap: 0.375rem;
     }
 
@@ -201,17 +208,20 @@
     }
   }
 
-  @media (max-width: 360px) {
+  @media (--small-mobile) {
     .account-badge {
-      padding: 0.375rem 0.5rem;
+      padding: 0 0.5rem;
+      height: 1.875rem;
     }
 
     .account-id {
       font-size: 0.6875rem;
     }
 
+    .connect-btn,
     .disconnect-btn {
-      padding: 0.375rem 0.5rem;
+      padding: 0 0.5rem;
+      height: 1.875rem;
     }
   }
 </style>

@@ -889,7 +889,7 @@
   }
 
   /* Mobile: full-screen bottom sheet */
-  @media (max-width: 640px) {
+  @media (--tablet) {
     .modal-backdrop {
       padding: 0;
       align-items: flex-end;

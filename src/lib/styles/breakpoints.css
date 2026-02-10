@@ -1,0 +1,5 @@
+@custom-media --tablet (max-width: 640px);
+@custom-media --mobile (max-width: 480px);
+@custom-media --small-mobile (max-width: 360px);
+@custom-media --short-screen ((max-height: 680px) and (not (--mobile))) or ((max-height: 560px) and (--mobile));
+@custom-media --landscape-mobile (max-height: 550px) and (orientation: landscape);

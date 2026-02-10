@@ -1,33 +1,37 @@
 <script lang="ts">
-  import SwapForm from "./lib/SwapForm.svelte";
-  import WalletButton from "./lib/WalletButton.svelte";
+  import WalletButton from "$lib/WalletButton.svelte";
   import { BookOpen } from "lucide-svelte";
   import { siX, siTelegram, siGithub } from "simple-icons";
+  import { browser } from "$app/environment";
+  import { page } from "$app/state";
+  import "../app.css";
 
-  const phrases = [
-    "Swap tokens instantly",
-    "Swap in tears",
-    "Best rates across all DEXes",
-    "Swap with fastest DEX aggregator",
-    "Have you tried Intear Wallet?",
-    "Trade even faster in Bettear Bot",
-    "Trade at the speed of Internet",
-  ];
+  if (browser && "serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js");
+  }
 
-  const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+  let { children } = $props();
 </script>
 
 <div class="top-bar">
+  <nav class="desktop-nav">
+    <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
+    <a href="/liquidity" class:active={page.url.pathname === "/liquidity"}>Liquidity</a>
+  </nav>
   <WalletButton />
 </div>
 
 <main>
   <header>
     <h1>Intear <span class="accent">DEX</span></h1>
-    <p class="subtitle">{randomPhrase}</p>
   </header>
 
-  <SwapForm />
+  <nav class="mobile-nav">
+    <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
+    <a href="/liquidity" class:active={page.url.pathname === "/liquidity"}>Liquidity</a>
+  </nav>
+
+  {@render children()}
 </main>
 
 <footer>
@@ -104,15 +108,17 @@
 
   .top-bar {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
     width: 100%;
     max-width: 900px;
     padding-top: env(safe-area-inset-top, 0px);
   }
 
-  @media (max-width: 640px) {
+  @media (--tablet) {
     .top-bar {
       max-width: 480px;
+      justify-content: flex-end;
     }
   }
 
@@ -132,11 +138,53 @@
     color: var(--accent-primary);
   }
 
-  .subtitle {
-    margin: 0.5rem 0 0;
+  nav {
+    display: flex;
+    gap: 0.5rem;
+    background: var(--bg-secondary);
+    padding: 0.25rem;
+    border-radius: 0.75rem;
+  }
+
+  .desktop-nav {
+    display: flex;
+  }
+
+  .mobile-nav {
+    display: none;
+  }
+
+  @media (--tablet) {
+    .desktop-nav {
+      display: none;
+    }
+
+    .mobile-nav {
+      display: flex;
+    }
+
+    main {
+      gap: 1rem;
+    }
+  }
+
+  nav a {
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.5rem;
     color: var(--text-secondary);
-    font-size: 1rem;
-    font-weight: 400;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  nav a:hover {
+    color: var(--text-primary);
+  }
+
+  nav a.active {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
   }
 
   footer {
@@ -161,15 +209,15 @@
     color: var(--accent-primary);
   }
 
-  @media (max-width: 640px) {
+  @media (--tablet) {
     .footer-links {
       gap: 1.25rem;
     }
   }
 
-  @media (max-width: 480px) {
+  @media (--mobile) {
     main {
-      gap: 1rem;
+      gap: 0.5rem;
     }
 
     header {
@@ -181,9 +229,9 @@
       font-size: 1.75rem;
     }
 
-    .subtitle {
-      font-size: 0.875rem;
-      margin-top: 0.25rem;
+    nav a {
+      padding: 0.5rem 1rem;
+      font-size: 0.8125rem;
     }
 
     .footer-links {
@@ -191,13 +239,13 @@
     }
   }
 
-  @media (max-height: 600px) {
+  @media (--short-screen) {
     main {
-      gap: 1rem;
+      gap: 0.5rem;
     }
   }
 
-  @media (max-height: 500px) and (orientation: landscape) {
+  @media (--landscape-mobile) {
     main {
       gap: 0.75rem;
     }
