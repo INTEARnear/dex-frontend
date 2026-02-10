@@ -233,7 +233,7 @@
     count: filteredTokens.length,
     getScrollElement: () => scrollContainerRef,
     estimateSize: () => 80,
-    overscan: 15,
+    overscan: 50,
   }));
 
   function handleSelectToken(token: Token) {
