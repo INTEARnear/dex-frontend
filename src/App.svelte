@@ -96,7 +96,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2rem;
+    gap: 1.5rem;
     width: 100%;
     max-width: 480px;
     position: relative;
@@ -104,7 +104,7 @@
 
   .top-bar {
     position: fixed;
-    top: 2rem;
+    top: calc(2rem + env(safe-area-inset-top, 0px));
     right: 2rem;
     z-index: 100;
   }
@@ -133,11 +133,8 @@
   }
 
   footer {
-    position: fixed;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
+    margin-top: 2rem;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .footer-links {
@@ -160,12 +157,8 @@
 
   @media (max-width: 640px) {
     .top-bar {
-      top: 1rem;
+      top: calc(1rem + env(safe-area-inset-top, 0px));
       right: 1rem;
-    }
-
-    footer {
-      bottom: 1rem;
     }
 
     .footer-links {
@@ -176,16 +169,20 @@
   @media (max-width: 480px) {
     .top-bar {
       position: fixed;
-      top: 0.75rem;
+      top: calc(0.75rem + env(safe-area-inset-top, 0px));
       right: 0.75rem;
       left: 0.75rem;
       display: flex;
       justify-content: flex-end;
     }
 
+    main {
+      gap: 1rem;
+    }
+
     header {
       gap: 0;
-      margin-top: 3rem;
+      margin-top: 0;
     }
 
     h1 {
@@ -198,11 +195,39 @@
     }
 
     footer {
-      bottom: 0.75rem;
+      margin-top: 1.5rem;
     }
 
     .footer-links {
       gap: 1rem;
+    }
+  }
+
+  @media (max-height: 600px) {
+    .top-bar {
+      position: absolute;
+    }
+
+    main {
+      gap: 1rem;
+    }
+
+    footer {
+      margin-top: 1rem;
+    }
+  }
+
+  @media (max-height: 500px) and (orientation: landscape) {
+    main {
+      gap: 0.75rem;
+    }
+
+    header {
+      display: none;
+    }
+
+    footer {
+      margin-top: 0.75rem;
     }
   }
 </style>

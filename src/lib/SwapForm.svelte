@@ -2393,4 +2393,78 @@
       margin-top: 0.25rem;
     }
   }
+
+  /* ── Very short screens: ultra-compact layout ── */
+  @media (max-height: 600px) {
+    .swap-card {
+      padding: 0.75rem;
+      gap: 0.375rem;
+    }
+
+    .settings-row {
+      margin-bottom: 0;
+    }
+
+    .input-wrapper {
+      padding: 0.5rem 0.625rem;
+      gap: 0.25rem;
+    }
+
+    .swap-fields {
+      gap: 0.25rem;
+    }
+
+    input {
+      font-size: 1.125rem;
+    }
+
+    .route-info {
+      padding: 0.5rem 0.625rem;
+      gap: 0.25rem;
+    }
+
+    .swap-btn {
+      padding: 0.75rem;
+      margin-top: 0.125rem;
+    }
+
+    .switch-btn {
+      width: 2rem;
+      height: 2rem;
+    }
+  }
+
+  /* ── Landscape mobile: maximize usable space ── */
+  @media (max-height: 500px) and (orientation: landscape) {
+    .swap-card {
+      padding: 0.625rem 0.75rem;
+      gap: 0.25rem;
+    }
+
+    .input-wrapper {
+      padding: 0.375rem 0.5rem;
+      gap: 0.125rem;
+    }
+
+    .swap-fields {
+      gap: 0.125rem;
+    }
+
+    input {
+      font-size: 1rem;
+    }
+
+    .swap-btn {
+      padding: 0.625rem;
+      font-size: 0.875rem;
+    }
+
+    .route-info {
+      padding: 0.375rem 0.5rem;
+    }
+
+    .preset-buttons {
+      display: none;
+    }
+  }
 </style>
