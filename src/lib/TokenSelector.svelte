@@ -992,6 +992,7 @@
     box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.5);
     pointer-events: none;
     z-index: 1100;
+    user-select: none;
   }
 
   .tooltip-row {
@@ -1040,6 +1041,7 @@
     border-radius: 1rem 1rem 0 0;
     padding: 1rem 1.25rem 1.5rem;
     box-shadow: 0 -12px 20px -8px rgba(0, 0, 0, 0.5);
+    user-select: none;
   }
 
   .mobile-tooltip-header {
