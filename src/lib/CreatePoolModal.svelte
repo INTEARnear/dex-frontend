@@ -27,6 +27,7 @@
 
   const DEX_CONTRACT_ID = "dex.intear.near";
   const DEX_ID = "slimedragon.near/xyk";
+  const DEX_BACKEND_API = "https://dex-backend.intear.tech";
 
   function tokenToAssetId(token: Token): Record<string, unknown> {
     if (token.account_id === "near") {
@@ -395,6 +396,10 @@
       createError = "Please connect your wallet";
       return;
     }
+    if (!accountId) {
+      createError = "Unable to resolve connected account";
+      return;
+    }
 
     isCreating = true;
     createError = null;
@@ -407,36 +412,67 @@
         !isPrivate, // is_public
       );
 
-      // 0.01 NEAR for storage
-      const attachedNear = "1" + "0".repeat(24 - 2);
+      const registrationActions = [
+        {
+          type: "FunctionCall" as const,
+          params: {
+            methodName: "storage_deposit",
+            args: {
+              registration_only: true,
+            },
+            gas: "10" + "0".repeat(12), // 10 TGas
+            deposit: "1" + "0".repeat(24 - 2), // 0.01 NEAR
+          },
+        },
+        {
+          type: "FunctionCall" as const,
+          params: {
+            methodName: "register_assets",
+            args: {
+              asset_ids: ["near"],
+            },
+            gas: "10" + "0".repeat(12), // 10 TGas
+            deposit: "1",
+          },
+        },
+      ];
+      const registrationCheckResponse = await fetch(
+        `${DEX_BACKEND_API}/are-assets-registered?for=${encodeURIComponent(JSON.stringify({ Account: accountId }))}&assets=near`,
+      );
+      if (!registrationCheckResponse.ok) {
+        throw new Error("Failed to check NEAR asset registration");
+      }
+      const isNearRegistered: boolean = await registrationCheckResponse.json();
 
+      const actions = [
+        ...(isNearRegistered ? [] : registrationActions),
+        {
+          type: "FunctionCall" as const,
+          params: {
+            methodName: "execute_operations",
+            args: {
+              operations: [
+                {
+                  DexCall: {
+                    dex_id: DEX_ID,
+                    method: "create_pool",
+                    args: argsBase64,
+                    attached_assets: {
+                      near: "1" + "0".repeat(24 - 2), // 0.01 NEAR
+                    },
+                  },
+                },
+              ],
+            },
+            gas: "100" + "0".repeat(12), // 100 TGas
+            deposit: "1" + "0".repeat(24 - 2), // 0.01 NEAR
+          },
+        },
+      ];
       const transactions = [
         {
           receiverId: DEX_CONTRACT_ID,
-          actions: [
-            {
-              type: "FunctionCall" as const,
-              params: {
-                methodName: "execute_operations",
-                args: {
-                  operations: [
-                    {
-                      DexCall: {
-                        dex_id: DEX_ID,
-                        method: "create_pool",
-                        args: argsBase64,
-                        attached_assets: {
-                          near: attachedNear,
-                        },
-                      },
-                    },
-                  ],
-                },
-                gas: "100" + "0".repeat(12), // 100 TGas
-                deposit: attachedNear,
-              },
-            },
-          ],
+          actions,
         },
       ];
 

@@ -22,7 +22,7 @@ function createWalletStore() {
       link: "https://wallet.intear.tech",
       linkText: "Don't have a wallet?",
     },
-    manifest: {
+    manifest: JSON.parse(`{
       "version": "1.1.0",
       "wallets": [
         {
@@ -286,7 +286,7 @@ function createWalletStore() {
           }
         }
       ]
-    }
+    }`)
   })
 
   connector.on('wallet:signIn', async (event) => {

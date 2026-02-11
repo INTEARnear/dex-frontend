@@ -133,8 +133,8 @@ function createTokenStore() {
         }
 
         // Then by liquidity * log2(volume)
-        const aVolumeScore = a.volume_usd_24h > 10 ? Math.log2(a.volume_usd_24h) : 0.1
-        const bVolumeScore = b.volume_usd_24h > 10 ? Math.log2(b.volume_usd_24h) : 0.1
+        const aVolumeScore = a.volume_usd_24h > 10 ? Math.log2(a.volume_usd_24h) : 0
+        const bVolumeScore = b.volume_usd_24h > 10 ? Math.log2(b.volume_usd_24h) : 0
         const aScore = a.liquidity_usd * aVolumeScore
         const bScore = b.liquidity_usd * bVolumeScore
 
