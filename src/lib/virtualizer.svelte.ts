@@ -18,6 +18,12 @@ export function createVirtualizer<TScrollElement extends Element>(
   let totalSize = $state(0);
   let scrollOffset = $state(0);
 
+  const syncStateFromInstance = (instance: Virtualizer<TScrollElement, Element>) => {
+    items = instance.getVirtualItems();
+    totalSize = instance.getTotalSize();
+    scrollOffset = instance.scrollOffset ?? 0;
+  };
+
   const resolvedOptions: VirtualizerOptions<TScrollElement, Element> = {
     ...options(),
     observeElementRect,
@@ -31,6 +37,7 @@ export function createVirtualizer<TScrollElement extends Element>(
   };
 
   const instance = new Virtualizer(resolvedOptions);
+  syncStateFromInstance(instance);
 
   $effect(() => {
     const opts = options();
@@ -46,6 +53,7 @@ export function createVirtualizer<TScrollElement extends Element>(
       },
     });
     instance._willUpdate();
+    syncStateFromInstance(instance);
   });
 
   $effect(() => {

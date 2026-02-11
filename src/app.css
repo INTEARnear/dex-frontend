@@ -31,7 +31,7 @@
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 280px;
   min-height: 100dvh;
   background: 
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.15), transparent),

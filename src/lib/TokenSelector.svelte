@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { tokenStore } from "./tokenStore";
   import { walletStore } from "./walletStore";
   import { userBalances } from "./balanceStore";
@@ -13,6 +14,7 @@
   import { priceStore } from "./priceStore";
   import { fade, fly } from "svelte/transition";
   import { createVirtualizer } from "./virtualizer.svelte";
+  import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
 
   interface Props {
     isOpen: boolean;
@@ -22,6 +24,7 @@
 
   let { isOpen, onClose, onSelectToken }: Props = $props();
   let searchQuery = $state("");
+  let searchInputRef = $state<HTMLInputElement | null>(null);
   let tokenIcons = $state<Record<string, string | null>>({});
   let loadingIcons = $state<Set<string>>(new Set());
   let searchResults = $state<Token[]>([]);
@@ -40,11 +43,26 @@
   let touchStartX = 0;
   let touchStartY = 0;
   let scrollContainerRef = $state<HTMLDivElement | null>(null);
+  const chatwootModalVisibility = createChatwootModalVisibilityController();
+
+  onDestroy(() => {
+    chatwootModalVisibility.dispose();
+  });
+
+  $effect(() => {
+    chatwootModalVisibility.setVisible(isOpen);
+  });
 
   $effect(() => {
     if (isOpen && $tokenStore.tokens.length === 0 && !$tokenStore.isLoading) {
       const accountId = $walletStore.accountId;
       tokenStore.fetchTokens(accountId ?? undefined);
+    }
+  });
+
+  $effect(() => {
+    if (isOpen && searchInputRef) {
+      searchInputRef?.focus();
     }
   });
 
@@ -75,6 +93,8 @@
     }
     if (supportsTouch) {
       hoverSuppressUntil = Date.now() + 500;
+    } else {
+      hoverSuppressUntil = Date.now() + 200;
     }
   });
 
@@ -192,8 +212,6 @@
           "near".includes(query.toLowerCase()) ||
           query.toLowerCase().includes("near")
         ) {
-          // Remove NEAR from results if present
-          results = results.filter((token) => token.account_id !== "near");
           // Find NEAR token from store or create it
           const nearToken = $tokenStore.tokens.find(
             (t) => t.account_id === "near",
@@ -469,6 +487,7 @@
     role="presentation"
     onclick={handleBackdropClick}
     onkeydown={handleKeyDown}
+    transition:fade={{ duration: 150 }}
   >
     <div
       class="modal"
@@ -481,6 +500,7 @@
         handleModalClick(e);
       }}
       onkeydown={(e) => e.stopPropagation()}
+      transition:fly={{ y: 20, duration: 200 }}
     >
       <div class="modal-header">
         <h2 id="modal-title">Select a token</h2>
@@ -515,6 +535,7 @@
           type="text"
           placeholder="Search by ticker or address"
           bind:value={searchQuery}
+          bind:this={searchInputRef}
         />
       </div>
 
@@ -540,53 +561,59 @@
           >
             {#each virtual.items as virtualItem (virtualItem.key)}
               {@const token = filteredTokens[virtualItem.index]}
-              <button
-                class="token-item"
-                data-token-id={token.account_id}
-                data-index={virtualItem.index}
-                use:observeToken
-                onclick={() => handleTokenClick(token)}
-                onmouseenter={(event) => handleTooltipMove(event, token)}
-                onmousemove={(event) => handleTooltipMove(event, token)}
-                onmouseleave={handleTooltipLeave}
-                ontouchstart={(event) => handleTokenTouchStart(event, token)}
-                ontouchmove={handleTokenTouchMove}
-                ontouchend={handleTokenTouchEnd}
-                ontouchcancel={handleTokenTouchEnd}
-                oncontextmenu={(event) => event.preventDefault()}
-                style="position: absolute; top: 0; left: 0; width: 100%; height: {virtualItem.size}px; transform: translateY({virtualItem.start}px);"
-              >
-                <div class="token-left">
-                  <div class="token-icon-wrapper">
-                    {#if getTokenIcon(token.account_id)}
-                      <img
-                        src={getTokenIcon(token.account_id)}
-                        alt={token.metadata.symbol}
-                        class="token-icon"
-                      />
-                    {:else}
-                      <div class="token-icon-placeholder">
-                        {token.metadata.symbol.charAt(0)}
+              {#if token}
+                <button
+                  class="token-item"
+                  data-token-id={token.account_id}
+                  data-index={virtualItem.index}
+                  use:observeToken
+                  onclick={() => handleTokenClick(token)}
+                  onmouseenter={(event) => handleTooltipMove(event, token)}
+                  onmousemove={(event) => handleTooltipMove(event, token)}
+                  onmouseleave={handleTooltipLeave}
+                  ontouchstart={(event) => handleTokenTouchStart(event, token)}
+                  ontouchmove={handleTokenTouchMove}
+                  ontouchend={handleTokenTouchEnd}
+                  ontouchcancel={handleTokenTouchEnd}
+                  oncontextmenu={(event) => event.preventDefault()}
+                  style="position: absolute; top: 0; left: 0; width: 100%; height: {virtualItem.size}px; transform: translateY({virtualItem.start}px);"
+                >
+                  <div class="token-left">
+                    <div class="token-icon-wrapper">
+                      {#if getTokenIcon(token.account_id)}
+                        <img
+                          src={getTokenIcon(token.account_id)}
+                          alt={token.metadata.symbol}
+                          class="token-icon"
+                        />
+                      {:else}
+                        <div class="token-icon-placeholder">
+                          {token.metadata.symbol.charAt(0)}
+                        </div>
+                      {/if}
+                      <TokenBadge {token} />
+                    </div>
+                    <div class="token-info">
+                      <div class="token-symbol">{token.metadata.symbol}</div>
+                      <div class="token-price-secondary">
+                        {formatPrice(token)}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="token-stats">
+                    {#if formatBalance(token)}
+                      <div class="token-balance-main">
+                        {formatBalance(token)}
                       </div>
                     {/if}
-                    <TokenBadge {token} />
+                    {#if formatDollarBalance(token)}
+                      <div class="token-balance-secondary">
+                        Balance: {formatDollarBalance(token)}
+                      </div>
+                    {/if}
                   </div>
-                  <div class="token-info">
-                    <div class="token-symbol">{token.metadata.symbol}</div>
-                    <div class="token-price-secondary">{formatPrice(token)}</div>
-                  </div>
-                </div>
-                <div class="token-stats">
-                  {#if formatBalance(token)}
-                    <div class="token-balance-main">{formatBalance(token)}</div>
-                  {/if}
-                  {#if formatDollarBalance(token)}
-                    <div class="token-balance-secondary">
-                      Balance: {formatDollarBalance(token)}
-                    </div>
-                  {/if}
-                </div>
-              </button>
+                </button>
+              {/if}
             {/each}
           </div>
         {/if}

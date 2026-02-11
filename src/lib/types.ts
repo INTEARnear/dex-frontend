@@ -32,3 +32,36 @@ export interface UserTokenBalance {
 }
 
 export type UserTokensResponse = UserTokenBalance[]
+
+export interface AssetWithBalance {
+  asset_id: string
+  balance: string
+}
+
+export type XykFeeReceiver =
+  | { Account: string }
+  | "Pool"
+
+export interface XykPrivatePoolData {
+  assets: [AssetWithBalance, AssetWithBalance]
+  fees: {
+    receivers: Array<[XykFeeReceiver, number]>
+  }
+  owner_id: string
+}
+
+export interface XykPublicPoolData {
+  assets: [AssetWithBalance, AssetWithBalance]
+  fees: {
+    receivers: Array<[XykFeeReceiver, number]>
+  }
+  total_shares: number
+}
+
+export interface XykPool {
+  id: number
+  pool: {
+    Private?: XykPrivatePoolData
+    Public?: XykPublicPoolData
+  }
+}

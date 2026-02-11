@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { walletStore } from "./walletStore";
   import TokenSelector from "./TokenSelector.svelte";
   import TokenBadge from "./TokenBadge.svelte";
@@ -18,6 +19,7 @@
     PRICES_API,
     ROUTER_API,
   } from "./utils";
+  import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
 
   const phrases = [
     "Swap tokens instantly",
@@ -161,6 +163,15 @@
   let errorMessage = $state("");
   let showSuccessModal = $state(false);
   let successTransfers = $state<SwapResultModalInfoTransfer[]>([]);
+  const chatwootModalVisibility = createChatwootModalVisibilityController();
+
+  onDestroy(() => {
+    chatwootModalVisibility.dispose();
+  });
+
+  $effect(() => {
+    chatwootModalVisibility.setVisible(showErrorModal || showSuccessModal);
+  });
 
   let inputTokenBalance = $state<string | null>(null);
   let outputTokenBalance = $state<string | null>(null);

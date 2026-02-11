@@ -1,5 +1,5 @@
 <script lang="ts">
-  import WalletButton from "$lib/WalletButton.svelte";
+  import WalletButton from "../lib/WalletButton.svelte";
   import { BookOpen } from "lucide-svelte";
   import { siX, siTelegram, siGithub } from "simple-icons";
   import { browser } from "$app/environment";
@@ -11,24 +11,30 @@
   }
 
   let { children } = $props();
+
+  const isLiquidityPage = $derived(page.url.pathname === "/liquidity");
 </script>
 
 <div class="top-bar">
   <nav class="desktop-nav">
     <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
-    <a href="/liquidity" class:active={page.url.pathname === "/liquidity"}>Liquidity</a>
+    <a href="/liquidity" class:active={page.url.pathname === "/liquidity"}
+      >Liquidity</a
+    >
   </nav>
   <WalletButton />
 </div>
 
-<main>
+<main class:wide={isLiquidityPage}>
   <header>
     <h1>Intear <span class="accent">DEX</span></h1>
   </header>
 
   <nav class="mobile-nav">
     <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
-    <a href="/liquidity" class:active={page.url.pathname === "/liquidity"}>Liquidity</a>
+    <a href="/liquidity" class:active={page.url.pathname === "/liquidity"}
+      >Liquidity</a
+    >
   </nav>
 
   {@render children()}
@@ -104,6 +110,12 @@
     width: 100%;
     max-width: 480px;
     position: relative;
+  }
+
+  main.wide {
+    max-width: 1400px;
+    flex: 1;
+    justify-content: flex-start;
   }
 
   .top-bar {
@@ -217,7 +229,7 @@
 
   @media (--mobile) {
     main {
-      gap: 0.5rem;
+      gap: 0.75rem;
     }
 
     header {

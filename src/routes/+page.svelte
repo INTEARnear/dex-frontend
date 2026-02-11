@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SwapForm from "$lib/SwapForm.svelte";
+  import SwapForm from "../lib/SwapForm.svelte";
 </script>
 
 <SwapForm />
