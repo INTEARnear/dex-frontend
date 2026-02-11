@@ -12,28 +12,28 @@
 
   let { children } = $props();
 
-  const isLiquidityPage = $derived(page.url.pathname === "/liquidity");
+  const isPoolsPage = $derived(page.url.pathname === "/pools");
 </script>
 
 <div class="top-bar">
   <nav class="desktop-nav">
     <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
-    <a href="/liquidity" class:active={page.url.pathname === "/liquidity"}
-      >Liquidity</a
+    <a href="/pools" class:active={page.url.pathname === "/pools"}
+      >Pools</a
     >
   </nav>
   <WalletButton />
 </div>
 
-<main class:wide={isLiquidityPage}>
+<main class:wide={isPoolsPage}>
   <header>
     <h1>Intear <span class="accent">DEX</span></h1>
   </header>
 
   <nav class="mobile-nav">
     <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
-    <a href="/liquidity" class:active={page.url.pathname === "/liquidity"}
-      >Liquidity</a
+    <a href="/pools" class:active={page.url.pathname === "/pools"}
+      >Pools</a
     >
   </nav>
 
@@ -153,7 +153,6 @@
   nav {
     display: flex;
     gap: 0.5rem;
-    background: var(--bg-secondary);
     padding: 0.25rem;
     border-radius: 0.75rem;
   }
