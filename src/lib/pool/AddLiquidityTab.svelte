@@ -1,6 +1,11 @@
 <script lang="ts">
   import SwapSettings from "../SwapSettings.svelte";
   import type { AmountPreset, SlippageMode } from "../SwapSettings.svelte";
+  import DexPresetButtons, {
+    type DexPresetButtonItem,
+  } from "../DexPresetButtons.svelte";
+  import Spinner from "../Spinner.svelte";
+  import TradeSettingsRow from "../TradeSettingsRow.svelte";
   import type { Token } from "../types";
   import {
     formatAmount,
@@ -31,30 +36,12 @@
   import ErrorModal from "../ErrorModal.svelte";
   import AddedLiquidityModal from "./AddedLiquidityModal.svelte";
   import { parseLiquidityAddedFromOutcomes } from "./liquidityEvents";
-  const DEFAULT_AMOUNT_PRESETS: AmountPreset[] = [
-    { type: "percent", value: 25 },
-    { type: "percent", value: 50 },
-    { type: "percent", value: 80 },
-    { type: "percent", value: 100 },
-    { type: "dollar", value: 10 },
-    { type: "dollar", value: 100 },
-  ];
-
-  function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } {
-    try {
-      const saved = localStorage.getItem("intear-dex-slippage");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { mode: "auto", value: 0 };
-  }
-
-  function loadPresetsConfig(): { visible: boolean; presets: AmountPreset[] } {
-    try {
-      const saved = localStorage.getItem("intear-dex-amount-presets");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { visible: true, presets: DEFAULT_AMOUNT_PRESETS };
-  }
+  import {
+    loadAmountPresetsConfig,
+    loadSwapSettingsConfig,
+    saveAmountPresetsConfig,
+    saveSwapSettingsConfig,
+  } from "../swapConfig";
 
   function loadRiskAwarenessConfig(): boolean {
     try {
@@ -118,7 +105,7 @@
   }: Props = $props();
 
   const initialSwap = loadSwapSettingsConfig();
-  const initialPresets = loadPresetsConfig();
+  const initialPresets = loadAmountPresetsConfig();
 
   let amount0Human = $state("");
   let amount1Human = $state("");
@@ -434,23 +421,13 @@
   function handleSlippageChange(mode: SlippageMode, value: number) {
     swapSlippageMode = mode;
     swapSlippageValue = value;
-    try {
-      localStorage.setItem(
-        "intear-dex-slippage",
-        JSON.stringify({ mode, value }),
-      );
-    } catch {}
+    saveSwapSettingsConfig(mode, value);
   }
 
   function handlePresetsChange(visible: boolean, presets: AmountPreset[]) {
     presetsVisible = visible;
     amountPresets = presets;
-    try {
-      localStorage.setItem(
-        "intear-dex-amount-presets",
-        JSON.stringify({ visible, presets }),
-      );
-    } catch {}
+    saveAmountPresetsConfig(visible, presets);
   }
 
   function handleRiskAwarenessChange(checked: boolean) {
@@ -687,73 +664,39 @@
   }
 </script>
 
-<div class="settings-row">
-  {#if presetsVisible && $walletStore.isConnected && token0 && token0Id}
-    {@const token0Price = parseFloat(token0.price_usd)}
-    <div class="preset-buttons">
-      {#each amountPresets as preset, i}
-        {#if preset.type === "percent" || token0Price > 0}
-          <button
-            class="preset-btn"
-            class:active={activePresetIndex === i}
-            onclick={() => applyPreset(preset)}
-          >
-            {preset.type === "dollar" ? `$${preset.value}` : `${preset.value}%`}
-          </button>
-        {/if}
-      {/each}
-    </div>
-  {/if}
-
-  <div class="settings-anchor">
-    <button
-      class="settings-btn"
-      onclick={() => (swapSettingsOpen = !swapSettingsOpen)}
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path
-          d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-        />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-      <span class="settings-label">{swapSettingsDisplay}</span>
-    </button>
-
-    {#if swapSettingsOpen}
-      <button
-        class="swap-settings-backdrop"
-        aria-label="Close liquidity settings"
-        onclick={() => (swapSettingsOpen = false)}
-      ></button>
-      <div
-        class="swap-settings-popup"
-        role="dialog"
-        aria-label="Liquidity settings"
-        tabindex="-1"
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.key === "Escape" && (swapSettingsOpen = false)}
-      >
-        <SwapSettings
-          mode={swapSlippageMode}
-          value={swapSlippageValue}
-          onchange={handleSlippageChange}
-          {presetsVisible}
-          presets={amountPresets}
-          onPresetsChange={handlePresetsChange}
-        />
-      </div>
+<TradeSettingsRow
+  bind:open={swapSettingsOpen}
+  settingsLabel={swapSettingsDisplay}
+  dialogLabel="Liquidity settings"
+  closeBackdropLabel="Close liquidity settings"
+>
+  {#snippet presets()}
+    {#if presetsVisible && $walletStore.isConnected && token0 && token0Id}
+      {@const token0Price = parseFloat(token0.price_usd)}
+      <DexPresetButtons
+        items={amountPresets.reduce((buttons, preset, i) => {
+          if (preset.type === "percent" || token0Price > 0) {
+            buttons.push({
+              id: i,
+              label: preset.type === "dollar" ? `$${preset.value}` : `${preset.value}%`,
+              active: activePresetIndex === i,
+              onClick: () => applyPreset(preset),
+            });
+          }
+          return buttons;
+        }, [] as DexPresetButtonItem[])}
+      />
     {/if}
-  </div>
-</div>
+  {/snippet}
+  <SwapSettings
+    mode={swapSlippageMode}
+    value={swapSlippageValue}
+    onchange={handleSlippageChange}
+    {presetsVisible}
+    presets={amountPresets}
+    onPresetsChange={handlePresetsChange}
+  />
+</TradeSettingsRow>
 
 {#if !poolData || !isSupportedAsset(poolData.assets[0].asset_id) || !isSupportedAsset(poolData.assets[1].asset_id)}
   <div class="warning-box error-box">
@@ -951,7 +894,7 @@
       disabled={!canSubmit}
     >
       {#if isSubmitting}
-        <span class="spinner small"></span>
+        <Spinner tone="light" />
         Adding Liquidity...
       {:else if isPrivate && !isOwner}
         Owner Only
@@ -963,106 +906,6 @@
 {/if}
 
 <style>
-  .settings-row {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    margin-bottom: 0.25rem;
-  }
-  .preset-buttons {
-    display: flex;
-    gap: 1rem;
-    margin-right: auto;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    flex-shrink: 1;
-    min-width: 0;
-  }
-  .preset-buttons::-webkit-scrollbar {
-    display: none;
-  }
-  .preset-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    font-family: "JetBrains Mono", monospace;
-    cursor: pointer;
-    transition: color 0.15s ease;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .preset-btn:hover,
-  .preset-btn.active {
-    color: var(--accent-primary);
-  }
-  .settings-anchor {
-    position: relative;
-    flex-shrink: 0;
-  }
-  .settings-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.625rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-  .settings-btn:hover {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border-color: var(--text-muted);
-  }
-  .settings-label {
-    font-family: "JetBrains Mono", monospace;
-  }
-  .swap-settings-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 99;
-    background: rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(1px);
-    border: none;
-    padding: 0;
-    margin: 0;
-    cursor: default;
-  }
-  .swap-settings-popup {
-    position: absolute;
-    top: calc(100% + 0.5rem);
-    right: 0;
-    z-index: 100;
-    width: 20.3412rem;
-    max-width: calc(max(100vw - 7rem, 13rem));
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 0.875rem;
-    box-shadow:
-      0 10px 25px -5px rgba(0, 0, 0, 0.5),
-      0 4px 10px -2px rgba(0, 0, 0, 0.3),
-      0 0 0 1px rgba(59, 130, 246, 0.08);
-    animation: popupFadeIn 0.15s ease-out;
-  }
-  @keyframes popupFadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
   .warning-box {
     border-radius: 0.75rem;
     padding: 0.75rem 1rem;
@@ -1275,15 +1118,7 @@
     opacity: 0.6;
     cursor: not-allowed;
   }
-  .spinner.small {
-    width: 1rem;
-    height: 1rem;
-    border-width: 2px;
-  }
   @media (--small-mobile) {
-    .settings-row {
-      margin-bottom: 0;
-    }
     .input-wrapper {
       padding: 0.5rem 0.625rem;
       gap: 0.25rem;

@@ -29,6 +29,7 @@
     type NormalizedPool,
     parsePoolId,
   } from "../../lib/pool/shared";
+  import Spinner from "../../lib/Spinner.svelte";
 
   interface TrackedFeeConfig {
     receivers: Array<[XykFeeReceiver, number]>;
@@ -257,7 +258,7 @@
 <div class="pool-page">
   {#if isLoading}
     <div class="loading">
-      <div class="spinner"></div>
+      <Spinner size={28} borderWidth={3} />
       <p>Loading pool...</p>
     </div>
   {:else if error || !poolData || parsedPoolId === null}
@@ -484,21 +485,6 @@
 
   .back-link:hover {
     color: var(--accent-hover);
-  }
-
-  .spinner {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 3px solid var(--border-color);
-    border-top-color: var(--accent-primary);
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   @media (--tablet) {

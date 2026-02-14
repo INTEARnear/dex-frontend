@@ -3,6 +3,7 @@
   import { createChatwootModalVisibilityController } from "../chatwootBubbleVisibility";
   import type { Token } from "../types";
   import { formatAmount, rawAmountToHumanReadable } from "../utils";
+  import ModalShell from "../ModalShell.svelte";
   import type { LiquidityRemovedEventData } from "./liquidityEvents";
 
   interface PositionData {
@@ -97,111 +98,60 @@
   });
 </script>
 
-{#if isOpen && eventData && (snapshot || (token0 && token1))}
-  <div
-    class="modal-backdrop"
-    role="presentation"
-    onclick={onClose}
-    onkeydown={(e) => e.key === "Escape" && onClose()}
-  >
-    <div
-      class="result-modal success-modal"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
+<ModalShell
+  isOpen={!!(isOpen && eventData && (snapshot || (token0 && token1)))}
+  {onClose}
+  modalClassName="success-modal"
+  dialogLabel="Liquidity removed"
+>
+  <div class="modal-icon success-icon">
+    <svg
+      width="48"
+      height="48"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
     >
-      <div class="modal-icon success-icon">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="9 12 11 14 15 10" />
-        </svg>
-      </div>
-      <h3>Liquidity Removed</h3>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="9 12 11 14 15 10" />
+    </svg>
+  </div>
+  <h3 class="modal-title">Liquidity Removed</h3>
 
-      <div class="tokens-received">
-        <span class="tokens-label">You received</span>
-        <div class="token-row">
-          <span class="token-amount"
-            >{removed0Human !== null ? formatAmount(parseFloat(removed0Human)) : "—"}</span
-          >
-          <span class="token-symbol">{symbol0}</span>
-        </div>
-        <div class="token-row">
-          <span class="token-amount"
-            >{removed1Human !== null ? formatAmount(parseFloat(removed1Human)) : "—"}</span
-          >
-          <span class="token-symbol">{symbol1}</span>
-        </div>
-      </div>
-
-      {#if isPositionClose && pnlUsd !== null}
-        <div
-          class="pnl-row"
-          class:pnl-positive={pnlUsd > 0}
-          class:pnl-negative={pnlUsd < 0}
-        >
-          <span class="pnl-label">PnL</span>
-          <span class="pnl-value">
-            {pnlUsd >= 0 ? "+" : ""}${formatAmount(pnlUsd)}
-          </span>
-        </div>
-      {/if}
-
-      <button class="modal-btn success-btn" onclick={onClose}>Done</button>
+  <div class="tokens-received">
+    <span class="tokens-label">You received</span>
+    <div class="token-row">
+      <span class="token-amount"
+        >{removed0Human !== null ? formatAmount(parseFloat(removed0Human)) : "—"}</span
+      >
+      <span class="token-symbol">{symbol0}</span>
+    </div>
+    <div class="token-row">
+      <span class="token-amount"
+        >{removed1Human !== null ? formatAmount(parseFloat(removed1Human)) : "—"}</span
+      >
+      <span class="token-symbol">{symbol1}</span>
     </div>
   </div>
-{/if}
+
+  {#if isPositionClose && pnlUsd !== null}
+    <div
+      class="pnl-row"
+      class:pnl-positive={pnlUsd > 0}
+      class:pnl-negative={pnlUsd < 0}
+    >
+      <span class="pnl-label">PnL</span>
+      <span class="pnl-value">
+        {pnlUsd >= 0 ? "+" : ""}${formatAmount(pnlUsd)}
+      </span>
+    </div>
+  {/if}
+
+  <button class="modal-btn success-btn" onclick={onClose}>Done</button>
+</ModalShell>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
-  .result-modal {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 1.25rem;
-    padding: 2rem;
-    max-width: 400px;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    box-shadow:
-      0 20px 25px -5px rgba(0, 0, 0, 0.4),
-      0 10px 10px -5px rgba(0, 0, 0, 0.2);
-    animation: modalSlideIn 0.2s ease-out;
-  }
-
-  @keyframes modalSlideIn {
-    from {
-      opacity: 0;
-      transform: scale(0.95) translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1) translateY(0);
-    }
-  }
-
   .modal-icon {
     width: 64px;
     height: 64px;
@@ -216,7 +166,7 @@
     color: #4ade80;
   }
 
-  .result-modal h3 {
+  .modal-title {
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;

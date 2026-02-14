@@ -16,12 +16,13 @@
   import ErrorModal from "../ErrorModal.svelte";
   import RemovedLiquidityModal from "./RemovedLiquidityModal.svelte";
   import { parseLiquidityRemovedFromOutcomes } from "./liquidityEvents";
+  import Spinner from "../Spinner.svelte";
   import {
     formatAmount,
     formatRelativeDate,
     rawAmountToHumanReadable,
   } from "../utils";
-  import type { SlippageMode } from "../SwapSettings.svelte";
+  import { loadSwapSettingsConfig } from "../swapConfig";
 
   const NEP413_MESSAGE = "Sign in to Intear DEX for LP position tracking";
   const NEP413_RECIPIENT = "dex.intea.rs";
@@ -57,14 +58,6 @@
       `${STORAGE_KEY_PREFIX}${accountId}`,
       JSON.stringify(payload),
     );
-  }
-
-  function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } {
-    try {
-      const saved = localStorage.getItem("intear-dex-slippage");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { mode: "auto", value: 0 };
   }
 
   export interface OpenPosition {
@@ -584,7 +577,7 @@
                   aria-busy={isClosing}
                 >
                   {#if isClosing}
-                    <span class="spinner small"></span>
+                    <Spinner tone="light" />
                     {hasStoredAuth ? "Closing…" : "Signing…"}
                   {:else}
                     {hasStoredAuth ? "Close Position" : "Close Position (1/2)"}
@@ -918,26 +911,6 @@
   .close-position-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  .spinner {
-    display: inline-block;
-    border-radius: 50%;
-    border: 3px solid var(--border-color);
-    border-top-color: var(--accent-primary);
-    animation: spin 0.8s linear infinite;
-  }
-
-  .spinner.small {
-    width: 1rem;
-    height: 1rem;
-    border-width: 2px;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .details-grid {

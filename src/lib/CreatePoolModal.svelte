@@ -4,9 +4,8 @@
   import { walletStore } from "./walletStore";
   import { tokenHubStore } from "./tokenHubStore";
   import TokenSelector from "./TokenSelector.svelte";
-  import TokenBadge from "./TokenBadge.svelte";
+  import TokenIcon from "./TokenIcon.svelte";
   import type { Token, XykFeeReceiver } from "./types";
-  import { getTokenIcon } from "./utils";
   import {
     User,
     CirclePlus,
@@ -560,20 +559,7 @@
             >
               {#if token1}
                 <div class="selected-token">
-                  <div class="token-icon-wrapper">
-                    {#if getTokenIcon(token1)}
-                      <img
-                        src={getTokenIcon(token1)}
-                        alt={token1.metadata.symbol}
-                        class="token-icon"
-                      />
-                    {:else}
-                      <div class="token-icon-placeholder">
-                        {token1.metadata.symbol.charAt(0)}
-                      </div>
-                    {/if}
-                    <TokenBadge token={token1} small />
-                  </div>
+                  <TokenIcon token={token1} size={28} showBadge badgeSmall />
                   <span>{token1.metadata.symbol}</span>
                 </div>
               {:else}
@@ -610,20 +596,7 @@
             >
               {#if token2}
                 <div class="selected-token">
-                  <div class="token-icon-wrapper">
-                    {#if getTokenIcon(token2)}
-                      <img
-                        src={getTokenIcon(token2)}
-                        alt={token2.metadata.symbol}
-                        class="token-icon"
-                      />
-                    {:else}
-                      <div class="token-icon-placeholder">
-                        {token2.metadata.symbol.charAt(0)}
-                      </div>
-                    {/if}
-                    <TokenBadge token={token2} small />
-                  </div>
+                  <TokenIcon token={token2} size={28} showBadge badgeSmall />
                   <span>{token2.metadata.symbol}</span>
                 </div>
               {:else}
@@ -990,36 +963,6 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-  }
-
-  .token-icon-wrapper {
-    position: relative;
-    width: 1.75rem;
-    height: 1.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .token-icon {
-    width: 1.75rem;
-    height: 1.75rem;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .token-icon-placeholder {
-    width: 1.75rem;
-    height: 1.75rem;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.75rem;
-    color: white;
   }
 
   .placeholder {

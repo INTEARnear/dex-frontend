@@ -1,5 +1,6 @@
 <script lang="ts">
   import { walletStore } from "./walletStore";
+  import Spinner from "./Spinner.svelte";
 
   let isConnecting = $state(false);
 
@@ -48,7 +49,7 @@
 {:else}
   <button class="connect-btn" onclick={handleConnect} disabled={isConnecting}>
     {#if isConnecting}
-      <span class="spinner"></span>
+      <Spinner size={14} tone="light" />
       Connecting...
     {:else}
       Connect Wallet
@@ -127,21 +128,6 @@
     background: var(--bg-input);
     border-color: #ef4444;
     color: #ef4444;
-  }
-
-  .spinner {
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   @media (--tablet) {

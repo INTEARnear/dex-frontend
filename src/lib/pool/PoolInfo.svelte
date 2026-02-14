@@ -1,8 +1,8 @@
 <script lang="ts">
-  import TokenBadge from "../TokenBadge.svelte";
+  import TokenIcon from "../TokenIcon.svelte";
   import type { Token } from "../types";
   import type { NormalizedPool } from "./shared";
-  import { formatFeePercent, formatLiquidity, getTokenIcon } from "../utils";
+  import { formatFeePercent, formatLiquidity } from "../utils";
 
   interface Props {
     poolData: NormalizedPool | null;
@@ -56,36 +56,17 @@
     <div class="pool-identity">
       <div class="token-icons">
         {#if token0}
-          <div class="token-icon-wrapper">
-            {#if getTokenIcon(token0)}
-              <img
-                src={getTokenIcon(token0)!}
-                alt={token0.metadata.symbol}
-                class="token-icon"
-              />
-            {:else}
-              <div class="token-icon-placeholder">
-                {token0.metadata.symbol.charAt(0)}
-              </div>
-            {/if}
-            <TokenBadge token={token0} />
-          </div>
+          <TokenIcon token={token0} size={48} showBadge ring ringWidth={3} />
         {/if}
         {#if token1}
-          <div class="token-icon-wrapper token-icon-second">
-            {#if getTokenIcon(token1)}
-              <img
-                src={getTokenIcon(token1)!}
-                alt={token1.metadata.symbol}
-                class="token-icon"
-              />
-            {:else}
-              <div class="token-icon-placeholder">
-                {token1.metadata.symbol.charAt(0)}
-              </div>
-            {/if}
-            <TokenBadge token={token1} />
-          </div>
+          <TokenIcon
+            token={token1}
+            size={48}
+            showBadge
+            ring
+            ringWidth={3}
+            overlap
+          />
         {/if}
       </div>
       <div class="pair-symbols">
@@ -163,43 +144,9 @@
     flex-shrink: 0;
   }
 
-  .token-icon-wrapper {
-    position: relative;
-    width: 3rem;
-    height: 3rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .token-icon-second {
-    margin-left: -1rem;
-  }
-
   .token-icons :global(.reputation-reputable),
   .token-icons :global(.reputation-notfake) {
     display: none;
-  }
-
-  .token-icon {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid var(--bg-card);
-  }
-
-  .token-icon-placeholder {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    color: white;
-    border: 3px solid var(--bg-card);
   }
 
   .pool-badges {

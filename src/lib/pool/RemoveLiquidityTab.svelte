@@ -1,6 +1,11 @@
 <script lang="ts">
   import SwapSettings from "../SwapSettings.svelte";
   import type { AmountPreset, SlippageMode } from "../SwapSettings.svelte";
+  import DexPresetButtons, {
+    type DexPresetButtonItem,
+  } from "../DexPresetButtons.svelte";
+  import Spinner from "../Spinner.svelte";
+  import TradeSettingsRow from "../TradeSettingsRow.svelte";
   import type { Token } from "../types";
   import {
     formatAmount,
@@ -20,31 +25,12 @@
   import ErrorModal from "../ErrorModal.svelte";
   import RemovedLiquidityModal from "./RemovedLiquidityModal.svelte";
   import { parseLiquidityRemovedFromOutcomes } from "./liquidityEvents";
-
-  const DEFAULT_AMOUNT_PRESETS: AmountPreset[] = [
-    { type: "percent", value: 25 },
-    { type: "percent", value: 50 },
-    { type: "percent", value: 80 },
-    { type: "percent", value: 100 },
-    { type: "dollar", value: 10 },
-    { type: "dollar", value: 100 },
-  ];
-
-  function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } {
-    try {
-      const saved = localStorage.getItem("intear-dex-slippage");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { mode: "auto", value: 0 };
-  }
-
-  function loadPresetsConfig(): { visible: boolean; presets: AmountPreset[] } {
-    try {
-      const saved = localStorage.getItem("intear-dex-amount-presets");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { visible: true, presets: DEFAULT_AMOUNT_PRESETS };
-  }
+  import {
+    loadAmountPresetsConfig,
+    loadSwapSettingsConfig,
+    saveAmountPresetsConfig,
+    saveSwapSettingsConfig,
+  } from "../swapConfig";
 
   function formatShares(raw: bigint): string {
     const human = rawAmountToHumanReadable(raw.toString(), 18);
@@ -79,7 +65,7 @@
   }: Props = $props();
 
   const initialSwap = loadSwapSettingsConfig();
-  const initialPresets = loadPresetsConfig();
+  const initialPresets = loadAmountPresetsConfig();
 
   let removePercent = $state(50);
   let swapSettingsOpen = $state(false);
@@ -257,23 +243,13 @@
   function handleSlippageChange(mode: SlippageMode, value: number) {
     swapSlippageMode = mode;
     swapSlippageValue = value;
-    try {
-      localStorage.setItem(
-        "intear-dex-slippage",
-        JSON.stringify({ mode, value }),
-      );
-    } catch {}
+    saveSwapSettingsConfig(mode, value);
   }
 
   function handlePresetsChange(visible: boolean, presets: AmountPreset[]) {
     presetsVisible = visible;
     amountPresets = presets;
-    try {
-      localStorage.setItem(
-        "intear-dex-amount-presets",
-        JSON.stringify({ visible, presets }),
-      );
-    } catch {}
+    saveAmountPresetsConfig(visible, presets);
   }
 
   async function handleRemoveLiquidity() {
@@ -370,42 +346,36 @@
       If you use this tab directly, PnL tracking will stop working for all open positions. To keep track of your PnL and liquidity history, click "Close" on the positions instead of removing liquidity directly.
     </div>
   {/if}
-  <div class="settings-row">
-    <div class="preset-buttons">
-      {#each removeQuickPresets as preset (preset.key)}
-        <button
-          class="preset-btn"
-          class:active={preset.percent !== null && removePercent === preset.percent}
-          class:insufficient-dollar={preset.insufficientDollar}
-          onclick={() => {
+  <TradeSettingsRow
+    bind:open={swapSettingsOpen}
+    settingsLabel={swapSettingsDisplay}
+    dialogLabel="Liquidity settings"
+    closeBackdropLabel="Close liquidity settings"
+    bottomMargin="0"
+  >
+    {#snippet presets()}
+      <DexPresetButtons
+        items={removeQuickPresets.map((preset) => ({
+          id: preset.key,
+          label: preset.label,
+          active: preset.percent !== null && removePercent === preset.percent,
+          disabled: preset.disabled,
+          insufficientDollar: preset.insufficientDollar,
+          onClick: () => {
             if (preset.percent !== null) removePercent = preset.percent;
-          }}
-          disabled={preset.disabled}
-        >
-          {preset.label}
-        </button>
-      {/each}
-    </div>
-    <div class="settings-anchor">
-      <button
-        class="settings-btn"
-        onclick={() => (swapSettingsOpen = !swapSettingsOpen)}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-        <span class="settings-label">{swapSettingsDisplay}</span>
-      </button>
-
-      {#if swapSettingsOpen}
-        <button class="swap-settings-backdrop" aria-label="Close liquidity settings" onclick={() => (swapSettingsOpen = false)}></button>
-        <div class="swap-settings-popup" role="dialog" aria-label="Liquidity settings" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === "Escape" && (swapSettingsOpen = false)}>
-          <SwapSettings mode={swapSlippageMode} value={swapSlippageValue} onchange={handleSlippageChange} {presetsVisible} presets={amountPresets} onPresetsChange={handlePresetsChange} />
-        </div>
-      {/if}
-    </div>
-  </div>
+          },
+        }) satisfies DexPresetButtonItem)}
+      />
+    {/snippet}
+    <SwapSettings
+      mode={swapSlippageMode}
+      value={swapSlippageValue}
+      onchange={handleSlippageChange}
+      {presetsVisible}
+      presets={amountPresets}
+      onPresetsChange={handlePresetsChange}
+    />
+  </TradeSettingsRow>
 
   <div class="slider-wrapper">
     <div class="slider-header">
@@ -517,7 +487,7 @@
 
   <button class="primary-btn remove-btn" onclick={handleRemoveLiquidity} disabled={!canRemove}>
     {#if isSubmitting}
-      <span class="spinner small"></span>
+      <Spinner tone="light" />
       Removing Liquidity...
     {:else if removePercent === 0}
       Select Amount
@@ -529,18 +499,6 @@
 
 <style>
   .remove-liquidity-content { display: flex; flex-direction: column; gap: 0.75rem; }
-  .settings-row { display: flex; justify-content: flex-end; align-items: center; }
-  .preset-buttons { display: flex; gap: 1rem; margin-right: auto; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
-  .preset-buttons::-webkit-scrollbar { display: none; }
-  .preset-btn { background: none; border: none; padding: 0; margin: 0; color: var(--text-muted); font-size: 0.8125rem; font-weight: 500; font-family: "JetBrains Mono", monospace; cursor: pointer; transition: color 0.15s ease; white-space: nowrap; }
-  .preset-btn:hover, .preset-btn.active { color: var(--accent-primary); }
-  .preset-btn.insufficient-dollar, .preset-btn.insufficient-dollar:hover { color: #f87171; cursor: not-allowed; }
-  .preset-btn:disabled { opacity: 1; }
-  .settings-anchor { position: relative; }
-  .settings-btn { display: flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.625rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; font-weight: 500; cursor: pointer; }
-  .settings-label { font-family: "JetBrains Mono", monospace; }
-  .swap-settings-backdrop { position: fixed; inset: 0; z-index: 99; background: rgba(0, 0, 0, 0.1); backdrop-filter: blur(1px); border: none; cursor: default; }
-  .swap-settings-popup { position: absolute; top: calc(100% + 0.5rem); right: 0; z-index: 100; width: 20.3412rem; max-width: calc(max(100vw - 7rem, 13rem)); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 0.875rem; }
   .slider-wrapper { display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1rem 0.875rem; }
   .slider-header { display: flex; justify-content: space-between; align-items: center; }
   .slider-label { color: var(--text-secondary); font-size: 0.875rem; }
@@ -571,7 +529,6 @@
   .primary-btn.remove-btn:hover:not(:disabled) { background: #dc2626; }
   .primary-btn.remove-btn:disabled { background: rgba(239, 68, 68, 0.45); opacity: 1; cursor: not-allowed; }
   .primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-  .spinner.small { width: 1rem; height: 1rem; border-width: 2px; }
   @media (--mobile) { .slider-wrapper { padding: 0.625rem 0.75rem; gap: 0.375rem; } .slider-value { font-size: 1.25rem; } .remove-preview-box { padding: 0.625rem 0.75rem; gap: 0.375rem; } .preview-token-icon, .preview-token-icon-placeholder { width: 1.25rem; height: 1.25rem; font-size: 0.625rem; } .preview-token-amount { font-size: 1rem; } .preview-token-symbol { font-size: 0.75rem; } }
   @media (--small-mobile) { .slider-wrapper { padding: 0.5rem 0.625rem; gap: 0.25rem; } .slider-value { font-size: 1.125rem; } .percent-slider { height: 6px; } .percent-slider::-webkit-slider-thumb, .percent-slider::-moz-range-thumb { width: 16px; height: 16px; } .remove-preview-box { padding: 0.5rem 0.625rem; gap: 0.25rem; } .preview-token { gap: 0.375rem; } .preview-token-icon, .preview-token-icon-placeholder { width: 1.125rem; height: 1.125rem; font-size: 0.5625rem; } .preview-token-amount { font-size: 0.875rem; } .preview-token-symbol { font-size: 0.75rem; } .preview-total { padding-top: 0.375rem; } }
 </style>

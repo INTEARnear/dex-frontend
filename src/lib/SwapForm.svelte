@@ -2,7 +2,12 @@
   import { onDestroy } from "svelte";
   import { walletStore } from "./walletStore";
   import TokenSelector from "./TokenSelector.svelte";
-  import TokenBadge from "./TokenBadge.svelte";
+  import TokenIcon from "./TokenIcon.svelte";
+  import Spinner from "./Spinner.svelte";
+  import DexPresetButtons, {
+    type DexPresetButtonItem,
+  } from "./DexPresetButtons.svelte";
+  import TradeSettingsRow from "./TradeSettingsRow.svelte";
   import SwapSettings from "./SwapSettings.svelte";
   import type { SlippageMode, AmountPreset } from "./SwapSettings.svelte";
   import type { Token } from "./types";
@@ -13,11 +18,17 @@
     rawAmountToHumanReadable,
     formatBalance,
     formatUsdValue,
-    getTokenIcon,
     ROUTER_API,
   } from "./utils";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
+  import {
+    loadAmountPresetsConfig,
+    loadSwapSettingsConfig,
+    saveAmountPresetsConfig,
+    saveSwapSettingsConfig,
+  } from "./swapConfig";
   import ErrorModal from "./ErrorModal.svelte";
+  import ModalShell from "./ModalShell.svelte";
 
   const phrases = [
     "Swap tokens instantly",
@@ -87,13 +98,6 @@
   let inputTokenSelectorOpen = $state(false);
   let outputTokenSelectorOpen = $state(false);
 
-  function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } {
-    try {
-      const saved = localStorage.getItem("intear-dex-slippage");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { mode: "auto", value: 0 };
-  }
   const initialSwapSettings = loadSwapSettingsConfig();
   let swapSlippageMode = $state<SlippageMode>(initialSwapSettings.mode);
   let swapSlippageValue = $state(initialSwapSettings.value);
@@ -106,46 +110,16 @@
   function handleSlippageChange(mode: SlippageMode, value: number) {
     swapSlippageMode = mode;
     swapSlippageValue = value;
-    try {
-      localStorage.setItem(
-        "intear-dex-slippage",
-        JSON.stringify({ mode, value }),
-      );
-    } catch {}
+    saveSwapSettingsConfig(mode, value);
   }
-
-  const DEFAULT_AMOUNT_PRESETS: AmountPreset[] = [
-    { type: "percent", value: 25 },
-    { type: "percent", value: 50 },
-    { type: "percent", value: 80 },
-    { type: "percent", value: 100 },
-    { type: "dollar", value: 10 },
-    { type: "dollar", value: 100 },
-  ];
-
-  function loadPresetsConfig(): {
-    visible: boolean;
-    presets: AmountPreset[];
-  } {
-    try {
-      const saved = localStorage.getItem("intear-dex-amount-presets");
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { visible: true, presets: DEFAULT_AMOUNT_PRESETS };
-  }
-  const initialPresets = loadPresetsConfig();
+  const initialPresets = loadAmountPresetsConfig();
   let presetsVisible = $state(initialPresets.visible);
   let amountPresets = $state<AmountPreset[]>(initialPresets.presets);
 
   function handlePresetsChange(visible: boolean, presets: AmountPreset[]) {
     presetsVisible = visible;
     amountPresets = presets;
-    try {
-      localStorage.setItem(
-        "intear-dex-amount-presets",
-        JSON.stringify({ visible, presets }),
-      );
-    } catch {}
+    saveAmountPresetsConfig(visible, presets);
   }
 
   let currentRoute = $state<Route | null>(null);
@@ -950,7 +924,7 @@
                     "Smart contract panicked: Output amount is less than constraint",
                     "Smart contract panicked: Input amount is greater than constraint",
                     "Smart contract panicked: E68: slippage error",
-                  ].includes(executionError)
+                  ].some((error) => error.includes(executionError))
                 ) {
                   throw new Error(
                     "Slippage error: The price has changed while you were confirming transaction. Please try again.",
@@ -1117,73 +1091,39 @@
 <p class="subtitle">{randomPhrase}</p>
 
 <div class="swap-card" class:disabled={!$walletStore.isConnected}>
-  <div class="settings-row">
-    {#if presetsVisible && $walletStore.isConnected && inputToken && inputTokenBalance}
-      {@const inputPrice = parseFloat(inputToken.price_usd)}
-      <div class="preset-buttons">
-        {#each amountPresets as preset, i}
-          {#if preset.type === "percent" || inputPrice > 0}
-            <button
-              class="preset-btn"
-              class:active={activePresetIndex === i}
-              onclick={() => applyPreset(preset)}
-              >{preset.type === "dollar"
-                ? `$${preset.value}`
-                : `${preset.value}%`}</button
-            >
-          {/if}
-        {/each}
-      </div>
-    {/if}
-    <div class="settings-anchor">
-      <button
-        class="settings-btn"
-        onclick={() => (swapSettingsOpen = !swapSettingsOpen)}
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-          />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-        <span class="settings-label">{swapSettingsDisplay}</span>
-      </button>
-
-      {#if swapSettingsOpen}
-        <button
-          class="swap-settings-backdrop"
-          aria-label="Close swap settings"
-          onclick={() => (swapSettingsOpen = false)}
-        ></button>
-        <div
-          class="swap-settings-popup"
-          role="dialog"
-          aria-label="Swap settings"
-          tabindex="-1"
-          onclick={(e) => e.stopPropagation()}
-          onkeydown={(e) => e.key === "Escape" && (swapSettingsOpen = false)}
-        >
-          <SwapSettings
-            mode={swapSlippageMode}
-            value={swapSlippageValue}
-            onchange={handleSlippageChange}
-            {presetsVisible}
-            presets={amountPresets}
-            onPresetsChange={handlePresetsChange}
-          />
-        </div>
+  <TradeSettingsRow
+    bind:open={swapSettingsOpen}
+    settingsLabel={swapSettingsDisplay}
+    dialogLabel="Swap settings"
+    closeBackdropLabel="Close swap settings"
+  >
+    {#snippet presets()}
+      {#if presetsVisible && $walletStore.isConnected && inputToken && inputTokenBalance}
+        {@const inputPrice = parseFloat(inputToken.price_usd)}
+        <DexPresetButtons
+          items={amountPresets.reduce((buttons, preset, i) => {
+            if (preset.type === "percent" || inputPrice > 0) {
+              buttons.push({
+                id: i,
+                label: preset.type === "dollar" ? `$${preset.value}` : `${preset.value}%`,
+                active: activePresetIndex === i,
+                onClick: () => applyPreset(preset),
+              });
+            }
+            return buttons;
+          }, [] as DexPresetButtonItem[])}
+        />
       {/if}
-    </div>
-  </div>
+    {/snippet}
+    <SwapSettings
+      mode={swapSlippageMode}
+      value={swapSlippageValue}
+      onchange={handleSlippageChange}
+      {presetsVisible}
+      presets={amountPresets}
+      onPresetsChange={handlePresetsChange}
+    />
+  </TradeSettingsRow>
 
   <div class="swap-fields">
     <div
@@ -1264,20 +1204,7 @@
           onclick={() => (inputTokenSelectorOpen = true)}
         >
           {#if inputToken}
-            <div class="token-icon-wrapper-small">
-              {#if getTokenIcon(inputToken)}
-                <img
-                  src={getTokenIcon(inputToken)}
-                  alt={inputToken.metadata.symbol}
-                  class="token-icon-small"
-                />
-              {:else}
-                <div class="token-icon-small-placeholder">
-                  {inputToken.metadata.symbol.charAt(0)}
-                </div>
-              {/if}
-              <TokenBadge token={inputToken} small />
-            </div>
+            <TokenIcon token={inputToken} size={24} showBadge badgeSmall />
             <span class="token-symbol"
               >{truncateSymbol(inputToken.metadata.symbol)}</span
             >
@@ -1363,20 +1290,7 @@
           onclick={() => (outputTokenSelectorOpen = true)}
         >
           {#if outputToken}
-            <div class="token-icon-wrapper-small">
-              {#if getTokenIcon(outputToken)}
-                <img
-                  src={getTokenIcon(outputToken)}
-                  alt={outputToken.metadata.symbol}
-                  class="token-icon-small"
-                />
-              {:else}
-                <div class="token-icon-small-placeholder">
-                  {outputToken.metadata.symbol.charAt(0)}
-                </div>
-              {/if}
-              <TokenBadge token={outputToken} small />
-            </div>
+            <TokenIcon token={outputToken} size={24} showBadge badgeSmall />
             <span class="token-symbol"
               >{truncateSymbol(outputToken.metadata.symbol)}</span
             >
@@ -1489,10 +1403,10 @@
         hasInsufficientBalance}
     >
       {#if isSwapping}
-        <span class="spinner"></span>
+        <Spinner tone="light" />
         Swapping...
       {:else if isFetchingRoute}
-        <span class="spinner"></span>
+        <Spinner tone="light" />
         Getting quote...
       {:else if hasInsufficientBalance}
         Insufficient balance
@@ -1526,64 +1440,50 @@
 />
 
 <!-- Success Modal -->
-{#if showSuccessModal}
-  <div
-    class="modal-backdrop"
-    role="presentation"
-    onclick={() => (showSuccessModal = false)}
-    onkeydown={(e) => e.key === "Escape" && (showSuccessModal = false)}
-  >
-    <div
-      class="result-modal success-modal"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
+<ModalShell
+  isOpen={showSuccessModal}
+  onClose={() => (showSuccessModal = false)}
+  modalClassName="success-modal"
+  dialogLabel="Swap complete"
+>
+  <div class="modal-icon success-icon">
+    <svg
+      width="48"
+      height="48"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
     >
-      <div class="modal-icon success-icon">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="9 12 11 14 15 10" />
-        </svg>
-      </div>
-      <h3>You Swapped</h3>
-      <div class="transfers-list">
-        {#each successTransfers as transfer}
-          <div
-            class="transfer-item"
-            class:transfer-in={transfer.direction === "in"}
-            class:transfer-out={transfer.direction === "out"}
-          >
-            <span class="transfer-direction"
-              >{transfer.direction === "in" ? "+" : "−"}</span
-            >
-            <span class="transfer-amount"
-              >{formatTransferAmount(transfer.amountRaw, transfer.tokenId) ??
-                "?"}</span
-            >
-            <span class="transfer-symbol"
-              >{getTokenSymbol(transfer.tokenId) ?? "?"}</span
-            >
-          </div>
-        {/each}
-      </div>
-      <button
-        class="modal-btn success-btn"
-        onclick={() => (showSuccessModal = false)}
-      >
-        Done
-      </button>
-    </div>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="9 12 11 14 15 10" />
+    </svg>
   </div>
-{/if}
+  <h3 class="modal-title">You Swapped</h3>
+  <div class="transfers-list">
+    {#each successTransfers as transfer}
+      <div
+        class="transfer-item"
+        class:transfer-in={transfer.direction === "in"}
+        class:transfer-out={transfer.direction === "out"}
+      >
+        <span class="transfer-direction"
+          >{transfer.direction === "in" ? "+" : "−"}</span
+        >
+        <span class="transfer-amount"
+          >{formatTransferAmount(transfer.amountRaw, transfer.tokenId) ??
+            "?"}</span
+        >
+        <span class="transfer-symbol"
+          >{getTokenSymbol(transfer.tokenId) ?? "?"}</span
+        >
+      </div>
+    {/each}
+  </div>
+  <button class="modal-btn success-btn" onclick={() => (showSuccessModal = false)}>
+    Done
+  </button>
+</ModalShell>
 
 <style>
   .subtitle {
@@ -1607,119 +1507,6 @@
       0 4px 6px -1px rgba(0, 0, 0, 0.3),
       0 2px 4px -2px rgba(0, 0, 0, 0.2),
       0 0 0 1px rgba(59, 130, 246, 0.05);
-  }
-
-  .settings-row {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    margin-bottom: 0.25rem;
-  }
-
-  .preset-buttons {
-    display: flex;
-    gap: 1rem;
-    margin-right: auto;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    flex-shrink: 1;
-    min-width: 0;
-  }
-
-  .preset-buttons::-webkit-scrollbar {
-    display: none;
-  }
-
-  .preset-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    font-family: "JetBrains Mono", monospace;
-    cursor: pointer;
-    transition: color 0.15s ease;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .preset-btn:hover,
-  .preset-btn.active {
-    color: var(--accent-primary);
-  }
-
-  .settings-anchor {
-    position: relative;
-    flex-shrink: 0;
-  }
-
-  .settings-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.625rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .settings-btn:hover {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border-color: var(--text-muted);
-  }
-
-  .settings-label {
-    font-family: "JetBrains Mono", monospace;
-  }
-
-  .swap-settings-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 99;
-    background: transparent;
-    border: none;
-    padding: 0;
-    margin: 0;
-    cursor: default;
-    background: rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(1px);
-  }
-
-  .swap-settings-popup {
-    position: absolute;
-    top: calc(100% + 0.5rem);
-    right: 0;
-    z-index: 100;
-    width: 20.3412rem;
-    max-width: calc(max(100vw - 7rem, 13rem));
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 0.875rem;
-    box-shadow:
-      0 10px 25px -5px rgba(0, 0, 0, 0.5),
-      0 4px 10px -2px rgba(0, 0, 0, 0.3),
-      0 0 0 1px rgba(59, 130, 246, 0.08);
-    animation: popupFadeIn 0.15s ease-out;
-  }
-
-  @keyframes popupFadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 
   .swap-card.disabled .input-wrapper {
@@ -1883,30 +1670,6 @@
     font-weight: 700;
   }
 
-  .token-icon-small {
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .token-icon-small-placeholder {
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.75rem;
-    color: white;
-  }
-
-  .token-icon-wrapper-small {
-    position: relative;
-  }
-
   .switch-btn {
     position: absolute;
     left: 50%;
@@ -1974,16 +1737,6 @@
 
   .connect-wallet-btn:hover:not(:disabled) {
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  }
-
-  .spinner {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
   }
 
   @keyframes spin {
@@ -2128,47 +1881,6 @@
     }
   }
 
-  /* Result Modals */
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
-  .result-modal {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 1.25rem;
-    padding: 2rem;
-    max-width: 400px;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    box-shadow:
-      0 20px 25px -5px rgba(0, 0, 0, 0.4),
-      0 10px 10px -5px rgba(0, 0, 0, 0.2);
-    animation: modalSlideIn 0.2s ease-out;
-  }
-
-  @keyframes modalSlideIn {
-    from {
-      opacity: 0;
-      transform: scale(0.95) translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1) translateY(0);
-    }
-  }
-
   .modal-icon {
     width: 64px;
     height: 64px;
@@ -2183,7 +1895,7 @@
     color: #4ade80;
   }
 
-  .result-modal h3 {
+  .modal-title {
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
@@ -2294,14 +2006,6 @@
       border-radius: 1rem;
     }
 
-    .settings-row {
-      margin-bottom: 0.125rem;
-    }
-
-    .preset-btn {
-      font-size: 0.75rem;
-    }
-
     .swap-fields {
       gap: 0.375rem;
     }
@@ -2337,13 +2041,6 @@
       padding: 0.375rem 0.625rem;
       font-size: 0.8125rem;
       border-radius: 0.5rem;
-    }
-
-    .token-icon-small,
-    .token-icon-small-placeholder {
-      width: 1.25rem;
-      height: 1.25rem;
-      font-size: 0.625rem;
     }
 
     .switch-btn {
@@ -2383,10 +2080,6 @@
     .swap-card {
       padding: 0.75rem;
       gap: 0.375rem;
-    }
-
-    .settings-row {
-      margin-bottom: 0;
     }
 
     .input-wrapper {

@@ -1,14 +1,10 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { tokenHubStore } from "./tokenHubStore";
-  import TokenBadge from "./TokenBadge.svelte";
+  import TokenIcon from "./TokenIcon.svelte";
+  import Spinner from "./Spinner.svelte";
   import type { Token, TokenInfo } from "./types";
-  import {
-    formatAmount,
-    formatCompact,
-    formatCompactBalance,
-    getTokenIcon,
-  } from "./utils";
+  import { formatAmount, formatCompact, formatCompactBalance } from "./utils";
   import { fade, fly } from "svelte/transition";
   import { createVirtualizer } from "./virtualizer.svelte";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
@@ -443,7 +439,7 @@
       <div class="token-list" bind:this={scrollContainerRef}>
         {#if $tokenHubStore.status.tokens || isSearching}
           <div class="loading">
-            <div class="spinner"></div>
+            <Spinner size={32} borderWidth={3} />
             <p>{isSearching ? "Searching..." : "Loading tokens..."}</p>
           </div>
         {:else if $tokenHubStore.errors.tokens}
@@ -480,20 +476,7 @@
                   style="position: absolute; top: 0; left: 0; width: 100%; height: {virtualItem.size}px; transform: translateY({virtualItem.start}px);"
                 >
                   <div class="token-left">
-                    <div class="token-icon-wrapper">
-                      {#if getTokenIcon(token)}
-                        <img
-                          src={getTokenIcon(token)}
-                          alt={token.metadata.symbol}
-                          class="token-icon"
-                        />
-                      {:else}
-                        <div class="token-icon-placeholder">
-                          {token.metadata.symbol.charAt(0)}
-                        </div>
-                      {/if}
-                      <TokenBadge {token} />
-                    </div>
+                    <TokenIcon token={token} size={40} showBadge />
                     <div class="token-info">
                       <div class="token-symbol">{token.metadata.symbol}</div>
                       <div class="token-price-secondary">
@@ -788,34 +771,6 @@
     min-width: 0;
   }
 
-  .token-icon-wrapper {
-    position: relative;
-    flex-shrink: 0;
-    width: 2.5rem;
-    height: 2.5rem;
-  }
-
-  .token-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    object-fit: cover;
-    display: block;
-  }
-
-  .token-icon-placeholder {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 1rem;
-    color: white;
-  }
-
   /* Mobile: full-screen bottom sheet */
   @media (--tablet) {
     .modal-backdrop {
@@ -848,21 +803,6 @@
       padding: 0.75rem;
     }
 
-    .token-icon-wrapper {
-      width: 2.25rem;
-      height: 2.25rem;
-    }
-
-    .token-icon {
-      width: 2.25rem;
-      height: 2.25rem;
-    }
-
-    .token-icon-placeholder {
-      width: 2.25rem;
-      height: 2.25rem;
-      font-size: 0.875rem;
-    }
   }
 
   .token-info {
@@ -1040,18 +980,4 @@
     background: var(--accent-hover);
   }
 
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid var(--border-color);
-    border-top-color: var(--accent-primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 </style>

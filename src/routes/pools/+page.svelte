@@ -3,10 +3,11 @@
   import { goto } from "$app/navigation";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
-  import { formatCompact } from "../../lib/utils";
+  import { formatFeePercent, formatLiquidity } from "../../lib/utils";
   import type { TokenInfo, AssetWithBalance, XykPool } from "../../lib/types";
   import CreatePoolModal from "../../lib/CreatePoolModal.svelte";
-  import TokenBadge from "../../lib/TokenBadge.svelte";
+  import Spinner from "../../lib/Spinner.svelte";
+  import TokenIcon from "../../lib/TokenIcon.svelte";
 
   const DEX_BACKEND_API = "https://dex-backend.intear.tech";
 
@@ -90,15 +91,6 @@
       }
     }
     return total;
-  }
-
-  function formatLiquidity(value: number): string {
-    if (!Number.isFinite(value) || value <= 0) return "$0";
-    if (value < 1) return "<$1";
-    if (value < 1000) return `$${formatCompact(value)}`;
-    if (value < 1e6) return `$${formatCompact(value / 1e3)}K`;
-    if (value < 1e9) return `$${formatCompact(value / 1e6)}M`;
-    return `$${formatCompact(value / 1e9)}B`;
   }
 
   async function fetchPools() {
@@ -257,7 +249,7 @@
 
   {#if isLoading}
     <div class="loading">
-      <div class="spinner"></div>
+      <Spinner size={32} borderWidth={3} />
       <p>Loading pools...</p>
     </div>
   {:else if error}
@@ -286,25 +278,15 @@
             <div class="pool-header-top">
               <div class="token-icons">
                 {#each pool.tokens as token, i}
-                  <div
-                    class="token-icon-wrapper"
-                    class:token-icon-second={i === 1}
-                  >
-                    {#if token?.metadata.icon}
-                      <img
-                        src={token.metadata.icon}
-                        alt={token.metadata.symbol}
-                        class="token-icon"
-                      />
-                    {:else}
-                      <div class="token-icon-placeholder">
-                        {token?.metadata.symbol?.charAt(0) ?? "?"}
-                      </div>
-                    {/if}
-                    {#if token}
-                      <TokenBadge {token} />
-                    {/if}
-                  </div>
+                  <TokenIcon
+                    token={token}
+                    size={48}
+                    showBadge
+                    preferMetadataIcon
+                    overlap={i === 1}
+                    ring={i !== 1}
+                    ringWidth={3}
+                  />
                 {/each}
               </div>
               <div class="pool-badges">
@@ -332,17 +314,7 @@
             </div>
             <div class="stat">
               <span class="stat-label">Fee</span>
-              <span class="stat-value">
-                {(() => {
-                  let str = pool.totalFeePercent.toFixed(4);
-                  if (str.endsWith("00")) {
-                    str = str.slice(0, -2);
-                  } else if (str.endsWith("0")) {
-                    str = str.slice(0, -1);
-                  }
-                  return str;
-                })()}%
-              </span>
+              <span class="stat-value">{formatFeePercent(pool.totalFeePercent)}%</span>
             </div>
             <div class="stat">
               <span class="stat-label">APY</span>
@@ -577,50 +549,9 @@
     align-items: center;
   }
 
-  .token-icon-wrapper {
-    position: relative;
-    width: 3rem;
-    height: 3rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .token-icon {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid var(--bg-card);
-    background: var(--bg-secondary);
-  }
-
-  .token-icon-second {
-    margin-left: -1rem;
-  }
-
-  .token-icon-wrapper:not(.token-icon-second) .token-icon,
-  .token-icon-wrapper:not(.token-icon-second) .token-icon-placeholder {
-    filter: brightness(0.95);
-  }
-
   .token-icons :global(.reputation-reputable),
   .token-icons :global(.reputation-notfake) {
     display: none;
-  }
-
-  .token-icon-placeholder {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 1rem;
-    color: white;
-    border: 3px solid var(--bg-card);
   }
 
   .pair-symbols {
@@ -734,18 +665,4 @@
     background: var(--accent-hover);
   }
 
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid var(--border-color);
-    border-top-color: var(--accent-primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 </style>
