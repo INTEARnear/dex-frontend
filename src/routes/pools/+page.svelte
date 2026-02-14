@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { NEAR_TOKEN } from "../../lib/tokenStore";
+  import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
-  import { PRICES_API, formatCompact } from "../../lib/utils";
-  import type { Token, AssetWithBalance, XykPool } from "../../lib/types";
+  import { formatCompact } from "../../lib/utils";
+  import type { TokenInfo, AssetWithBalance, XykPool } from "../../lib/types";
   import CreatePoolModal from "../../lib/CreatePoolModal.svelte";
   import TokenBadge from "../../lib/TokenBadge.svelte";
 
@@ -15,7 +15,7 @@
     ownerId?: string;
     assets: [AssetWithBalance, AssetWithBalance];
     totalFeePercent: number;
-    tokens: [Token | null, Token | null];
+    tokens: [TokenInfo | null, TokenInfo | null];
   }
 
   let pools = $state<PoolDisplay[]>([]);
@@ -26,8 +26,6 @@
     isFetchingPools || (isLoadingTokens && !canDisplayPools),
   );
   let error = $state<string | null>(null);
-  let tokenCache = $state<Map<string, Token | null>>(new Map());
-  const pendingTokenRequests = new Map<string, Promise<Token | null>>();
   let tokenDisplayFallbackTimer: number | null = null;
   let showCreatePoolModal = $state(false);
 
@@ -47,9 +45,9 @@
 
   function buildPoolsWithCachedTokens(poolList: PoolDisplay[]): PoolDisplay[] {
     return poolList.map((pool) => {
-      const tokens: [Token | null, Token | null] = [
-        tokenCache.get(pool.assets[0].asset_id) ?? null,
-        tokenCache.get(pool.assets[1].asset_id) ?? null,
+      const tokens: [TokenInfo | null, TokenInfo | null] = [
+        tokenHubStore.selectToken(pool.assets[0].asset_id),
+        tokenHubStore.selectToken(pool.assets[1].asset_id),
       ];
 
       return {
@@ -68,7 +66,7 @@
 
   function startTokenDisplayFallbackTimer(poolList: PoolDisplay[]) {
     clearTokenDisplayFallbackTimer();
-    tokenDisplayFallbackTimer = window.setTimeout(() => {
+    tokenDisplayFallbackTimer = setTimeout(() => {
       if (isLoadingTokens) {
         pools = buildPoolsWithCachedTokens(poolList);
         canDisplayPools = true;
@@ -76,57 +74,9 @@
     }, 1000);
   }
 
-  async function fetchTokenInfo(assetId: string): Promise<Token | null> {
-    if (tokenCache.has(assetId)) {
-      return tokenCache.get(assetId) ?? null;
-    }
-
-    const pendingRequest = pendingTokenRequests.get(assetId);
-    if (pendingRequest) {
-      return pendingRequest;
-    }
-
-    const request = (async () => {
-      if (assetId === "near") {
-        tokenCache.set(assetId, NEAR_TOKEN);
-        return NEAR_TOKEN;
-      }
-
-      if (!assetId.startsWith("nep141:")) {
-        tokenCache.set(assetId, null);
-        return null;
-      }
-
-      const tokenId = assetId.replace(/^nep141:/, "");
-      try {
-        const response = await fetch(`${PRICES_API}/token?token_id=${tokenId}`);
-        if (response.ok) {
-          const data: Token = await response.json();
-          if (!data.metadata.icon?.startsWith("data:")) {
-            data.metadata.icon = undefined;
-          }
-          tokenCache.set(assetId, data);
-          return data;
-        }
-      } catch (e) {
-        console.error(`Failed to fetch token ${tokenId}:`, e);
-      }
-
-      tokenCache.set(assetId, null);
-      return null;
-    })();
-
-    pendingTokenRequests.set(assetId, request);
-    try {
-      return await request;
-    } finally {
-      pendingTokenRequests.delete(assetId);
-    }
-  }
-
   function calculateLiquidityUsd(
     assets: [AssetWithBalance, AssetWithBalance],
-    tokens: [Token | null, Token | null],
+    tokens: [TokenInfo | null, TokenInfo | null],
   ): number {
     let total = 0;
     for (let i = 0; i < assets.length; i++) {
@@ -226,19 +176,23 @@
       new Set(poolList.flatMap((pool) => pool.assets.map((a) => a.asset_id))),
     );
 
+    await tokenHubStore.refreshTokens();
     await Promise.allSettled(
-      uniqueAssetIds.map((assetId) => fetchTokenInfo(assetId)),
+      uniqueAssetIds.map((assetId) => tokenHubStore.ensureTokenByAssetId(assetId)),
     );
 
     pools = buildPoolsWithCachedTokens(poolList);
   }
 
   onMount(() => {
+    tokenHubStore.updatePricesEvery(10_000);
+    tokenHubStore.updateBalancesEvery(5_000);
     fetchPools();
   });
 
   onDestroy(() => {
     clearTokenDisplayFallbackTimer();
+    tokenHubStore.updateBalancesEvery(null);
   });
 </script>
 

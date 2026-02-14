@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { tokenStore } from "./tokenStore";
-  import type { Token } from "./types";
+  import { tokenHubStore } from "./tokenHubStore";
+  import type { TokenInfo } from "./types";
 
   interface Props {
-    token: Token;
+    token: TokenInfo;
     small?: boolean;
   }
 
@@ -46,7 +46,7 @@
       return true;
     }
 
-    const reputableTokens = $tokenStore.tokens.filter(
+    const reputableTokens = $tokenHubStore.tokens.filter(
       (t) => t.reputation === "Reputable" || t.reputation === "NotFake",
     );
 

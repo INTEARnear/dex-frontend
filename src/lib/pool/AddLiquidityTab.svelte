@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { browser } from "$app/environment";
   import SwapSettings from "../SwapSettings.svelte";
   import type { AmountPreset, SlippageMode } from "../SwapSettings.svelte";
   import type { Token } from "../types";
@@ -15,7 +14,7 @@
     XykRegisterLiquidityArgsSchema,
     serializeToBase64,
   } from "../xykSchemas";
-  import { userBalances } from "../balanceStore";
+  import { tokenHubStore } from "../tokenHubStore";
   import { walletStore } from "../walletStore";
   import {
     assetIdToTokenId,
@@ -42,7 +41,6 @@
   ];
 
   function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } {
-    if (!browser) return { mode: "auto", value: 0 };
     try {
       const saved = localStorage.getItem("intear-dex-slippage");
       if (saved) return JSON.parse(saved);
@@ -51,7 +49,6 @@
   }
 
   function loadPresetsConfig(): { visible: boolean; presets: AmountPreset[] } {
-    if (!browser) return { visible: true, presets: DEFAULT_AMOUNT_PRESETS };
     try {
       const saved = localStorage.getItem("intear-dex-amount-presets");
       if (saved) return JSON.parse(saved);
@@ -60,7 +57,6 @@
   }
 
   function loadRiskAwarenessConfig(): boolean {
-    if (!browser) return false;
     try {
       return localStorage.getItem("intear-dex-risk-aware") === "true";
     } catch {}
@@ -151,6 +147,11 @@
   const isOwner = $derived(
     !!poolData?.ownerId && poolData.ownerId === $walletStore.accountId,
   );
+
+  function getUserBalanceRaw(tokenId: string | null): string {
+    if (!tokenId) return "0";
+    return $tokenHubStore.tokensById[tokenId]?.balance ?? "0";
+  }
 
   const poolRatio = $derived.by(() => {
     if (!poolData || !token0 || !token1) return null;
@@ -258,7 +259,7 @@
 
   function getToken0EffectiveBalanceRaw(): bigint | null {
     if (!token0 || !token0Id) return null;
-    let balanceRaw = BigInt($userBalances[token0Id] ?? "0");
+    let balanceRaw = BigInt(getUserBalanceRaw(token0Id));
     if (token0Id === "near") {
       balanceRaw =
         balanceRaw > GAS_RESERVE_NEAR ? balanceRaw - GAS_RESERVE_NEAR : 0n;
@@ -324,15 +325,15 @@
   const insufficientReason = $derived.by(() => {
     if (!hasValidAmounts || !token0 || !token1) return null;
     if (!token0Id || !token1Id) return "Unsupported pool assets";
-    const balance0 = BigInt($userBalances[token0Id] ?? "0");
-    const balance1 = BigInt($userBalances[token1Id] ?? "0");
+    const balance0 = BigInt(getUserBalanceRaw(token0Id));
+    const balance1 = BigInt(getUserBalanceRaw(token1Id));
     if (token0Id !== "near" && amount0Raw > balance0) {
       return `Insufficient ${token0.metadata.symbol} balance`;
     }
     if (token1Id !== "near" && amount1Raw > balance1) {
       return `Insufficient ${token1.metadata.symbol} balance`;
     }
-    const nearBalance = BigInt($userBalances.near ?? "0");
+    const nearBalance = BigInt(getUserBalanceRaw("near"));
     const nearAvailable =
       nearBalance > GAS_RESERVE_NEAR ? nearBalance - GAS_RESERVE_NEAR : 0n;
     if (requiredNearRaw > nearAvailable) return "Insufficient NEAR balance";
@@ -370,18 +371,12 @@
 
   const token0BalanceDisplay = $derived.by(() => {
     if (!token0 || !token0Id) return "0";
-    return formatBalance(
-      $userBalances[token0Id] ?? "0",
-      token0.metadata.decimals,
-    );
+    return formatBalance(getUserBalanceRaw(token0Id), token0.metadata.decimals);
   });
 
   const token1BalanceDisplay = $derived.by(() => {
     if (!token1 || !token1Id) return "0";
-    return formatBalance(
-      $userBalances[token1Id] ?? "0",
-      token1.metadata.decimals,
-    );
+    return formatBalance(getUserBalanceRaw(token1Id), token1.metadata.decimals);
   });
 
   function setAmount0AndRecalculate(nextAmount0: string) {
@@ -439,7 +434,6 @@
   function handleSlippageChange(mode: SlippageMode, value: number) {
     swapSlippageMode = mode;
     swapSlippageValue = value;
-    if (!browser) return;
     try {
       localStorage.setItem(
         "intear-dex-slippage",
@@ -451,7 +445,6 @@
   function handlePresetsChange(visible: boolean, presets: AmountPreset[]) {
     presetsVisible = visible;
     amountPresets = presets;
-    if (!browser) return;
     try {
       localStorage.setItem(
         "intear-dex-amount-presets",
@@ -462,7 +455,6 @@
 
   function handleRiskAwarenessChange(checked: boolean) {
     isRiskAware = checked;
-    if (!browser) return;
     try {
       localStorage.setItem("intear-dex-risk-aware", checked ? "true" : "false");
     } catch {}

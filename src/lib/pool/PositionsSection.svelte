@@ -52,7 +52,7 @@
     }
   }
 
-  function saveAuthPayload(accountId: string, payload: AuthPayload): void {
+  function saveAuthPayload(accountId: string, payload: AuthPayload) {
     localStorage.setItem(
       `${STORAGE_KEY_PREFIX}${accountId}`,
       JSON.stringify(payload),

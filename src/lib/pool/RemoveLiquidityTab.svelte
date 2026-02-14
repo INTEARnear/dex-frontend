@@ -1,9 +1,13 @@
 <script lang="ts">
-  import { browser } from "$app/environment";
   import SwapSettings from "../SwapSettings.svelte";
   import type { AmountPreset, SlippageMode } from "../SwapSettings.svelte";
   import type { Token } from "../types";
-  import { formatAmount, formatBalance, rawAmountToHumanReadable } from "../utils";
+  import {
+    formatAmount,
+    formatBalance,
+    getTokenIcon,
+    rawAmountToHumanReadable,
+  } from "../utils";
   import { XykRemoveLiquidityArgsSchema, serializeToBase64 } from "../xykSchemas";
   import { walletStore } from "../walletStore";
   import {
@@ -27,7 +31,6 @@
   ];
 
   function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } {
-    if (!browser) return { mode: "auto", value: 0 };
     try {
       const saved = localStorage.getItem("intear-dex-slippage");
       if (saved) return JSON.parse(saved);
@@ -36,7 +39,6 @@
   }
 
   function loadPresetsConfig(): { visible: boolean; presets: AmountPreset[] } {
-    if (!browser) return { visible: true, presets: DEFAULT_AMOUNT_PRESETS };
     try {
       const saved = localStorage.getItem("intear-dex-amount-presets");
       if (saved) return JSON.parse(saved);
@@ -48,12 +50,6 @@
     const human = rawAmountToHumanReadable(raw.toString(), 18);
     const num = parseFloat(human);
     return Number.isFinite(num) ? formatAmount(num) : "0";
-  }
-
-  function getTokenIcon(token: Token | null): string | null {
-    if (!token) return null;
-    if (token.metadata?.icon?.startsWith("data:")) return token.metadata.icon;
-    return null;
   }
 
   interface Props {
@@ -261,7 +257,6 @@
   function handleSlippageChange(mode: SlippageMode, value: number) {
     swapSlippageMode = mode;
     swapSlippageValue = value;
-    if (!browser) return;
     try {
       localStorage.setItem(
         "intear-dex-slippage",
@@ -273,7 +268,6 @@
   function handlePresetsChange(visible: boolean, presets: AmountPreset[]) {
     presetsVisible = visible;
     amountPresets = presets;
-    if (!browser) return;
     try {
       localStorage.setItem(
         "intear-dex-amount-presets",

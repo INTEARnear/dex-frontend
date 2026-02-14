@@ -1,17 +1,14 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { tokenStore } from "./tokenStore";
-  import { walletStore } from "./walletStore";
-  import { userBalances } from "./balanceStore";
+  import { tokenHubStore } from "./tokenHubStore";
   import TokenBadge from "./TokenBadge.svelte";
-  import type { Token } from "./types";
+  import type { Token, TokenInfo } from "./types";
   import {
     formatAmount,
     formatCompact,
     formatCompactBalance,
-    PRICES_API,
+    getTokenIcon,
   } from "./utils";
-  import { priceStore } from "./priceStore";
   import { fade, fly } from "svelte/transition";
   import { createVirtualizer } from "./virtualizer.svelte";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
@@ -25,16 +22,13 @@
   let { isOpen, onClose, onSelectToken }: Props = $props();
   let searchQuery = $state("");
   let searchInputRef = $state<HTMLInputElement | null>(null);
-  let tokenIcons = $state<Record<string, string | null>>({});
-  let loadingIcons = $state<Set<string>>(new Set());
-  let searchResults = $state<Token[]>([]);
+  let searchResults = $state<TokenInfo[]>([]);
   let isSearching = $state(false);
-  let searchAbortController: AbortController | null = null;
-  const pricesCache = $derived($priceStore);
-  let hoveredToken = $state<Token | null>(null);
+  let activeSearchId = 0;
+  let hoveredToken = $state<TokenInfo | null>(null);
   let tooltipX = $state(0);
   let tooltipY = $state(0);
-  let mobileTooltipToken = $state<Token | null>(null);
+  let mobileTooltipToken = $state<TokenInfo | null>(null);
   let isMobile = $state(false);
   let supportsTouch = $state(false);
   let hoverSuppressUntil = $state(0);
@@ -54,9 +48,12 @@
   });
 
   $effect(() => {
-    if (isOpen && $tokenStore.tokens.length === 0 && !$tokenStore.isLoading) {
-      const accountId = $walletStore.accountId;
-      tokenStore.fetchTokens(accountId ?? undefined);
+    if (
+      isOpen &&
+      $tokenHubStore.tokens.length === 0 &&
+      !$tokenHubStore.status.tokens
+    ) {
+      tokenHubStore.refreshTokens();
     }
   });
 
@@ -98,50 +95,8 @@
     }
   });
 
-  // Preload icons from tokens with balances
-  $effect(() => {
-    if ($tokenStore.tokens.length > 0) {
-      const newIcons: Record<string, string | null> = {};
-      for (const token of $tokenStore.tokens) {
-        if (token.preloadedIcon && !(token.account_id in tokenIcons)) {
-          newIcons[token.account_id] = token.preloadedIcon;
-        }
-      }
-      if (Object.keys(newIcons).length > 0) {
-        tokenIcons = { ...tokenIcons, ...newIcons };
-      }
-    }
-  });
-
   async function loadTokenIcon(tokenId: string) {
-    // Skip if already loading or loaded
-    if (loadingIcons.has(tokenId) || tokenId in tokenIcons) {
-      return;
-    }
-
-    loadingIcons.add(tokenId);
-    loadingIcons = loadingIcons; // Trigger reactivity
-
-    try {
-      const response = await fetch(`${PRICES_API}/token?token_id=${tokenId}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.metadata?.icon && data.metadata.icon.startsWith("data:")) {
-          tokenIcons[tokenId] = data.metadata.icon;
-          tokenIcons = { ...tokenIcons }; // Trigger reactivity
-        } else {
-          tokenIcons[tokenId] = null;
-          tokenIcons = { ...tokenIcons };
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to load icon for ${tokenId}:`, error);
-      tokenIcons[tokenId] = null;
-      tokenIcons = { ...tokenIcons };
-    } finally {
-      loadingIcons.delete(tokenId);
-      loadingIcons = loadingIcons;
-    }
+    await tokenHubStore.ensureTokenById(tokenId);
   }
 
   function handleTokenIntersection(entries: IntersectionObserverEntry[]) {
@@ -189,46 +144,17 @@
   });
 
   async function performSearch(query: string) {
-    searchAbortController?.abort();
-    const controller = new AbortController();
-    searchAbortController = controller;
-
+    const searchId = ++activeSearchId;
     isSearching = true;
     try {
-      const acc = $walletStore.accountId
-        ? `&acc=${$walletStore.accountId}`
-        : "";
-      const response = await fetch(
-        `${PRICES_API}/token-search?q=${encodeURIComponent(query)}&n=100${acc}`,
-        { signal: controller.signal },
-      );
-      if (controller.signal.aborted) return;
-      if (response.ok) {
-        let results: Token[] = await response.json();
-        if (controller.signal.aborted) return;
-
-        // If query matches "NEAR" partially, put NEAR token at top
-        if (
-          "near".includes(query.toLowerCase()) ||
-          query.toLowerCase().includes("near")
-        ) {
-          // Find NEAR token from store or create it
-          const nearToken = $tokenStore.tokens.find(
-            (t) => t.account_id === "near",
-          );
-          if (nearToken) {
-            results.unshift(nearToken);
-          }
-        }
-
-        searchResults = results;
-      }
+      const results = await tokenHubStore.searchTokens(query);
+      if (searchId !== activeSearchId) return;
+      searchResults = results;
     } catch (error) {
-      if (controller.signal.aborted) return;
       console.error("Search failed:", error);
       searchResults = [];
     } finally {
-      if (!controller.signal.aborted) {
+      if (searchId === activeSearchId) {
         isSearching = false;
       }
     }
@@ -236,15 +162,9 @@
 
   const filteredTokens = $derived.by(() => {
     if (searchQuery.trim().length > 0) {
-      const balances = $userBalances;
-      return searchResults.map((token) => {
-        const balance = balances[token.account_id];
-        return balance !== undefined
-          ? { ...token, userBalance: balance }
-          : token;
-      });
+      return searchResults;
     }
-    return $tokenStore.tokens;
+    return $tokenHubStore.tokens;
   });
 
   const virtual = createVirtualizer<HTMLDivElement>(() => ({
@@ -254,21 +174,8 @@
     overscan: 50,
   }));
 
-  function handleSelectToken(token: Token) {
-    // Build updated token with latest price and icon
-    const icon = tokenIcons[token.account_id];
-    const latestPrice = pricesCache[token.account_id];
-
-    const updatedToken: Token = {
-      ...token,
-      ...(latestPrice && { price_usd: latestPrice }),
-      metadata: {
-        ...token.metadata,
-        ...(icon && { icon }),
-      },
-    };
-
-    onSelectToken(updatedToken);
+  function handleSelectToken(token: TokenInfo) {
+    onSelectToken(token);
     onClose();
     searchQuery = "";
   }
@@ -285,18 +192,14 @@
     }
   }
 
-  function getTokenPrice(token: Token): string {
-    return pricesCache[token.account_id] ?? token.price_usd;
+  function getTokenPrice(token: TokenInfo): string {
+    return token.price_usd;
   }
 
-  function formatPrice(token: Token): string {
+  function formatPrice(token: TokenInfo): string {
     const num = parseFloat(getTokenPrice(token));
     if (num === 0) return "$0.00";
     return `$${formatAmount(num)}`;
-  }
-
-  function getTokenIcon(tokenId: string): string | null {
-    return tokenIcons[tokenId] ?? null;
   }
 
   function observeToken(node: HTMLElement) {
@@ -315,15 +218,13 @@
     };
   }
 
-  function formatBalance(token: Token): string | null {
-    const rawBalance =
-      (token as any).userBalance ?? $userBalances[token.account_id];
+  function formatBalance(token: TokenInfo): string | null {
+    const rawBalance = token.balance;
     return formatCompactBalance(rawBalance, token.metadata.decimals);
   }
 
-  function formatDollarBalance(token: Token): string | null {
-    const rawBalance =
-      (token as any).userBalance ?? $userBalances[token.account_id];
+  function formatDollarBalance(token: TokenInfo): string | null {
+    const rawBalance = token.balance;
     if (rawBalance === undefined || rawBalance === null) return null;
 
     const decimals = token.metadata.decimals;
@@ -345,30 +246,30 @@
     return `$${formatCompact(value / 1e12)}T`;
   }
 
-  function getCirculatingSupply(token: Token): number {
+  function getCirculatingSupply(token: TokenInfo): number {
     const supply = parseFloat(token.circulating_supply);
     if (!Number.isFinite(supply)) return 0;
     return supply / Math.pow(10, token.metadata.decimals);
   }
 
-  function getTotalSupply(token: Token): number {
+  function getTotalSupply(token: TokenInfo): number {
     const supply = parseFloat(token.total_supply);
     if (!Number.isFinite(supply)) return 0;
     return supply / Math.pow(10, token.metadata.decimals);
   }
 
-  function formatMarketCap(token: Token): string {
+  function formatMarketCap(token: TokenInfo): string {
     const marketCap =
       getCirculatingSupply(token) * parseFloat(getTokenPrice(token));
     return formatUsdCompact(marketCap);
   }
 
-  function formatFdv(token: Token): string {
+  function formatFdv(token: TokenInfo): string {
     const fdv = getTotalSupply(token) * parseFloat(getTokenPrice(token));
     return formatUsdCompact(fdv);
   }
 
-  function formatPriceChange24h(token: Token): string {
+  function formatPriceChange24h(token: TokenInfo): string {
     const current = parseFloat(token.price_usd_raw);
     const previous = parseFloat(token.price_usd_raw_24h_ago ?? "0");
     if (
@@ -384,7 +285,7 @@
     return `${sign}${formatCompact(Math.abs(percent))}%`;
   }
 
-  function getPriceChange24hDirection(token: Token): "up" | "down" | "flat" {
+  function getPriceChange24hDirection(token: TokenInfo): "up" | "down" | "flat" {
     const current = parseFloat(token.price_usd_raw);
     const previous = parseFloat(token.price_usd_raw_24h_ago ?? "0");
     if (
@@ -399,7 +300,7 @@
     return "flat";
   }
 
-  function getLiquiditySeverity(token: Token): "low" | "medium" | "normal" {
+  function getLiquiditySeverity(token: TokenInfo): "low" | "medium" | "normal" {
     const liquidity = token.liquidity_usd;
     if (!Number.isFinite(liquidity)) return "normal";
     if (liquidity < 500) return "low";
@@ -407,13 +308,13 @@
     return "normal";
   }
 
-  function getVolumeSeverity(token: Token): "low" | "normal" {
+  function getVolumeSeverity(token: TokenInfo): "low" | "normal" {
     const volume = token.volume_usd_24h;
     if (!Number.isFinite(volume)) return "normal";
     return volume < 500 ? "low" : "normal";
   }
 
-  function handleTooltipMove(event: MouseEvent, token: Token) {
+  function handleTooltipMove(event: MouseEvent, token: TokenInfo) {
     if (Date.now() < hoverSuppressUntil) return;
     hoveredToken = token;
     tooltipX = event.clientX + 12;
@@ -424,7 +325,7 @@
     hoveredToken = null;
   }
 
-  function handleTokenClick(token: Token) {
+  function handleTokenClick(token: TokenInfo) {
     if (longPressActive || mobileTooltipToken) {
       longPressActive = false;
       return;
@@ -432,7 +333,7 @@
     handleSelectToken(token);
   }
 
-  function handleTokenTouchStart(event: TouchEvent, token: Token) {
+  function handleTokenTouchStart(event: TouchEvent, token: TokenInfo) {
     if (!isMobile || !supportsTouch) return;
     event.preventDefault();
     longPressActive = false;
@@ -440,7 +341,7 @@
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
     if (longPressTimer) window.clearTimeout(longPressTimer);
-    longPressTimer = window.setTimeout(() => {
+    longPressTimer = setTimeout(() => {
       hoveredToken = null;
       mobileTooltipToken = token;
       longPressActive = true;
@@ -540,15 +441,15 @@
       </div>
 
       <div class="token-list" bind:this={scrollContainerRef}>
-        {#if $tokenStore.isLoading || isSearching}
+        {#if $tokenHubStore.status.tokens || isSearching}
           <div class="loading">
             <div class="spinner"></div>
             <p>{isSearching ? "Searching..." : "Loading tokens..."}</p>
           </div>
-        {:else if $tokenStore.error}
+        {:else if $tokenHubStore.errors.tokens}
           <div class="error">
             <p>Failed to load tokens</p>
-            <button onclick={() => tokenStore.fetchTokens()}>Retry</button>
+            <button onclick={() => tokenHubStore.refreshTokens()}>Retry</button>
           </div>
         {:else if filteredTokens.length === 0}
           <div class="empty">
@@ -580,9 +481,9 @@
                 >
                   <div class="token-left">
                     <div class="token-icon-wrapper">
-                      {#if getTokenIcon(token.account_id)}
+                      {#if getTokenIcon(token)}
                         <img
-                          src={getTokenIcon(token.account_id)}
+                          src={getTokenIcon(token)}
                           alt={token.metadata.symbol}
                           class="token-icon"
                         />

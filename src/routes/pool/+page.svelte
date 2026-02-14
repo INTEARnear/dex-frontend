@@ -17,18 +17,15 @@
     LiquidityAddedEventData,
     LiquidityRemovedEventData,
   } from "../../lib/pool/liquidityEvents";
+  import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
-  import { refreshBalances } from "../../lib/balanceStore";
-  import { NEAR_TOKEN } from "../../lib/tokenStore";
   import type {
     AssetWithBalance,
-    Token,
+    TokenInfo,
     XykFeeReceiver,
   } from "../../lib/types";
-  import { PRICES_API } from "../../lib/utils";
   import {
     DEX_BACKEND_API,
-    assetIdToTokenId,
     type NormalizedPool,
     parsePoolId,
   } from "../../lib/pool/shared";
@@ -78,15 +75,13 @@
     untracked?: UntrackedPosition;
   }
 
-  const tokenRequestCache = new Map<string, Promise<Token | null>>();
-  let nearPriceRequest: Promise<void> | null = null;
   let activePoolRequestId = 0;
 
   type LiquidityTab = "add" | "remove";
 
   let poolData = $state<NormalizedPool | null>(null);
-  let token0 = $state<Token | null>(null);
-  let token1 = $state<Token | null>(null);
+  let token0 = $state<TokenInfo | null>(null);
+  let token1 = $state<TokenInfo | null>(null);
   let userSharesRaw = $state<string | null>(null);
   let openPositions = $state<OpenPosition[]>([]);
   let closedPositions = $state<ClosedPosition[]>([]);
@@ -136,66 +131,8 @@
     return null;
   }
 
-  async function ensureNearTokenPrice(): Promise<void> {
-    if (
-      NEAR_TOKEN.price_usd !== "0" &&
-      NEAR_TOKEN.price_usd_raw !== "0" &&
-      NEAR_TOKEN.price_usd_hardcoded !== "0"
-    ) {
-      return;
-    }
-
-    if (nearPriceRequest) {
-      await nearPriceRequest;
-      return;
-    }
-
-    nearPriceRequest = (async () => {
-      try {
-        const response = await fetch(`${PRICES_API}/token?token_id=wrap.near`);
-        if (!response.ok) return;
-        const wrapNear: Token = await response.json();
-        NEAR_TOKEN.price_usd = wrapNear.price_usd;
-        NEAR_TOKEN.price_usd_raw = wrapNear.price_usd_raw;
-        NEAR_TOKEN.price_usd_hardcoded = wrapNear.price_usd_hardcoded;
-      } catch (priceError) {
-        console.error("Failed to fetch wrap.near price:", priceError);
-      } finally {
-        nearPriceRequest = null;
-      }
-    })();
-
-    await nearPriceRequest;
-  }
-
-  async function fetchTokenInfo(assetId: string): Promise<Token | null> {
-    const cached = tokenRequestCache.get(assetId);
-    if (cached) return cached;
-
-    const request = (async () => {
-      if (assetId === "near") {
-        await ensureNearTokenPrice();
-        return NEAR_TOKEN;
-      }
-      const tokenId = assetIdToTokenId(assetId);
-      if (!tokenId) return null;
-
-      try {
-        const response = await fetch(`${PRICES_API}/token?token_id=${tokenId}`);
-        if (!response.ok) return null;
-        const token: Token = await response.json();
-        if (!token.metadata.icon?.startsWith("data:")) {
-          token.metadata.icon = undefined;
-        }
-        return token;
-      } catch (fetchError) {
-        console.error("Token fetch failed:", fetchError);
-        return null;
-      }
-    })();
-
-    tokenRequestCache.set(assetId, request);
-    return request;
+  async function fetchTokenInfo(assetId: string): Promise<TokenInfo | null> {
+    return tokenHubStore.ensureTokenByAssetId(assetId);
   }
 
   async function fetchPoolData(
@@ -303,11 +240,17 @@
     }
     fetchPoolData(id, accountId);
 
+    tokenHubStore.updateBalancesEvery(1000);
+    tokenHubStore.updatePricesEvery(3000);
+
     const interval = setInterval(() => {
       fetchPoolData(id, accountId ?? undefined, true);
-      refreshBalances(accountId ?? undefined);
     }, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      tokenHubStore.updateBalancesEvery(null);
+      tokenHubStore.updatePricesEvery(10_000);
+    };
   });
 </script>
 

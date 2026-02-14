@@ -22,16 +22,26 @@ export interface Token {
 }
 
 export interface TokensResponse {
-  [key: string]: Token;
+  [key: string]: TokenResponseWithIcon;
 }
 
-export interface UserTokenBalance {
+export type TokenResponse = Omit<Token, "metadata"> & {
+  metadata: Omit<TokenMetadata, "icon">;
+};
+
+export type TokenResponseWithIcon = Token;
+
+export interface UserTokenResponse {
   balance: string;
   source: string;
-  token: Token;
+  token: TokenResponseWithIcon;
 }
 
-export type UserTokensResponse = UserTokenBalance[];
+export interface TokenInfo extends TokenResponseWithIcon {
+  balance?: string;
+  balanceSource?: string;
+  balanceUsd?: number;
+}
 
 export interface AssetWithBalance {
   asset_id: string;

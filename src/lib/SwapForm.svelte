@@ -6,9 +6,7 @@
   import SwapSettings from "./SwapSettings.svelte";
   import type { SlippageMode, AmountPreset } from "./SwapSettings.svelte";
   import type { Token } from "./types";
-  import { NEAR_TOKEN, tokenStore } from "./tokenStore";
-  import { refreshBalances, userBalances } from "./balanceStore";
-  import { priceStore } from "./priceStore";
+  import { tokenHubStore } from "./tokenHubStore";
   import {
     formatAmount,
     humanReadableToRawAmount,
@@ -16,7 +14,6 @@
     formatBalance,
     formatUsdValue,
     getTokenIcon,
-    PRICES_API,
     ROUTER_API,
   } from "./utils";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
@@ -79,8 +76,14 @@
   let inputAmountHumanReadable = $state("");
   let outputAmountHumanReadable = $state("");
   let isSwapping = $state(false);
-  let inputToken = $state<Token | null>(null);
-  let outputToken = $state<Token | null>(null);
+  let inputTokenId = $state<string | null>(null);
+  let outputTokenId = $state<string | null>(null);
+  const inputToken = $derived.by(() =>
+    inputTokenId ? ($tokenHubStore.tokensById[inputTokenId] ?? null) : null,
+  );
+  const outputToken = $derived.by(() =>
+    outputTokenId ? ($tokenHubStore.tokensById[outputTokenId] ?? null) : null,
+  );
   let inputTokenSelectorOpen = $state(false);
   let outputTokenSelectorOpen = $state(false);
 
@@ -177,26 +180,44 @@
   let inputTokenBalance = $state<string | null>(null);
   let outputTokenBalance = $state<string | null>(null);
 
-  // Eagerly load token store so TokenBadge has reputable tokens for comparison.
+  function parsePersistedTokenId(raw: string | null): string | null {
+    if (!raw) return null;
+    if (!raw.startsWith("{")) return raw;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.account_id === "string") {
+        return parsed.account_id;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Eagerly load token hub so TokenBadge has reputable tokens for comparison.
   // Re-fetch when wallet connects/disconnects so balances & sorting stay correct.
   let lastFetchedForAccount: string | null = null;
   $effect(() => {
     const accountId = $walletStore.accountId ?? null;
-    if (accountId !== lastFetchedForAccount && !$tokenStore.isLoading) {
+    if (accountId !== lastFetchedForAccount && !$tokenHubStore.status.tokens) {
       lastFetchedForAccount = accountId;
-      tokenStore.fetchTokens(accountId ?? undefined);
+      tokenHubStore.refreshTokens();
+      tokenHubStore.refreshBalances();
     }
   });
 
   // Load saved tokens from localStorage on mount
   $effect(() => {
     try {
-      const savedInput = localStorage.getItem("intear-dex-input-token");
-      const savedOutput = localStorage.getItem("intear-dex-output-token");
+      const savedInput = parsePersistedTokenId(
+        localStorage.getItem("intear-dex-input-token"),
+      );
+      const savedOutput = parsePersistedTokenId(
+        localStorage.getItem("intear-dex-output-token"),
+      );
 
       if (savedInput) {
-        const token = JSON.parse(savedInput);
-        inputToken = token;
+        loadDefaultToken(savedInput, true);
       } else {
         loadDefaultToken(
           "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
@@ -205,8 +226,7 @@
       }
 
       if (savedOutput) {
-        const token = JSON.parse(savedOutput);
-        outputToken = token;
+        loadDefaultToken(savedOutput, false);
       } else {
         loadDefaultToken("jambo-1679.meme-cooking.near", false);
       }
@@ -217,14 +237,12 @@
 
   async function loadDefaultToken(tokenId: string, isInput: boolean) {
     try {
-      const response = await fetch(`${PRICES_API}/token?token_id=${tokenId}`);
-      if (response.ok) {
-        const token = await response.json();
-        if (isInput) {
-          inputToken = token;
-        } else {
-          outputToken = token;
-        }
+      const token = await tokenHubStore.ensureTokenById(tokenId);
+      if (!token) return;
+      if (isInput) {
+        inputTokenId = token.account_id;
+      } else {
+        outputTokenId = token.account_id;
       }
     } catch (error) {
       console.error(`Failed to load default token ${tokenId}:`, error);
@@ -233,12 +251,9 @@
 
   // Save input token to localStorage when it changes
   $effect(() => {
-    if (inputToken) {
+    if (inputTokenId) {
       try {
-        localStorage.setItem(
-          "intear-dex-input-token",
-          JSON.stringify(inputToken),
-        );
+        localStorage.setItem("intear-dex-input-token", inputTokenId);
       } catch (error) {
         console.error("Failed to save input token:", error);
       }
@@ -247,19 +262,16 @@
 
   // Save output token to localStorage when it changes
   $effect(() => {
-    if (outputToken) {
+    if (outputTokenId) {
       try {
-        localStorage.setItem(
-          "intear-dex-output-token",
-          JSON.stringify(outputToken),
-        );
+        localStorage.setItem("intear-dex-output-token", outputTokenId);
       } catch (error) {
         console.error("Failed to save output token:", error);
       }
     }
   });
 
-  // Update input/output balances when tokens or shared balance store changes
+  // Update input/output balances when tokens or canonical TokenInfo balances change
   $effect(() => {
     if (!$walletStore.accountId) {
       inputTokenBalance = null;
@@ -267,31 +279,13 @@
       return;
     }
 
-    inputTokenBalance = inputToken
-      ? ($userBalances[inputToken.account_id] ?? "0")
+    const tokensById = $tokenHubStore.tokensById;
+    inputTokenBalance = inputTokenId
+      ? (tokensById[inputTokenId]?.balance ?? "0")
       : null;
-    outputTokenBalance = outputToken
-      ? ($userBalances[outputToken.account_id] ?? "0")
+    outputTokenBalance = outputTokenId
+      ? (tokensById[outputTokenId]?.balance ?? "0")
       : null;
-  });
-
-  // Update token prices
-  $effect(() => {
-    const prices = $priceStore;
-
-    if (inputToken && prices[inputToken.account_id]) {
-      const newPrice = prices[inputToken.account_id];
-      if (inputToken.price_usd !== newPrice) {
-        inputToken = { ...inputToken, price_usd: newPrice };
-      }
-    }
-
-    if (outputToken && prices[outputToken.account_id]) {
-      const newPrice = prices[outputToken.account_id];
-      if (outputToken.price_usd !== newPrice) {
-        outputToken = { ...outputToken, price_usd: newPrice };
-      }
-    }
   });
 
   const hasInsufficientBalance = $derived.by(() => {
@@ -500,7 +494,7 @@
       clearInterval(quoteRefreshInterval);
     }
 
-    quoteRefreshInterval = window.setInterval(() => {
+    quoteRefreshInterval = setInterval(() => {
       const hasValidAmount =
         swapMode === "exactIn"
           ? inputAmountHumanReadable && parseFloat(inputAmountHumanReadable) > 0
@@ -937,7 +931,7 @@
         });
 
       const outcomes = await wallet.signAndSendTransactions({ transactions });
-      refreshBalances();
+      tokenHubStore.refreshBalances();
 
       console.log("Transaction results:", outcomes);
 
@@ -1033,7 +1027,7 @@
   }
 
   function switchTokens() {
-    [inputToken, outputToken] = [outputToken, inputToken];
+    [inputTokenId, outputTokenId] = [outputTokenId, inputTokenId];
 
     currentRoute = null;
     if (swapMode === "exactIn") {
@@ -1049,18 +1043,18 @@
 
   function handleSelectInputToken(token: Token) {
     // If selecting the same token as output, flip them
-    if (outputToken && token.account_id === outputToken.account_id) {
-      outputToken = inputToken;
+    if (outputTokenId && token.account_id === outputTokenId) {
+      outputTokenId = inputTokenId;
     }
-    inputToken = token;
+    inputTokenId = token.account_id;
   }
 
   function handleSelectOutputToken(token: Token) {
     // If selecting the same token as input, flip them
-    if (inputToken && token.account_id === inputToken.account_id) {
-      inputToken = outputToken;
+    if (inputTokenId && token.account_id === inputTokenId) {
+      inputTokenId = outputTokenId;
     }
-    outputToken = token;
+    outputTokenId = token.account_id;
   }
 
   function getEffectiveBalance(): bigint | null {
@@ -1068,7 +1062,7 @@
     let balanceRaw = BigInt(inputTokenBalance);
     if (inputToken.account_id === "near") {
       const gasReserve = BigInt(
-        humanReadableToRawAmount("0.03", NEAR_TOKEN.metadata.decimals),
+        humanReadableToRawAmount("0.03", inputToken.metadata.decimals),
       );
       balanceRaw = balanceRaw > gasReserve ? balanceRaw - gasReserve : 0n;
     }
@@ -1214,7 +1208,7 @@
                   const gasReserve = BigInt(
                     humanReadableToRawAmount(
                       "0.03",
-                      NEAR_TOKEN.metadata.decimals,
+                      inputToken.metadata.decimals,
                     ),
                   );
                   const availableBalance =

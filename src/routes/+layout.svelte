@@ -2,13 +2,16 @@
   import WalletButton from "../lib/WalletButton.svelte";
   import { BookOpen } from "lucide-svelte";
   import { siX, siTelegram, siGithub } from "simple-icons";
-  import { browser } from "$app/environment";
   import { page } from "$app/state";
+  import { tokenHubStore } from "../lib/tokenHubStore";
   import "../app.css";
 
-  if (browser && "serviceWorker" in navigator) {
+  if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js");
   }
+
+  tokenHubStore.init();
+  tokenHubStore.start();
 
   let { children } = $props();
 
@@ -20,9 +23,7 @@
 <div class="top-bar">
   <nav class="desktop-nav">
     <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
-    <a href="/pools" class:active={page.url.pathname === "/pools"}
-      >Pools</a
-    >
+    <a href="/pools" class:active={page.url.pathname === "/pools"}>Pools</a>
   </nav>
   <WalletButton />
 </div>
@@ -34,9 +35,7 @@
 
   <nav class="mobile-nav">
     <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
-    <a href="/pools" class:active={page.url.pathname === "/pools"}
-      >Pools</a
-    >
+    <a href="/pools" class:active={page.url.pathname === "/pools"}>Pools</a>
   </nav>
 
   {@render children()}

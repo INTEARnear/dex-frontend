@@ -1,4 +1,4 @@
-import type { Token, UserTokenBalance } from "./types";
+import type { Token } from "./types";
 
 // API base URLs
 export const PRICES_API = "https://prices.intear.tech";
@@ -169,39 +169,6 @@ export function formatUsdValue(
   if (value < 1000) return `$${value.toFixed(2)}`;
   if (value < 1000000) return `$${(value / 1000).toFixed(2)}K`;
   return `$${(value / 1000000).toFixed(2)}M`;
-}
-
-/**
- * Fetch user token balances from the API.
- * Returns a record mapping token account_id to raw balance string.
- */
-export async function fetchUserBalances(
-  accountId: string,
-): Promise<Record<string, UserTokenBalance>> {
-  const response = await fetch(
-    `${PRICES_API}/get-user-tokens?account_id=${accountId}&native=true`,
-  );
-  if (response.ok) {
-    const data = await response.json();
-    const balances: Record<string, UserTokenBalance> = {};
-    for (const item of data) {
-      balances[item.token.account_id] = item;
-    }
-    return balances;
-  }
-  return {};
-}
-
-/**
- * Fetch current token prices from the API.
- * Returns a record mapping token account_id to price USD string.
- */
-export async function fetchPrices(): Promise<Record<string, string>> {
-  const response = await fetch(`${PRICES_API}/prices`);
-  if (response.ok) {
-    return await response.json();
-  }
-  return {};
 }
 
 /**

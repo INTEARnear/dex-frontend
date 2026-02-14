@@ -2,11 +2,11 @@
   import { onDestroy } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { walletStore } from "./walletStore";
-  import { tokenStore } from "./tokenStore";
+  import { tokenHubStore } from "./tokenHubStore";
   import TokenSelector from "./TokenSelector.svelte";
   import TokenBadge from "./TokenBadge.svelte";
   import type { Token, XykFeeReceiver } from "./types";
-  import { PRICES_API } from "./utils";
+  import { getTokenIcon } from "./utils";
   import {
     User,
     CirclePlus,
@@ -165,18 +165,14 @@
 
   // Pre-fetch tokens when modal opens
   $effect(() => {
-    if (isOpen && $tokenStore.tokens.length === 0 && !$tokenStore.isLoading) {
-      tokenStore.fetchTokens(accountId ?? undefined);
+    if (
+      isOpen &&
+      $tokenHubStore.tokens.length === 0 &&
+      !$tokenHubStore.status.tokens
+    ) {
+      tokenHubStore.refreshTokens();
     }
   });
-
-  function getTokenIcon(token: Token | null): string | null {
-    if (!token) return null;
-    if (token.metadata?.icon?.startsWith("data:")) {
-      return token.metadata.icon;
-    }
-    return null;
-  }
 
   function addFeeReceiver() {
     feeReceivers = [...feeReceivers, createEmptyAccountReceiver()];
@@ -239,22 +235,7 @@
     feeReceivers = [...feeReceivers];
 
     try {
-      const response = await fetch(
-        `${PRICES_API}/get-user-tokens?account_id=${encodeURIComponent(accountValue)}&native=true`,
-      );
-
-      if (!response.ok) {
-        feeReceivers[index] = {
-          ...feeReceivers[index],
-          isValid: false,
-          isChecking: false,
-          warning: null,
-        };
-        feeReceivers = [...feeReceivers];
-        return;
-      }
-
-      const data = await response.json();
+      const data = await tokenHubStore.fetchAccountTokens(accountValue);
 
       const nearToken = data.find(
         (t: { token: { account_id: string }; balance: string }) =>
