@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusFirstElement, trapFocusKeydown } from "./a11y";
   import type { Snippet } from "svelte";
 
   interface Props {
@@ -16,6 +17,37 @@
     modalClassName = "",
     children,
   }: Props = $props();
+
+  let dialogRef = $state<HTMLDivElement | null>(null);
+  let previouslyFocusedElement: HTMLElement | null = null;
+
+  $effect(() => {
+    if (!isOpen) return;
+
+    previouslyFocusedElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    queueMicrotask(() => {
+      if (dialogRef) focusFirstElement(dialogRef);
+    });
+
+    return () => {
+      previouslyFocusedElement?.focus();
+      previouslyFocusedElement = null;
+    };
+  });
+
+  function handleDialogKeydown(event: KeyboardEvent) {
+    if (!dialogRef) return;
+
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+
+    trapFocusKeydown(event, dialogRef);
+  }
 </script>
 
 {#if isOpen}
@@ -27,12 +59,13 @@
   >
     <div
       class={`result-modal ${modalClassName}`.trim()}
+      bind:this={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={dialogLabel}
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
+      onkeydown={handleDialogKeydown}
     >
       {@render children?.()}
     </div>

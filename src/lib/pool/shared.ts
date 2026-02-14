@@ -6,7 +6,14 @@ export const DEX_ID = "slimedragon.near/xyk";
 
 export const STORAGE_DEPOSIT_NEAR = 10n ** 22n; // 0.01 NEAR
 export const GAS_RESERVE_NEAR = 3n * 10n ** 22n; // 0.03 NEAR
+export const AUTO_MIN_SLIPPAGE_PERCENT = 0.1;
 export const AUTO_MAX_SLIPPAGE_PERCENT = 10;
+export const AUTO_LIQUIDITY_SLIPPAGE_PERCENT = Math.pow(
+  2,
+  (Math.log2(AUTO_MIN_SLIPPAGE_PERCENT) +
+    Math.log2(AUTO_MAX_SLIPPAGE_PERCENT)) /
+    2,
+);
 
 export interface TrackedFeeConfig {
   receivers: Array<[XykFeeReceiver, number]>;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusFirstElement, trapFocusKeydown } from "./a11y";
   import { onDestroy } from "svelte";
   import { fade, fly } from "svelte/transition";
   import { walletStore } from "./walletStore";
@@ -130,6 +131,8 @@
   let token1 = $state<Token | null>(null);
   let token2 = $state<Token | null>(null);
   let isPrivate = $state(false);
+  let modalRef = $state<HTMLDivElement | null>(null);
+  let previouslyFocusedElement: HTMLElement | null = null;
 
   function createEmptyAccountReceiver(): FeeReceiverFormItem {
     return {
@@ -171,6 +174,22 @@
     ) {
       tokenHubStore.refreshTokens();
     }
+  });
+
+  $effect(() => {
+    if (!isOpen) return;
+
+    previouslyFocusedElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    queueMicrotask(() => {
+      if (modalRef) focusFirstElement(modalRef);
+    });
+
+    return () => {
+      previouslyFocusedElement?.focus();
+      previouslyFocusedElement = null;
+    };
   });
 
   function addFeeReceiver() {
@@ -352,6 +371,18 @@
     }
   }
 
+  function handleModalKeyDown(e: KeyboardEvent) {
+    if (!modalRef) return;
+
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+
+    trapFocusKeydown(e, modalRef);
+  }
+
   function handleSelectToken1(token: Token) {
     token1 = token;
     showToken1Selector = false;
@@ -523,12 +554,13 @@
   >
     <div
       class="modal"
+      bind:this={modalRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
+      onkeydown={handleModalKeyDown}
       transition:fly={{ y: 20, duration: 200 }}
     >
       <div class="modal-header">
@@ -660,6 +692,10 @@
                         <input
                           type="text"
                           placeholder="you.near"
+                          aria-label={`Fee receiver ${index + 1} account`}
+                          aria-describedby={item.warning
+                            ? `receiver-warning-${index}`
+                            : undefined}
                           value={item.receiver.Account}
                           oninput={(e) =>
                             updateReceiverValue(index, e.currentTarget.value)}
@@ -687,6 +723,7 @@
                     <input
                       type="number"
                       placeholder="0"
+                      aria-label={`Fee receiver ${index + 1} percentage`}
                       value={item.percentage}
                       oninput={(e) =>
                         updateReceiverPercentage(index, e.currentTarget.value)}
@@ -708,7 +745,7 @@
                 </div>
 
                 {#if isAccountReceiver(item.receiver) && item.warning}
-                  <p class="warning-text">{item.warning}</p>
+                  <p id={`receiver-warning-${index}`} class="warning-text">{item.warning}</p>
                 {/if}
               </div>
             {/each}
@@ -745,7 +782,12 @@
       </div>
 
       {#if !isFeeValid || hasDuplicateReceivers() || (token1 && token2 && token1.account_id === token2.account_id)}
-        <div class="form-errors">
+        <div
+          id="create-pool-validation-errors"
+          class="form-errors"
+          role="alert"
+          aria-live="assertive"
+        >
           {#if !isFeeValid}
             <div class="form-error">
               <AlertCircle size={14} />
@@ -768,7 +810,12 @@
       {/if}
 
       {#if createError}
-        <div class="form-errors">
+        <div
+          id="create-pool-submit-error"
+          class="form-errors"
+          role="alert"
+          aria-live="assertive"
+        >
           <div class="form-error">
             <AlertCircle size={14} />
             <span>{createError}</span>
@@ -783,6 +830,13 @@
         <button
           class="create-btn"
           onclick={handleCreate}
+          aria-describedby={!isFeeValid ||
+          hasDuplicateReceivers() ||
+          (token1 && token2 && token1.account_id === token2.account_id)
+            ? "create-pool-validation-errors"
+            : createError
+              ? "create-pool-submit-error"
+              : undefined}
           disabled={!isFormValid || isCreating}
         >
           {#if isCreating}

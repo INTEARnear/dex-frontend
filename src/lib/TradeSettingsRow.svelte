@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusFirstElement, trapFocusKeydown } from "./a11y";
   import type { Snippet } from "svelte";
 
   interface Props {
@@ -20,12 +21,57 @@
     presets,
     children,
   }: Props = $props();
+
+  let settingsButtonRef = $state<HTMLButtonElement | null>(null);
+  let popupRef = $state<HTMLDivElement | null>(null);
+  let previouslyFocusedElement: HTMLElement | null = null;
+
+  $effect(() => {
+    if (!open) return;
+
+    previouslyFocusedElement =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : settingsButtonRef;
+
+    queueMicrotask(() => {
+      if (popupRef) focusFirstElement(popupRef);
+    });
+
+    return () => {
+      if (settingsButtonRef && document.contains(settingsButtonRef)) {
+        settingsButtonRef.focus();
+      } else {
+        previouslyFocusedElement?.focus();
+      }
+      previouslyFocusedElement = null;
+    };
+  });
+
+  function handlePopupKeydown(event: KeyboardEvent) {
+    if (!popupRef) return;
+
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      open = false;
+      return;
+    }
+
+    trapFocusKeydown(event, popupRef);
+  }
 </script>
 
 <div class="settings-row" style={`--settings-row-margin-bottom: ${bottomMargin};`}>
   {@render presets?.()}
   <div class="settings-anchor">
-    <button class="settings-btn" onclick={() => (open = !open)}>
+    <button
+      class="settings-btn"
+      bind:this={settingsButtonRef}
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onclick={() => (open = !open)}
+    >
       <svg
         width="16"
         height="16"
@@ -47,16 +93,19 @@
     {#if open}
       <button
         class="swap-settings-backdrop"
+        type="button"
         aria-label={closeBackdropLabel}
         onclick={() => (open = false)}
       ></button>
       <div
         class="swap-settings-popup"
+        bind:this={popupRef}
         role="dialog"
+        aria-modal="true"
         aria-label={dialogLabel}
         tabindex="-1"
         onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.key === "Escape" && (open = false)}
+        onkeydown={handlePopupKeydown}
       >
         {@render children?.()}
       </div>

@@ -22,8 +22,17 @@
 
 <div class="top-bar">
   <nav class="desktop-nav">
-    <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
-    <a href="/pools" class:active={page.url.pathname === "/pools"}>Pools</a>
+    <a
+      href="/"
+      class:active={page.url.pathname === "/"}
+      aria-current={page.url.pathname === "/" ? "page" : undefined}>Swap</a
+    >
+    <a
+      href="/pools"
+      class:active={page.url.pathname === "/pools"}
+      aria-current={page.url.pathname === "/pools" ? "page" : undefined}
+      >Pools</a
+    >
   </nav>
   <WalletButton />
 </div>
@@ -34,8 +43,17 @@
   </header>
 
   <nav class="mobile-nav">
-    <a href="/" class:active={page.url.pathname === "/"}>Swap</a>
-    <a href="/pools" class:active={page.url.pathname === "/pools"}>Pools</a>
+    <a
+      href="/"
+      class:active={page.url.pathname === "/"}
+      aria-current={page.url.pathname === "/" ? "page" : undefined}>Swap</a
+    >
+    <a
+      href="/pools"
+      class:active={page.url.pathname === "/pools"}
+      aria-current={page.url.pathname === "/pools" ? "page" : undefined}
+      >Pools</a
+    >
   </nav>
 
   {@render children()}

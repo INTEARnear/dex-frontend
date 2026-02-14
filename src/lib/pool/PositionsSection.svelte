@@ -6,8 +6,8 @@
     serializeToBase64,
   } from "../xykSchemas";
   import {
+    AUTO_LIQUIDITY_SLIPPAGE_PERCENT,
     assertOutcomesSucceeded,
-    AUTO_MAX_SLIPPAGE_PERCENT,
     DEX_BACKEND_API,
     DEX_CONTRACT_ID,
     DEX_ID,
@@ -210,7 +210,7 @@
       const slippageConfig = loadSwapSettingsConfig();
       const effectiveSlippagePercent =
         slippageConfig.mode === "auto"
-          ? AUTO_MAX_SLIPPAGE_PERCENT
+          ? AUTO_LIQUIDITY_SLIPPAGE_PERCENT
           : slippageConfig.value;
       const slippageBps = BigInt(
         Math.min(

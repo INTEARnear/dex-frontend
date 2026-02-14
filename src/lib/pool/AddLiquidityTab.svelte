@@ -22,9 +22,9 @@
   import { tokenHubStore } from "../tokenHubStore";
   import { walletStore } from "../walletStore";
   import {
+    AUTO_LIQUIDITY_SLIPPAGE_PERCENT,
     assetIdToTokenId,
     assertOutcomesSucceeded,
-    AUTO_MAX_SLIPPAGE_PERCENT,
     checkAreAssetsRegistered,
     DEX_CONTRACT_ID,
     DEX_ID,
@@ -34,8 +34,8 @@
   import type { NormalizedPool } from "./shared";
   import { STORAGE_DEPOSIT_NEAR } from "./shared";
   import ErrorModal from "../ErrorModal.svelte";
-  import AddedLiquidityModal from "./AddedLiquidityModal.svelte";
-  import { parseLiquidityAddedFromOutcomes } from "./liquidityEvents";
+  import AddedLiquidityModal, { type AddedLiquiditySnapshot } from "./AddedLiquidityModal.svelte";
+  import { parseLiquidityAddedFromOutcomes, type LiquidityAddedEventData } from "./liquidityEvents";
   import {
     loadAmountPresetsConfig,
     loadSwapSettingsConfig,
@@ -121,8 +121,12 @@
   let txError = $state<string | null>(null);
   let showErrorModal = $state(false);
   let showSuccessModal = $state(false);
-  let successEventData = $state<import("./liquidityEvents").LiquidityAddedEventData | null>(null);
-  let successSnapshot = $state<import("./AddedLiquidityModal.svelte").AddedLiquiditySnapshot | null>(null);
+  let successEventData = $state<
+    LiquidityAddedEventData | null
+  >(null);
+  let successSnapshot = $state<
+    AddedLiquiditySnapshot | null
+  >(null);
   let lastAttachedAmount0 = $state<bigint>(0n);
   let lastAttachedAmount1 = $state<bigint>(0n);
 
@@ -171,7 +175,9 @@
   );
 
   const effectiveSlippagePercent = $derived(
-    swapSlippageMode === "auto" ? AUTO_MAX_SLIPPAGE_PERCENT : swapSlippageValue,
+    swapSlippageMode === "auto"
+      ? AUTO_LIQUIDITY_SLIPPAGE_PERCENT
+      : swapSlippageValue,
   );
 
   const amount0Raw = $derived.by(() => {
@@ -239,9 +245,7 @@
   const isPoolEmpty = $derived(!!poolData && !poolData.totalSharesRaw);
 
   const swapSettingsDisplay = $derived(
-    swapSlippageMode === "auto"
-      ? `Auto (max ${AUTO_MAX_SLIPPAGE_PERCENT}%)`
-      : `${swapSlippageValue}%`,
+    swapSlippageMode === "auto" ? "Auto" : `${swapSlippageValue}%`,
   );
 
   function getToken0EffectiveBalanceRaw(): bigint | null {
@@ -641,7 +645,12 @@
           decimals1: token1.metadata.decimals,
         };
         if (onAddSuccess) {
-          onAddSuccess({ eventData: addedEvent, snapshot, attached0: lastAttachedAmount0, attached1: lastAttachedAmount1 });
+          onAddSuccess({
+            eventData: addedEvent,
+            snapshot,
+            attached0: lastAttachedAmount0,
+            attached1: lastAttachedAmount1,
+          });
         } else {
           successEventData = addedEvent;
           successSnapshot = snapshot;
@@ -678,7 +687,10 @@
           if (preset.type === "percent" || token0Price > 0) {
             buttons.push({
               id: i,
-              label: preset.type === "dollar" ? `$${preset.value}` : `${preset.value}%`,
+              label:
+                preset.type === "dollar"
+                  ? `$${preset.value}`
+                  : `${preset.value}%`,
               active: activePresetIndex === i,
               onClick: () => applyPreset(preset),
             });
@@ -751,6 +763,11 @@
         value={amount0Human}
         oninput={(e) => onAmount0Input(e.currentTarget.value)}
         disabled={!$walletStore.isConnected}
+        aria-describedby={isPrivate && $walletStore.isConnected && !isOwner
+          ? "add-liquidity-owner-warning"
+          : insufficientReason
+            ? "add-liquidity-balance-error"
+            : undefined}
       />
     </div>
     <div class="usd-label">{amount0Usd ?? "\u00a0"}</div>
@@ -771,6 +788,11 @@
         value={amount1Human}
         oninput={(e) => onAmount1Input(e.currentTarget.value)}
         disabled={!$walletStore.isConnected}
+        aria-describedby={isPrivate && $walletStore.isConnected && !isOwner
+          ? "add-liquidity-owner-warning"
+          : insufficientReason
+            ? "add-liquidity-balance-error"
+            : undefined}
       />
     </div>
     <div class="usd-label">{amount1Usd ?? "\u00a0"}</div>
@@ -796,15 +818,29 @@
   {/if}
 
   {#if isPrivate && $walletStore.isConnected && !isOwner}
-    <div class="warning-box error-box">
+    <div
+      id="add-liquidity-owner-warning"
+      class="warning-box error-box"
+      role="alert"
+      aria-live="assertive"
+    >
       Only pool owner can add liquidity to this private pool.
     </div>
   {:else if insufficientReason}
-    <div class="warning-box error-box">{insufficientReason}</div>
+    <div
+      id="add-liquidity-balance-error"
+      class="warning-box error-box"
+      role="alert"
+      aria-live="assertive"
+    >
+      {insufficientReason}
+    </div>
   {/if}
 
   {#if txError && !showErrorModal}
-    <div class="warning-box error-box">{txError}</div>
+    <div class="warning-box error-box" role="alert" aria-live="assertive">
+      {txError}
+    </div>
   {/if}
 
   <ErrorModal
@@ -872,8 +908,8 @@
         </li>
         <li>
           <strong>Smart contract risk:</strong> contract bugs or exploits can cause
-          partial or total loss of deposited assets. Depending on amount, Intear
-          might not be able to cover the loss.
+          partial or total loss of deposited assets. Depending on amount, Intear might
+          not be able to cover the loss.
         </li>
       </ul>
     {/if}

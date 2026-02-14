@@ -3,7 +3,10 @@ import type { AmountPreset, SlippageMode } from "./SwapSettings.svelte";
 const SWAP_SLIPPAGE_STORAGE_KEY = "intear-dex-slippage";
 const AMOUNT_PRESETS_STORAGE_KEY = "intear-dex-amount-presets";
 
-export const DEFAULT_SWAP_SETTINGS_CONFIG: { mode: SlippageMode; value: number } = {
+export const DEFAULT_SWAP_SETTINGS_CONFIG: {
+  mode: SlippageMode;
+  value: number;
+} = {
   mode: "auto",
   value: 0,
 };
@@ -35,7 +38,10 @@ function isValidPreset(value: unknown): value is AmountPreset {
   );
 }
 
-export function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } {
+export function loadSwapSettingsConfig(): {
+  mode: SlippageMode;
+  value: number;
+} {
   try {
     const saved = localStorage.getItem(SWAP_SLIPPAGE_STORAGE_KEY);
     if (saved) {
@@ -53,7 +59,10 @@ export function loadSwapSettingsConfig(): { mode: SlippageMode; value: number } 
   return { ...DEFAULT_SWAP_SETTINGS_CONFIG };
 }
 
-export function saveSwapSettingsConfig(mode: SlippageMode, value: number): void {
+export function saveSwapSettingsConfig(
+  mode: SlippageMode,
+  value: number,
+): void {
   try {
     localStorage.setItem(
       SWAP_SLIPPAGE_STORAGE_KEY,
@@ -77,7 +86,10 @@ export function loadAmountPresetsConfig(
         Array.isArray(parsed.presets) &&
         parsed.presets.every(isValidPreset)
       ) {
-        return { visible: parsed.visible, presets: clonePresets(parsed.presets) };
+        return {
+          visible: parsed.visible,
+          presets: clonePresets(parsed.presets),
+        };
       }
     }
   } catch {}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusFirstElement, trapFocusKeydown } from "./a11y";
   import { onDestroy } from "svelte";
   import { tokenHubStore } from "./tokenHubStore";
   import TokenIcon from "./TokenIcon.svelte";
@@ -33,6 +34,8 @@
   let touchStartX = 0;
   let touchStartY = 0;
   let scrollContainerRef = $state<HTMLDivElement | null>(null);
+  let modalRef = $state<HTMLDivElement | null>(null);
+  let previouslyFocusedElement: HTMLElement | null = null;
   const chatwootModalVisibility = createChatwootModalVisibilityController();
 
   onDestroy(() => {
@@ -54,9 +57,23 @@
   });
 
   $effect(() => {
-    if (isOpen && searchInputRef) {
-      searchInputRef?.focus();
-    }
+    if (!isOpen) return;
+
+    previouslyFocusedElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    queueMicrotask(() => {
+      if (searchInputRef) {
+        searchInputRef.focus();
+      } else if (modalRef) {
+        focusFirstElement(modalRef);
+      }
+    });
+
+    return () => {
+      previouslyFocusedElement?.focus();
+      previouslyFocusedElement = null;
+    };
   });
 
   $effect(() => {
@@ -186,6 +203,18 @@
     if (e.key === "Escape") {
       onClose();
     }
+  }
+
+  function handleModalKeyDown(e: KeyboardEvent) {
+    if (!modalRef) return;
+
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+
+    trapFocusKeydown(e, modalRef);
   }
 
   function getTokenPrice(token: TokenInfo): string {
@@ -388,6 +417,7 @@
   >
     <div
       class="modal"
+      bind:this={modalRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
@@ -396,7 +426,7 @@
         e.stopPropagation();
         handleModalClick(e);
       }}
-      onkeydown={(e) => e.stopPropagation()}
+      onkeydown={handleModalKeyDown}
       transition:fly={{ y: 20, duration: 200 }}
     >
       <div class="modal-header">
@@ -429,7 +459,9 @@
           <path d="m21 21-4.35-4.35" />
         </svg>
         <input
-          type="text"
+          id="token-search-input"
+          type="search"
+          aria-label="Search tokens by ticker or address"
           placeholder="Search by ticker or address"
           bind:value={searchQuery}
           bind:this={searchInputRef}
@@ -712,6 +744,10 @@
     padding: 1rem 1.5rem;
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
+  }
+
+  .search-box:focus-within {
+    box-shadow: inset 0 -2px 0 var(--border-focus);
   }
 
   .search-box svg {

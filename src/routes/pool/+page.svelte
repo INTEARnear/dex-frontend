@@ -212,6 +212,12 @@
     }
   }
 
+  function handleLiquidityTabKeydown(event: KeyboardEvent) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    activeTab = activeTab === "add" ? "remove" : "add";
+  }
+
   const parsedPoolId = $derived(parsePoolId(page.url.searchParams.get("id")));
   const needsRegisterLiquidity = $derived(
     poolData?.ownerId === null &&
@@ -298,18 +304,36 @@
       <section class="deposit-card" class:disabled={!$walletStore.isConnected}>
         <div class="card-header">
           {#if hasUserShares && !isPrivate}
-            <div class="liquidity-tabs">
+            <div
+              class="liquidity-tabs"
+              role="tablist"
+              aria-label="Liquidity actions"
+            >
               <button
                 class="tab-btn"
+                id="add-liquidity-tab"
+                type="button"
+                role="tab"
                 class:active={activeTab === "add"}
+                aria-selected={activeTab === "add"}
+                aria-controls="add-liquidity-panel"
+                tabindex={activeTab === "add" ? 0 : -1}
                 onclick={() => (activeTab = "add")}
+                onkeydown={handleLiquidityTabKeydown}
               >
                 Add Liquidity
               </button>
               <button
                 class="tab-btn"
+                id="remove-liquidity-tab"
+                type="button"
+                role="tab"
                 class:active={activeTab === "remove"}
+                aria-selected={activeTab === "remove"}
+                aria-controls="remove-liquidity-panel"
+                tabindex={activeTab === "remove" ? 0 : -1}
                 onclick={() => (activeTab = "remove")}
+                onkeydown={handleLiquidityTabKeydown}
               >
                 Remove Liquidity
               </button>
@@ -320,40 +344,73 @@
         </div>
 
         {#if activeTab === "add" || !hasUserShares || isPrivate}
-          <AddLiquidityTab
-            {poolData}
-            {token0}
-            {token1}
-            poolId={parsedPoolId}
-            {needsRegisterLiquidity}
-            onSuccess={async () => {
-            }}
-            onAddSuccess={(payload) => {
-              addSuccessEventData = payload.eventData;
-              addSuccessSnapshot = payload.snapshot;
-              addSuccessAttached0 = payload.attached0;
-              addSuccessAttached1 = payload.attached1;
-              showAddSuccessModal = true;
-            }}
-            {isConnecting}
-            onConnectWallet={handleConnectWallet}
-          />
+          {#if hasUserShares && !isPrivate}
+            <div
+              id="add-liquidity-panel"
+              role="tabpanel"
+              aria-labelledby="add-liquidity-tab"
+            >
+              <AddLiquidityTab
+                {poolData}
+                {token0}
+                {token1}
+                poolId={parsedPoolId}
+                {needsRegisterLiquidity}
+                onSuccess={async () => {
+                }}
+                onAddSuccess={(payload) => {
+                  addSuccessEventData = payload.eventData;
+                  addSuccessSnapshot = payload.snapshot;
+                  addSuccessAttached0 = payload.attached0;
+                  addSuccessAttached1 = payload.attached1;
+                  showAddSuccessModal = true;
+                }}
+                {isConnecting}
+                onConnectWallet={handleConnectWallet}
+              />
+            </div>
+          {:else}
+            <AddLiquidityTab
+              {poolData}
+              {token0}
+              {token1}
+              poolId={parsedPoolId}
+              {needsRegisterLiquidity}
+              onSuccess={async () => {
+              }}
+              onAddSuccess={(payload) => {
+                addSuccessEventData = payload.eventData;
+                addSuccessSnapshot = payload.snapshot;
+                addSuccessAttached0 = payload.attached0;
+                addSuccessAttached1 = payload.attached1;
+                showAddSuccessModal = true;
+              }}
+              {isConnecting}
+              onConnectWallet={handleConnectWallet}
+            />
+          {/if}
         {:else}
-          <RemoveLiquidityTab
-            {poolData}
-            {token0}
-            {token1}
-            {userSharesRaw}
-            poolId={parsedPoolId}
-            hasOpenPositions={openPositions.length > 0}
-            onSuccess={async () => {
-            }}
-            onRemoveSuccess={(payload) => {
-              removeSuccessEventData = payload.eventData;
-              removeSuccessSnapshot = payload.snapshot;
-              showRemoveSuccessModal = true;
-            }}
-          />
+          <div
+            id="remove-liquidity-panel"
+            role="tabpanel"
+            aria-labelledby="remove-liquidity-tab"
+          >
+            <RemoveLiquidityTab
+              {poolData}
+              {token0}
+              {token1}
+              {userSharesRaw}
+              poolId={parsedPoolId}
+              hasOpenPositions={openPositions.length > 0}
+              onSuccess={async () => {
+              }}
+              onRemoveSuccess={(payload) => {
+                removeSuccessEventData = payload.eventData;
+                removeSuccessSnapshot = payload.snapshot;
+                showRemoveSuccessModal = true;
+              }}
+            />
+          </div>
         {/if}
       </section>
     </div>
@@ -446,6 +503,11 @@
 
   .deposit-card.disabled {
     opacity: 0.7;
+  }
+
+  #add-liquidity-panel,
+  #remove-liquidity-panel {
+    display: contents;
   }
 
   .card-header {

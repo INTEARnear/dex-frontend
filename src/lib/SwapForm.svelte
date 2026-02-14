@@ -20,6 +20,10 @@
     formatUsdValue,
     ROUTER_API,
   } from "./utils";
+  import {
+    AUTO_MAX_SLIPPAGE_PERCENT,
+    AUTO_MIN_SLIPPAGE_PERCENT,
+  } from "./pool/shared";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
   import {
     loadAmountPresetsConfig,
@@ -339,10 +343,9 @@
       });
 
       if (swapSlippageMode === "auto") {
-        // Dynamic slippage from 0% to 10%
         params.set("slippage_type", "Auto");
-        params.set("max_slippage", "0.1");
-        params.set("min_slippage", "0");
+        params.set("min_slippage", (AUTO_MIN_SLIPPAGE_PERCENT / 100).toFixed(3));
+        params.set("max_slippage", (AUTO_MAX_SLIPPAGE_PERCENT / 100).toFixed(3));
       } else {
         params.set("slippage_type", "Fixed");
         params.set("slippage", String(swapSlippageValue / 100));
@@ -1105,7 +1108,10 @@
             if (preset.type === "percent" || inputPrice > 0) {
               buttons.push({
                 id: i,
-                label: preset.type === "dollar" ? `$${preset.value}` : `${preset.value}%`,
+                label:
+                  preset.type === "dollar"
+                    ? `$${preset.value}`
+                    : `${preset.value}%`,
                 active: activePresetIndex === i,
                 onClick: () => applyPreset(preset),
               });
@@ -1356,7 +1362,13 @@
   {/if}
 
   {#if showPriceImpactWarning}
-    <div class="price-impact-warning" class:severe={priceImpactSevere}>
+    <div
+      id="swap-price-impact-warning"
+      class="price-impact-warning"
+      class:severe={priceImpactSevere}
+      role="alert"
+      aria-live="polite"
+    >
       <svg
         width="16"
         height="16"
@@ -1394,6 +1406,7 @@
     <button
       class="swap-btn"
       onclick={handleSwap}
+      aria-describedby={showPriceImpactWarning ? "swap-price-impact-warning" : undefined}
       disabled={!hasValidAmount ||
         isSwapping ||
         !inputToken ||
@@ -1480,7 +1493,10 @@
       </div>
     {/each}
   </div>
-  <button class="modal-btn success-btn" onclick={() => (showSuccessModal = false)}>
+  <button
+    class="modal-btn success-btn"
+    onclick={() => (showSuccessModal = false)}
+  >
     Done
   </button>
 </ModalShell>
@@ -1986,11 +2002,11 @@
     border: none;
   }
 
-@media (--short-screen) {
-  .subtitle {
-    display: none;
+  @media (--short-screen) {
+    .subtitle {
+      display: none;
+    }
   }
-}
 
   @media (--tablet) {
     .subtitle {

@@ -16,8 +16,10 @@
   import { XykRemoveLiquidityArgsSchema, serializeToBase64 } from "../xykSchemas";
   import { walletStore } from "../walletStore";
   import {
+    AUTO_LIQUIDITY_SLIPPAGE_PERCENT,
     assertOutcomesSucceeded,
     AUTO_MAX_SLIPPAGE_PERCENT,
+    AUTO_MIN_SLIPPAGE_PERCENT,
     DEX_CONTRACT_ID,
     DEX_ID,
   } from "./shared";
@@ -81,7 +83,9 @@
   let successSnapshot = $state<import("./RemovedLiquidityModal.svelte").RemovedLiquiditySnapshot | null>(null);
 
   const effectiveSlippagePercent = $derived(
-    swapSlippageMode === "auto" ? AUTO_MAX_SLIPPAGE_PERCENT : swapSlippageValue,
+    swapSlippageMode === "auto"
+      ? AUTO_LIQUIDITY_SLIPPAGE_PERCENT
+      : swapSlippageValue,
   );
 
   const userPositionUsd = $derived.by(() => {
@@ -236,7 +240,7 @@
 
   const swapSettingsDisplay = $derived(
     swapSlippageMode === "auto"
-      ? `Auto (max ${AUTO_MAX_SLIPPAGE_PERCENT}%)`
+      ? "Auto"
       : `${swapSlippageValue}%`,
   );
 
@@ -379,10 +383,11 @@
 
   <div class="slider-wrapper">
     <div class="slider-header">
-      <span class="slider-label">Amount to remove</span>
+      <label class="slider-label" for="remove-percent-slider">Amount to remove</label>
       <span class="slider-value">{removePercent}%</span>
     </div>
     <input
+      id="remove-percent-slider"
       type="range"
       min="0"
       max="100"
@@ -390,6 +395,7 @@
       value={removePercent}
       oninput={(e) => (removePercent = parseInt(e.currentTarget.value, 10))}
       class="percent-slider"
+      aria-describedby={txError && !showErrorModal ? "remove-liquidity-tx-error" : undefined}
     />
   </div>
 
@@ -455,7 +461,14 @@
   {/if}
 
   {#if txError && !showErrorModal}
-    <div class="warning-box error-box">{txError}</div>
+    <div
+      id="remove-liquidity-tx-error"
+      class="warning-box error-box"
+      role="alert"
+      aria-live="assertive"
+    >
+      {txError}
+    </div>
   {/if}
 
   <ErrorModal
@@ -504,6 +517,7 @@
   .slider-label { color: var(--text-secondary); font-size: 0.875rem; }
   .slider-value { color: var(--text-primary); font-size: 1.5rem; font-weight: 700; font-family: "JetBrains Mono", monospace; }
   .percent-slider { width: 100%; height: 8px; -webkit-appearance: none; appearance: none; background: var(--border-color); border-radius: 4px; outline: none; cursor: pointer; }
+  .percent-slider:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
   .percent-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent-primary); cursor: pointer; border: 2px solid var(--bg-card); }
   .percent-slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--accent-primary); cursor: pointer; border: 2px solid var(--bg-card); }
   .remove-preview-box { display: flex; flex-direction: column; gap: 0.625rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 0.875rem; }
@@ -525,9 +539,9 @@
   .warning-box { border-radius: 0.75rem; padding: 0.75rem 1rem; font-size: 0.8125rem; }
   .error-box { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; }
   .primary-btn { width: 100%; padding: 1rem 1.25rem; font-size: 1rem; font-weight: 600; border: none; border-radius: 0.75rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-  .primary-btn.remove-btn { background: #ef4444; }
-  .primary-btn.remove-btn:hover:not(:disabled) { background: #dc2626; }
-  .primary-btn.remove-btn:disabled { background: rgba(239, 68, 68, 0.45); opacity: 1; cursor: not-allowed; }
+  .primary-btn.remove-btn { background: #dc2626; }
+  .primary-btn.remove-btn:hover:not(:disabled) { background: #b91c1c; }
+  .primary-btn.remove-btn:disabled { background: rgba(220, 38, 38, 0.45); opacity: 1; cursor: not-allowed; }
   .primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
   @media (--mobile) { .slider-wrapper { padding: 0.625rem 0.75rem; gap: 0.375rem; } .slider-value { font-size: 1.25rem; } .remove-preview-box { padding: 0.625rem 0.75rem; gap: 0.375rem; } .preview-token-icon, .preview-token-icon-placeholder { width: 1.25rem; height: 1.25rem; font-size: 0.625rem; } .preview-token-amount { font-size: 1rem; } .preview-token-symbol { font-size: 0.75rem; } }
   @media (--small-mobile) { .slider-wrapper { padding: 0.5rem 0.625rem; gap: 0.25rem; } .slider-value { font-size: 1.125rem; } .percent-slider { height: 6px; } .percent-slider::-webkit-slider-thumb, .percent-slider::-moz-range-thumb { width: 16px; height: 16px; } .remove-preview-box { padding: 0.5rem 0.625rem; gap: 0.25rem; } .preview-token { gap: 0.375rem; } .preview-token-icon, .preview-token-icon-placeholder { width: 1.125rem; height: 1.125rem; font-size: 0.5625rem; } .preview-token-amount { font-size: 0.875rem; } .preview-token-symbol { font-size: 0.75rem; } .preview-total { padding-top: 0.375rem; } }

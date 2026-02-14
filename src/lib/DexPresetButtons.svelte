@@ -19,8 +19,10 @@
   {#each items as item (item.id)}
     <button
       class="dex-preset-btn"
+      type="button"
       class:active={!!item.active}
       class:insufficient-dollar={!!item.insufficientDollar}
+      aria-pressed={!!item.active}
       onclick={() => item.onClick?.()}
       disabled={!!item.disabled}
     >

@@ -109,6 +109,7 @@
     <button
       class="slippage-option"
       class:active={mode === "auto" && !isCustomActive}
+      aria-pressed={mode === "auto" && !isCustomActive}
       onclick={selectAuto}
     >
       Auto
@@ -117,6 +118,7 @@
       <button
         class="slippage-option"
         class:active={mode === "fixed" && value === preset && !isCustomActive}
+        aria-pressed={mode === "fixed" && value === preset && !isCustomActive}
         onclick={() => selectPreset(preset)}
       >
         {preset}%
@@ -126,6 +128,7 @@
       <input
         type="text"
         inputmode="decimal"
+        aria-label="Custom slippage tolerance percentage"
         placeholder="Custom"
         value={customText}
         oninput={handleCustomInput}
@@ -141,6 +144,7 @@
     <button
       class="toggle-btn"
       class:active={presetsVisible}
+      aria-pressed={presetsVisible}
       onclick={() => onPresetsChange(!presetsVisible, presets)}
       aria-label="Toggle quick amount buttons"
     >
@@ -156,12 +160,16 @@
           <input
             type="text"
             inputmode="numeric"
+            aria-label={`Quick amount preset ${i + 1} value`}
             value={preset.value}
             oninput={(e) => handlePresetValueInput(i, e)}
           />
           <button
             class="suffix-toggle"
             onclick={() => togglePresetType(i)}
+            aria-label={`Switch preset ${i + 1} to ${preset.type === "percent"
+              ? "dollar"
+              : "percent"} mode`}
             title="Click to switch to {preset.type === 'percent'
               ? 'dollar'
               : 'percent'} mode"
