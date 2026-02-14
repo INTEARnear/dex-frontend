@@ -12,13 +12,15 @@ export function createVirtualizer<TScrollElement extends Element>(
   options: () => Omit<
     VirtualizerOptions<TScrollElement, Element>,
     "observeElementRect" | "observeElementOffset" | "scrollToFn"
-  >
+  >,
 ) {
   let items = $state<VirtualItem[]>([]);
   let totalSize = $state(0);
   let scrollOffset = $state(0);
 
-  const syncStateFromInstance = (instance: Virtualizer<TScrollElement, Element>) => {
+  const syncStateFromInstance = (
+    instance: Virtualizer<TScrollElement, Element>,
+  ) => {
     items = instance.getVirtualItems();
     totalSize = instance.getTotalSize();
     scrollOffset = instance.scrollOffset ?? 0;

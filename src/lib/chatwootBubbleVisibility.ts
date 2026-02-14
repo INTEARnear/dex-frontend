@@ -5,12 +5,7 @@ type ChatwootApi = {
 let visibleModalCount = 0;
 
 function getChatwootApi(): ChatwootApi | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const maybeWindow = window as Window & { $chatwoot?: ChatwootApi };
-  return maybeWindow.$chatwoot ?? null;
+  return (window as Window & { $chatwoot?: ChatwootApi }).$chatwoot ?? null;
 }
 
 function syncBubbleVisibility() {

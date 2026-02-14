@@ -1,6 +1,7 @@
 const CACHE_NAME = "dex-frontend-v1";
 
-const CACHEABLE_EXTENSIONS = /\.(html|css|js|woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|svg|ico)$/;
+const CACHEABLE_EXTENSIONS =
+  /\.(html|css|js|woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|svg|ico)$/;
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -8,13 +9,15 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    )
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
+      ),
   );
   self.clients.claim();
 });
@@ -42,7 +45,7 @@ self.addEventListener("fetch", (event) => {
           return response;
         });
         return cached || fetched;
-      })
-    )
+      }),
+    ),
   );
 });

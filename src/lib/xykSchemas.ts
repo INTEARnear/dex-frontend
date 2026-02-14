@@ -1,4 +1,4 @@
-import { Schema, serialize } from "borsh";
+import { type Schema, serialize } from "borsh";
 
 const AccountIdSchema: Schema = "string";
 
@@ -11,15 +11,19 @@ export const AssetIdSchema: Schema = {
   ],
 };
 
-export type AssetId = {
-  Near: {};
-} | {
-  Nep141: string;
-} | {
-  Nep245: [string, string];
-} | {
-  Nep171: [string, string];
-};
+export type AssetId =
+  | {
+      Near: {};
+    }
+  | {
+      Nep141: string;
+    }
+  | {
+      Nep245: [string, string];
+    }
+  | {
+      Nep171: [string, string];
+    };
 
 export function assetId(
   type: "Near" | "Nep141" | "Nep245" | "Nep171",

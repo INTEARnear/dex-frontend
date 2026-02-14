@@ -20,6 +20,7 @@
     ROUTER_API,
   } from "./utils";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
+  import ErrorModal from "./ErrorModal.svelte";
 
   const phrases = [
     "Swap tokens instantly",
@@ -111,10 +112,10 @@
   }
 
   const DEFAULT_AMOUNT_PRESETS: AmountPreset[] = [
-    { type: "percent", value: 10 },
     { type: "percent", value: 25 },
     { type: "percent", value: 50 },
     { type: "percent", value: 80 },
+    { type: "percent", value: 100 },
     { type: "dollar", value: 10 },
     { type: "dollar", value: 100 },
   ];
@@ -1522,48 +1523,13 @@
   onSelectToken={handleSelectOutputToken}
 />
 
-<!-- Error Modal -->
-{#if showErrorModal}
-  <div
-    class="modal-backdrop"
-    role="presentation"
-    onclick={() => (showErrorModal = false)}
-    onkeydown={(e) => e.key === "Escape" && (showErrorModal = false)}
-  >
-    <div
-      class="result-modal error-modal"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
-    >
-      <div class="modal-icon error-icon">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="15" y1="9" x2="9" y2="15" />
-          <line x1="9" y1="9" x2="15" y2="15" />
-        </svg>
-      </div>
-      <h3>Swap Failed</h3>
-      <p class="error-message">
-        {errorMessage.startsWith("User rejected the transaction")
-          ? "You cancelled the swap in your wallet"
-          : errorMessage}
-      </p>
-      <button class="modal-btn" onclick={() => (showErrorModal = false)}>
-        Close
-      </button>
-    </div>
-  </div>
-{/if}
+<ErrorModal
+  isOpen={showErrorModal}
+  onClose={() => (showErrorModal = false)}
+  title="Swap Failed"
+  message={errorMessage}
+  isTransaction={true}
+/>
 
 <!-- Success Modal -->
 {#if showSuccessModal}
@@ -2218,11 +2184,6 @@
     justify-content: center;
   }
 
-  .error-icon {
-    background: rgba(239, 68, 68, 0.15);
-    color: #f87171;
-  }
-
   .success-icon {
     background: rgba(34, 197, 94, 0.15);
     color: #4ade80;
@@ -2233,17 +2194,6 @@
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-primary);
-  }
-
-  .error-message {
-    margin: 0;
-    color: var(--text-secondary);
-    text-align: center;
-    font-size: 0.9375rem;
-    line-height: 1.5;
-    word-break: break-word;
-    max-height: 150px;
-    overflow-y: auto;
   }
 
   .transfers-list {

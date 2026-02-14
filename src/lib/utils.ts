@@ -205,6 +205,49 @@ export async function fetchPrices(): Promise<Record<string, string>> {
 }
 
 /**
+ * Format liquidity USD for pool display (e.g. "$1.5K", "<$1").
+ */
+export function formatLiquidity(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "$0";
+  if (value < 1) return "<$1";
+  if (value < 1000) return `$${formatCompact(value)}`;
+  if (value < 1e6) return `$${formatCompact(value / 1e3)}K`;
+  if (value < 1e9) return `$${formatCompact(value / 1e6)}M`;
+  return `$${formatCompact(value / 1e9)}B`;
+}
+
+/**
+ * Format fee percent for pool display, trimming trailing zeros.
+ */
+export function formatFeePercent(feePercent: number): string {
+  let formatted = feePercent.toFixed(4);
+  if (formatted.endsWith("00")) {
+    formatted = formatted.slice(0, -2);
+  } else if (formatted.endsWith("0")) {
+    formatted = formatted.slice(0, -1);
+  }
+  return formatted;
+}
+
+/**
+ * Format a date as relative time (e.g. "2d 4h ago", "3h 12m ago").
+ */
+export function formatRelativeDate(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHr / 24);
+
+  if (diffDays > 0) return `${diffDays}d ${diffHr % 24}h ago`;
+  if (diffHr > 0) return `${diffHr}h ${diffMin % 60}m ago`;
+  if (diffMin > 0) return `${diffMin}m ago`;
+  if (diffSec > 0) return `${diffSec}s ago`;
+  return "now";
+}
+
+/**
  * Extract a data: URI icon from a token's metadata, or return null.
  */
 export function getTokenIcon(token: Token | null): string | null {

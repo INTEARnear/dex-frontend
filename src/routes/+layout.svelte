@@ -12,7 +12,9 @@
 
   let { children } = $props();
 
-  const isPoolsPage = $derived(page.url.pathname === "/pools");
+  const isPoolsPage = $derived(
+    page.url.pathname === "/pools" || page.url.pathname === "/pool",
+  );
 </script>
 
 <div class="top-bar">
