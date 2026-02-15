@@ -3,18 +3,34 @@ type ChatwootApi = {
 };
 
 let visibleModalCount = 0;
+const SUPPORT_BUTTON_ID = "support-chat-button";
+
+function setSupportButtonVisibility(isVisible: boolean) {
+  const supportButton = document.getElementById(SUPPORT_BUTTON_ID);
+  if (!supportButton) {
+    return;
+  }
+
+  if (isVisible) {
+    supportButton.removeAttribute("hidden");
+  } else {
+    supportButton.setAttribute("hidden", "hidden");
+  }
+}
 
 function getChatwootApi(): ChatwootApi | null {
   return (window as Window & { $chatwoot?: ChatwootApi }).$chatwoot ?? null;
 }
 
 function syncBubbleVisibility() {
+  setSupportButtonVisibility(visibleModalCount === 0);
+
   const api = getChatwootApi();
   if (!api?.toggleBubbleVisibility) {
     return;
   }
 
-  api.toggleBubbleVisibility(visibleModalCount > 0 ? "hide" : "show");
+  api.toggleBubbleVisibility("hide");
 }
 
 export function createChatwootModalVisibilityController() {

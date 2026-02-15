@@ -763,6 +763,10 @@
     color: var(--text-primary);
   }
 
+  .search-box input:focus-visible {
+    outline: none !important;
+  }
+
   .search-box input::placeholder {
     color: var(--text-muted);
   }

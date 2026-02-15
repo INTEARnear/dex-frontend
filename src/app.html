@@ -4,6 +4,33 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/intear-logo.svg" />
     <meta
+      name="description"
+      content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR."
+    />
+    <meta
+      name="keywords"
+      content="Intear DEX, NEAR DEX, token swap, liquidity pools, DeFi, NEAR"
+    />
+    <meta name="robots" content="index,follow" />
+    <meta name="theme-color" content="#0a0e17" />
+    <link rel="canonical" href="https://dex.intear.tech" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Intear DEX" />
+    <meta property="og:title" content="Intear DEX" />
+    <meta
+      property="og:description"
+      content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR."
+    />
+    <meta property="og:url" content="https://dex.intear.tech" />
+    <meta property="og:image" content="https://dex.intear.tech/intear-logo.svg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Intear DEX" />
+    <meta
+      name="twitter:description"
+      content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR."
+    />
+    <meta name="twitter:image" content="https://dex.intear.tech/intear-logo.svg" />
+    <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
@@ -17,11 +44,19 @@
         padding: 0;
       }
     </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      href="/fonts/jetbrains-mono-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/outfit-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
     />
     <link
       rel="preload"
@@ -29,30 +64,155 @@
       as="script"
     />
     <script>
-      window.chatwootSettings = {
-        position: "right",
-        type: "standard",
-        launcherTitle: "Chat with us",
-      };
-      (function (d, t) {
+      (function () {
         var BASE_URL = "https://app.chatwoot.com";
-        var g = d.createElement(t),
-          s = d.getElementsByTagName(t)[0];
-        g.src = BASE_URL + "/packs/js/sdk.js";
-        g.async = true;
-        s.parentNode.insertBefore(g, s);
-        g.onload = function () {
+        var WEBSITE_TOKEN = "rWhhtHuth6NLdgiiePdWqerD";
+        var SDK_SCRIPT_ID = "chatwoot-sdk-script";
+        var SUPPORT_BUTTON_ID = "support-chat-button";
+        var sdkLoadPromise = null;
+        var sdkReadyPromise = null;
+        var sdkInitialized = false;
+
+        window.chatwootSettings = {
+          position: "right",
+          type: "standard",
+          launcherTitle: "Chat with us",
+          hideMessageBubble: true,
+        };
+
+        function loadChatwootSdk() {
+          if (window.chatwootSDK) {
+            return Promise.resolve();
+          }
+
+          if (sdkLoadPromise) {
+            return sdkLoadPromise;
+          }
+
+          sdkLoadPromise = new Promise(function (resolve, reject) {
+            var existingScript = document.getElementById(SDK_SCRIPT_ID);
+            if (existingScript) {
+              existingScript.addEventListener("load", resolve, { once: true });
+              existingScript.addEventListener(
+                "error",
+                function () {
+                  reject(new Error("Failed to load Chatwoot SDK"));
+                },
+                { once: true },
+              );
+              return;
+            }
+
+            var script = document.createElement("script");
+            script.id = SDK_SCRIPT_ID;
+            script.src = BASE_URL + "/packs/js/sdk.js";
+            script.async = true;
+            script.onload = resolve;
+            script.onerror = function () {
+              reject(new Error("Failed to load Chatwoot SDK"));
+            };
+            document.head.appendChild(script);
+          });
+
+          return sdkLoadPromise;
+        }
+
+        function waitForChatwootReady() {
+          if (window.$chatwoot?.hasLoaded) {
+            return Promise.resolve();
+          }
+
+          if (sdkReadyPromise) {
+            return sdkReadyPromise;
+          }
+
+          sdkReadyPromise = new Promise(function (resolve) {
+            window.addEventListener("chatwoot:ready", resolve, { once: true });
+          });
+
+          return sdkReadyPromise;
+        }
+
+        function initializeChatwoot() {
+          if (sdkInitialized) {
+            return waitForChatwootReady();
+          }
+
           window.chatwootSDK.run({
-            websiteToken: "rWhhtHuth6NLdgiiePdWqerD",
+            websiteToken: WEBSITE_TOKEN,
             baseUrl: BASE_URL,
           });
-        };
-      })(document, "script");
+          sdkInitialized = true;
+
+          return waitForChatwootReady();
+        }
+
+        async function openSupportChat() {
+          var supportButton = document.getElementById(SUPPORT_BUTTON_ID);
+          if (!supportButton) {
+            return;
+          }
+
+          supportButton.disabled = true;
+          supportButton.classList.add("support-chat-button--loading");
+
+          try {
+            await loadChatwootSdk();
+            await initializeChatwoot();
+            if (window.$chatwoot?.toggle) {
+              window.$chatwoot.toggle("open");
+            }
+          } catch (error) {
+            console.error(error);
+          } finally {
+            supportButton.disabled = false;
+            supportButton.classList.remove("support-chat-button--loading");
+          }
+        }
+
+        function bindSupportButtonClick() {
+          var supportButton = document.getElementById(SUPPORT_BUTTON_ID);
+          if (!supportButton) {
+            return;
+          }
+
+          supportButton.addEventListener("click", openSupportChat);
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", bindSupportButtonClick, {
+            once: true,
+          });
+        } else {
+          bindSupportButtonClick();
+        }
+      })();
     </script>
     %sveltekit.head%
   </head>
 
   <body data-sveltekit-preload-data="hover">
     <div id="app">%sveltekit.body%</div>
+    <button
+      id="support-chat-button"
+      class="support-chat-button"
+      type="button"
+      aria-label="Open support chat"
+      title="Open support chat"
+    >
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 240 240"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        <path
+          d="M240.808 240.808H122.123C56.6994 240.808 3.45695 187.562 3.45695 122.122C3.45695 56.7031 56.6994 3.45697 122.124 3.45697C187.566 3.45697 240.808 56.7031 240.808 122.122V240.808Z"
+          fill="#FFFFFF"
+        />
+      </svg>
+    </button>
   </body>
 </html>
