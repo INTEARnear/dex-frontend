@@ -34,8 +34,10 @@
   import type { NormalizedPool } from "./shared";
   import { STORAGE_DEPOSIT_NEAR } from "./shared";
   import ErrorModal from "../ErrorModal.svelte";
-  import AddedLiquidityModal, { type AddedLiquiditySnapshot } from "./AddedLiquidityModal.svelte";
-  import { parseLiquidityAddedFromOutcomes, type LiquidityAddedEventData } from "./liquidityEvents";
+  import {
+    parseLiquidityAddedFromOutcomes,
+    type LiquidityAddedEventData,
+  } from "./liquidityEvents";
   import {
     loadAmountPresetsConfig,
     loadSwapSettingsConfig,
@@ -81,10 +83,8 @@
     poolId: number | null;
     needsRegisterLiquidity: boolean;
     onSuccess: () => Promise<void>;
-    /** Called with success payload; when provided, parent owns the success modal */
-    onAddSuccess?: (payload: {
-      eventData: import("./liquidityEvents").LiquidityAddedEventData;
-      snapshot: import("./AddedLiquidityModal.svelte").AddedLiquiditySnapshot;
+    onAddSuccess: (payload: {
+      eventData: LiquidityAddedEventData;
       attached0: bigint;
       attached1: bigint;
     }) => void;
@@ -120,13 +120,6 @@
   let isSubmitting = $state(false);
   let txError = $state<string | null>(null);
   let showErrorModal = $state(false);
-  let showSuccessModal = $state(false);
-  let successEventData = $state<
-    LiquidityAddedEventData | null
-  >(null);
-  let successSnapshot = $state<
-    AddedLiquiditySnapshot | null
-  >(null);
   let lastAttachedAmount0 = $state<bigint>(0n);
   let lastAttachedAmount1 = $state<bigint>(0n);
 
@@ -637,25 +630,12 @@
       assertOutcomesSucceeded(outcomes);
 
       const addedEvent = parseLiquidityAddedFromOutcomes(outcomes);
-      if (addedEvent && token0 && token1) {
-        const snapshot = {
-          symbol0: token0.metadata.symbol,
-          symbol1: token1.metadata.symbol,
-          decimals0: token0.metadata.decimals,
-          decimals1: token1.metadata.decimals,
-        };
-        if (onAddSuccess) {
-          onAddSuccess({
-            eventData: addedEvent,
-            snapshot,
-            attached0: lastAttachedAmount0,
-            attached1: lastAttachedAmount1,
-          });
-        } else {
-          successEventData = addedEvent;
-          successSnapshot = snapshot;
-          showSuccessModal = true;
-        }
+      if (addedEvent) {
+        onAddSuccess({
+          eventData: addedEvent,
+          attached0: lastAttachedAmount0,
+          attached1: lastAttachedAmount1,
+        });
       }
       amount0Human = "";
       amount1Human = "";
@@ -853,24 +833,6 @@
     message={txError ?? ""}
     isTransaction={true}
   />
-
-  {#if !onAddSuccess}
-    <AddedLiquidityModal
-      isOpen={showSuccessModal}
-      onClose={() => {
-        showSuccessModal = false;
-        successEventData = null;
-        successSnapshot = null;
-      }}
-      eventData={successEventData}
-      snapshot={successSnapshot}
-      {token0}
-      {token1}
-      isPrivatePool={!!poolData?.ownerId}
-      attachedAmount0Raw={lastAttachedAmount0}
-      attachedAmount1Raw={lastAttachedAmount1}
-    />
-  {/if}
 
   <div class="risk-awareness">
     <label class="risk-awareness-label">
@@ -1134,11 +1096,11 @@
   .primary-btn {
     width: 100%;
     padding: 1rem 1.25rem;
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 1.25rem;
+    font-weight: bold;
     border: none;
     border-radius: 0.75rem;
-    background: var(--accent-primary);
+    background: var(--accent-button);
     color: white;
     cursor: pointer;
     transition: all 0.15s ease;

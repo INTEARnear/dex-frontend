@@ -232,7 +232,7 @@
   }
 
   .slippage-option.active {
-    background: var(--accent-primary);
+    background: var(--accent-button-small);
     color: white;
     border-color: var(--accent-primary);
   }
@@ -318,7 +318,7 @@
   }
 
   .toggle-btn.active .toggle-track {
-    background: var(--accent-primary);
+    background: var(--accent-button-small);
     border-color: var(--accent-primary);
   }
 

@@ -7,24 +7,17 @@
   } from "../../lib/pool/PositionsSection.svelte";
   import AddLiquidityTab from "../../lib/pool/AddLiquidityTab.svelte";
   import RemoveLiquidityTab from "../../lib/pool/RemoveLiquidityTab.svelte";
-  import AddedLiquidityModal, {
-    type AddedLiquiditySnapshot,
-  } from "../../lib/pool/AddedLiquidityModal.svelte";
-  import RemovedLiquidityModal, {
-    type RemovedLiquiditySnapshot,
-  } from "../../lib/pool/RemovedLiquidityModal.svelte";
+  import AddedLiquidityModal from "../../lib/pool/AddedLiquidityModal.svelte";
+  import RemovedLiquidityModal from "../../lib/pool/RemovedLiquidityModal.svelte";
   import type {
     LiquidityAddedEventData,
     LiquidityRemovedEventData,
   } from "../../lib/pool/liquidityEvents";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
-  import type {
-    AssetWithBalance,
-    TokenInfo,
-    XykFeeReceiver,
-  } from "../../lib/types";
+  import type { AssetWithBalance, XykFeeReceiver } from "../../lib/types";
   import {
+    assetIdToTokenId,
     DEX_BACKEND_API,
     type NormalizedPool,
     parsePoolId,
@@ -81,8 +74,6 @@
   type LiquidityTab = "add" | "remove";
 
   let poolData = $state<NormalizedPool | null>(null);
-  let token0 = $state<TokenInfo | null>(null);
-  let token1 = $state<TokenInfo | null>(null);
   let userSharesRaw = $state<string | null>(null);
   let openPositions = $state<OpenPosition[]>([]);
   let closedPositions = $state<ClosedPosition[]>([]);
@@ -94,17 +85,18 @@
 
   let showAddSuccessModal = $state(false);
   let addSuccessEventData = $state<LiquidityAddedEventData | null>(null);
-  let addSuccessSnapshot = $state<AddedLiquiditySnapshot | null>(null);
   let addSuccessAttached0 = $state<bigint>(0n);
   let addSuccessAttached1 = $state<bigint>(0n);
 
   let showRemoveSuccessModal = $state(false);
   let removeSuccessEventData = $state<LiquidityRemovedEventData | null>(null);
-  let removeSuccessSnapshot = $state<RemovedLiquiditySnapshot | null>(null);
 
   let showCloseSuccessModal = $state(false);
   let closeSuccessEventData = $state<LiquidityRemovedEventData | null>(null);
-  let closeSuccessSnapshot = $state<RemovedLiquiditySnapshot | null>(null);
+  let closeSuccessPrices = $state<{
+    price0Usd: number;
+    price1Usd: number;
+  } | null>(null);
   let closedPositionForModal = $state<{
     asset0_amount: string;
     asset1_amount: string;
@@ -132,10 +124,6 @@
     return null;
   }
 
-  async function fetchTokenInfo(assetId: string): Promise<TokenInfo | null> {
-    return tokenHubStore.ensureTokenByAssetId(assetId);
-  }
-
   async function fetchPoolData(
     poolId: number,
     accountId?: string | null,
@@ -159,15 +147,15 @@
       const normalized = normalizePool(data.pool);
       if (!normalized) throw new Error("Unsupported pool format");
 
-      const [nextToken0, nextToken1] = await Promise.all([
-        fetchTokenInfo(normalized.assets[0].asset_id),
-        fetchTokenInfo(normalized.assets[1].asset_id),
+      const asset0Id = normalized.assets[0].asset_id;
+      const asset1Id = normalized.assets[1].asset_id;
+      await Promise.all([
+        tokenHubStore.ensureTokenByAssetId(asset0Id),
+        tokenHubStore.ensureTokenByAssetId(asset1Id),
       ]);
 
       if (requestId !== activePoolRequestId) return;
       poolData = normalized;
-      token0 = nextToken0;
-      token1 = nextToken1;
       const openSum = (data.open ?? []).reduce(
         (acc, p) => acc + BigInt(p.shares),
         0n,
@@ -185,8 +173,6 @@
       console.error("Pool fetch failed:", fetchError);
       if (!background) {
         poolData = null;
-        token0 = null;
-        token1 = null;
         userSharesRaw = null;
         openPositions = [];
         closedPositions = [];
@@ -219,6 +205,18 @@
   }
 
   const parsedPoolId = $derived(parsePoolId(page.url.searchParams.get("id")));
+  const token0Id = $derived(
+    poolData ? assetIdToTokenId(poolData.assets[0].asset_id) : null,
+  );
+  const token1Id = $derived(
+    poolData ? assetIdToTokenId(poolData.assets[1].asset_id) : null,
+  );
+  const token0 = $derived(
+    token0Id ? ($tokenHubStore.tokensById[token0Id] ?? null) : null,
+  );
+  const token1 = $derived(
+    token1Id ? ($tokenHubStore.tokensById[token1Id] ?? null) : null,
+  );
   const needsRegisterLiquidity = $derived(
     poolData?.ownerId === null &&
       openPositions.length === 0 &&
@@ -237,8 +235,6 @@
       isLoading = false;
       error = "Invalid pool ID. Expected ?id=PLACH-<number>";
       poolData = null;
-      token0 = null;
-      token1 = null;
       userSharesRaw = null;
       openPositions = [];
       closedPositions = [];
@@ -290,11 +286,10 @@
           open={openPositions}
           closed={closedPositions}
           poolId={parsedPoolId}
-          onPositionClose={async () => {
-          }}
+          onPositionClose={async () => {}}
           onCloseSuccess={(payload) => {
             closeSuccessEventData = payload.eventData;
-            closeSuccessSnapshot = payload.snapshot;
+            closeSuccessPrices = payload.prices;
             closedPositionForModal = payload.positionData;
             showCloseSuccessModal = true;
           }}
@@ -356,11 +351,9 @@
                 {token1}
                 poolId={parsedPoolId}
                 {needsRegisterLiquidity}
-                onSuccess={async () => {
-                }}
+                onSuccess={async () => {}}
                 onAddSuccess={(payload) => {
                   addSuccessEventData = payload.eventData;
-                  addSuccessSnapshot = payload.snapshot;
                   addSuccessAttached0 = payload.attached0;
                   addSuccessAttached1 = payload.attached1;
                   showAddSuccessModal = true;
@@ -376,11 +369,9 @@
               {token1}
               poolId={parsedPoolId}
               {needsRegisterLiquidity}
-              onSuccess={async () => {
-              }}
+              onSuccess={async () => {}}
               onAddSuccess={(payload) => {
                 addSuccessEventData = payload.eventData;
-                addSuccessSnapshot = payload.snapshot;
                 addSuccessAttached0 = payload.attached0;
                 addSuccessAttached1 = payload.attached1;
                 showAddSuccessModal = true;
@@ -402,11 +393,9 @@
               {userSharesRaw}
               poolId={parsedPoolId}
               hasOpenPositions={openPositions.length > 0}
-              onSuccess={async () => {
-              }}
+              onSuccess={async () => {}}
               onRemoveSuccess={(payload) => {
                 removeSuccessEventData = payload.eventData;
-                removeSuccessSnapshot = payload.snapshot;
                 showRemoveSuccessModal = true;
               }}
             />
@@ -422,10 +411,8 @@
     onClose={() => {
       showAddSuccessModal = false;
       addSuccessEventData = null;
-      addSuccessSnapshot = null;
     }}
     eventData={addSuccessEventData}
-    snapshot={addSuccessSnapshot}
     {token0}
     {token1}
     isPrivatePool={!!poolData?.ownerId}
@@ -438,10 +425,8 @@
     onClose={() => {
       showRemoveSuccessModal = false;
       removeSuccessEventData = null;
-      removeSuccessSnapshot = null;
     }}
     eventData={removeSuccessEventData}
-    snapshot={removeSuccessSnapshot}
     {token0}
     {token1}
     isPositionClose={false}
@@ -452,15 +437,15 @@
     onClose={() => {
       showCloseSuccessModal = false;
       closeSuccessEventData = null;
-      closeSuccessSnapshot = null;
+      closeSuccessPrices = null;
       closedPositionForModal = null;
     }}
     eventData={closeSuccessEventData}
-    snapshot={closeSuccessSnapshot}
     {token0}
     {token1}
     isPositionClose={true}
     positionData={closedPositionForModal}
+    closePrices={closeSuccessPrices}
   />
 </div>
 

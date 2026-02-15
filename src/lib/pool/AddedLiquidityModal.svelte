@@ -6,19 +6,10 @@
   import ModalShell from "../ModalShell.svelte";
   import type { LiquidityAddedEventData } from "./liquidityEvents";
 
-  export interface AddedLiquiditySnapshot {
-    symbol0: string;
-    symbol1: string;
-    decimals0: number;
-    decimals1: number;
-  }
-
   interface Props {
     isOpen: boolean;
     onClose: () => void;
     eventData: LiquidityAddedEventData | null;
-    /** Snapshot taken at open time; used when tokens may be null during refresh */
-    snapshot?: AddedLiquiditySnapshot | null;
     token0: Token | null;
     token1: Token | null;
     isPrivatePool: boolean;
@@ -31,7 +22,6 @@
     isOpen,
     onClose,
     eventData,
-    snapshot,
     token0,
     token1,
     isPrivatePool,
@@ -49,10 +39,14 @@
     chatwootModalVisibility.setVisible(isOpen);
   });
 
-  const decimals0 = $derived(snapshot?.decimals0 ?? token0?.metadata.decimals ?? 18);
-  const decimals1 = $derived(snapshot?.decimals1 ?? token1?.metadata.decimals ?? 18);
-  const symbol0 = $derived(snapshot?.symbol0 ?? token0?.metadata.symbol ?? "?");
-  const symbol1 = $derived(snapshot?.symbol1 ?? token1?.metadata.symbol ?? "?");
+  const requiredTokens = $derived.by(() => {
+    if (!isOpen || !eventData || !token0 || !token1) return null;
+    return { token0, token1 };
+  });
+  const decimals0 = $derived(requiredTokens?.token0.metadata.decimals ?? 0);
+  const decimals1 = $derived(requiredTokens?.token1.metadata.decimals ?? 0);
+  const symbol0 = $derived(requiredTokens?.token0.metadata.symbol ?? "");
+  const symbol1 = $derived(requiredTokens?.token1.metadata.symbol ?? "");
 
   const poolSharePercent = $derived.by(() => {
     if (!eventData || isPrivatePool || !eventData.new_total_shares) return null;
@@ -88,7 +82,7 @@
 </script>
 
 <ModalShell
-  isOpen={!!(isOpen && eventData && (snapshot || (token0 && token1)))}
+  isOpen={!!(isOpen && eventData)}
   {onClose}
   modalClassName="success-modal"
   dialogLabel="Liquidity added"

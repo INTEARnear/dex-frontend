@@ -1,4 +1,4 @@
-import type { AssetWithBalance, XykFeeReceiver } from "../types";
+import type { AssetWithBalance, Token, XykFeeReceiver } from "../types";
 
 export const DEX_BACKEND_API = "https://dex-backend.intear.tech";
 export const DEX_CONTRACT_ID = "dex.intear.near";

@@ -370,7 +370,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.52rem 1rem;
-    background: var(--accent-primary);
+    background: var(--accent-button-small);
     border: none;
     border-radius: 0.5rem;
     color: white;
@@ -652,7 +652,7 @@
 
   .error button {
     padding: 0.5rem 1rem;
-    background: var(--accent-primary);
+    background: var(--accent-button-small);
     border: none;
     border-radius: 0.5rem;
     color: white;

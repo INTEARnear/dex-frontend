@@ -13,39 +13,31 @@
     asset1_open_price_usd: number;
   }
 
-  export interface RemovedLiquiditySnapshot {
-    symbol0: string;
-    symbol1: string;
-    decimals0: number;
-    decimals1: number;
-    /** For PnL when isPositionClose */
-    price0Usd?: number;
-    price1Usd?: number;
-  }
-
   interface Props {
     isOpen: boolean;
     onClose: () => void;
     eventData: LiquidityRemovedEventData | null;
-    /** Snapshot taken at open time; used when tokens may be null during refresh */
-    snapshot?: RemovedLiquiditySnapshot | null;
     token0: Token | null;
     token1: Token | null;
     /** If true (position close), show PnL */
     isPositionClose: boolean;
     /** Required for PnL when isPositionClose */
     positionData?: PositionData | null;
+    closePrices?: {
+      price0Usd: number;
+      price1Usd: number;
+    } | null;
   }
 
   let {
     isOpen,
     onClose,
     eventData,
-    snapshot,
     token0,
     token1,
     isPositionClose,
     positionData,
+    closePrices,
   }: Props = $props();
 
   const chatwootModalVisibility = createChatwootModalVisibilityController();
@@ -58,16 +50,25 @@
     chatwootModalVisibility.setVisible(isOpen);
   });
 
-  const decimals0 = $derived(snapshot?.decimals0 ?? (token0?.metadata.decimals ?? 18));
-  const decimals1 = $derived(snapshot?.decimals1 ?? (token1?.metadata.decimals ?? 18));
-  const symbol0 = $derived(snapshot?.symbol0 ?? token0?.metadata.symbol ?? "?");
-  const symbol1 = $derived(snapshot?.symbol1 ?? token1?.metadata.symbol ?? "?");
-  const price0 = $derived(
-    snapshot?.price0Usd ?? (parseFloat(token0?.price_usd ?? "0") || 0),
-  );
-  const price1 = $derived(
-    snapshot?.price1Usd ?? (parseFloat(token1?.price_usd ?? "0") || 0),
-  );
+  const requiredTokens = $derived.by(() => {
+    if (!isOpen || !eventData || !token0 || !token1) return null;
+    return { token0, token1 };
+  });
+  const requiredPrices = $derived.by(() => {
+    if (!isOpen || !eventData || !isPositionClose) return null;
+    if (!closePrices) {
+      throw new Error(
+        "RemovedLiquidityModal: closePrices is required for position close",
+      );
+    }
+    return closePrices;
+  });
+  const decimals0 = $derived(requiredTokens?.token0.metadata.decimals ?? 0);
+  const decimals1 = $derived(requiredTokens?.token1.metadata.decimals ?? 0);
+  const symbol0 = $derived(requiredTokens?.token0.metadata.symbol ?? "");
+  const symbol1 = $derived(requiredTokens?.token1.metadata.symbol ?? "");
+  const price0 = $derived(requiredPrices?.price0Usd ?? 0);
+  const price1 = $derived(requiredPrices?.price1Usd ?? 0);
 
   const removed0Human = $derived(
     eventData ? rawAmountToHumanReadable(eventData.removed_amount_0, decimals0) : null,
@@ -78,6 +79,7 @@
 
   const pnlUsd = $derived.by(() => {
     if (!isPositionClose || !eventData || !positionData) return null;
+    if (!requiredPrices) return null;
 
     const currentValue =
       parseFloat(removed0Human ?? "0") * price0 +
@@ -99,7 +101,7 @@
 </script>
 
 <ModalShell
-  isOpen={!!(isOpen && eventData && (snapshot || (token0 && token1)))}
+  isOpen={!!(isOpen && eventData)}
   {onClose}
   modalClassName="success-modal"
   dialogLabel="Liquidity removed"

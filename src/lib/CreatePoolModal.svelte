@@ -1169,7 +1169,7 @@
   }
 
   .wallet-btn:hover {
-    background: var(--accent-primary);
+    background: var(--accent-button-small);
     color: white;
   }
 
@@ -1298,7 +1298,7 @@
   }
 
   .toggle-switch.active {
-    background: var(--accent-primary);
+    background: var(--accent-button-small);
     border-color: var(--accent-primary);
   }
 
@@ -1346,7 +1346,7 @@
   .create-btn {
     flex: 1;
     padding: 0.875rem 1.5rem;
-    background: var(--accent-primary);
+    background: var(--accent-button-small);
     border: none;
     border-radius: 0.75rem;
     color: white;

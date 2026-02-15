@@ -42,7 +42,7 @@
     style={`--token-icon-size: ${size}px; --token-icon-ring-width: ${ringWidth}px;`}
   >
     {#if iconSrc}
-      <img src={iconSrc} alt={symbol} class="token-icon-image" />
+      <img src={iconSrc} alt={`${symbol} token`} class="token-icon-image" />
     {:else}
       <div class="token-icon-placeholder">{placeholderLetter}</div>
     {/if}

@@ -13,20 +13,23 @@
     getTokenIcon,
     rawAmountToHumanReadable,
   } from "../utils";
-  import { XykRemoveLiquidityArgsSchema, serializeToBase64 } from "../xykSchemas";
+  import {
+    XykRemoveLiquidityArgsSchema,
+    serializeToBase64,
+  } from "../xykSchemas";
   import { walletStore } from "../walletStore";
   import {
     AUTO_LIQUIDITY_SLIPPAGE_PERCENT,
     assertOutcomesSucceeded,
-    AUTO_MAX_SLIPPAGE_PERCENT,
-    AUTO_MIN_SLIPPAGE_PERCENT,
     DEX_CONTRACT_ID,
     DEX_ID,
   } from "./shared";
   import type { NormalizedPool } from "./shared";
   import ErrorModal from "../ErrorModal.svelte";
-  import RemovedLiquidityModal from "./RemovedLiquidityModal.svelte";
-  import { parseLiquidityRemovedFromOutcomes } from "./liquidityEvents";
+  import {
+    parseLiquidityRemovedFromOutcomes,
+    type LiquidityRemovedEventData,
+  } from "./liquidityEvents";
   import {
     loadAmountPresetsConfig,
     loadSwapSettingsConfig,
@@ -48,10 +51,8 @@
     poolId: number | null;
     hasOpenPositions: boolean;
     onSuccess: () => Promise<void>;
-    /** Called with success payload; when provided, parent owns the success modal */
-    onRemoveSuccess?: (payload: {
-      eventData: import("./liquidityEvents").LiquidityRemovedEventData;
-      snapshot: import("./RemovedLiquidityModal.svelte").RemovedLiquiditySnapshot;
+    onRemoveSuccess: (payload: {
+      eventData: LiquidityRemovedEventData;
     }) => void;
   }
 
@@ -78,9 +79,6 @@
   let isSubmitting = $state(false);
   let txError = $state<string | null>(null);
   let showErrorModal = $state(false);
-  let showSuccessModal = $state(false);
-  let successEventData = $state<import("./liquidityEvents").LiquidityRemovedEventData | null>(null);
-  let successSnapshot = $state<import("./RemovedLiquidityModal.svelte").RemovedLiquiditySnapshot | null>(null);
 
   const effectiveSlippagePercent = $derived(
     swapSlippageMode === "auto"
@@ -123,15 +121,6 @@
   });
 
   const removeQuickPresets = $derived.by(() => {
-    if (amountPresets.length === 0) {
-      return [25, 50, 75, 100].map((value) => ({
-        key: `fallback-${value}`,
-        label: `${value}%`,
-        percent: value,
-        disabled: false,
-        insufficientDollar: false,
-      }));
-    }
     return amountPresets.map((preset, index) => {
       if (preset.type === "percent") {
         const value = Math.min(100, Math.max(1, Math.round(preset.value)));
@@ -239,9 +228,7 @@
   });
 
   const swapSettingsDisplay = $derived(
-    swapSlippageMode === "auto"
-      ? "Auto"
-      : `${swapSlippageValue}%`,
+    swapSlippageMode === "auto" ? "Auto" : `${swapSlippageValue}%`,
   );
 
   function handleSlippageChange(mode: SlippageMode, value: number) {
@@ -314,20 +301,8 @@
       assertOutcomesSucceeded(outcomes);
 
       const removedEvent = parseLiquidityRemovedFromOutcomes(outcomes);
-      if (removedEvent && token0 && token1) {
-        const snapshot = {
-          symbol0: token0.metadata.symbol,
-          symbol1: token1.metadata.symbol,
-          decimals0: token0.metadata.decimals,
-          decimals1: token1.metadata.decimals,
-        };
-        if (onRemoveSuccess) {
-          onRemoveSuccess({ eventData: removedEvent, snapshot });
-        } else {
-          successEventData = removedEvent;
-          successSnapshot = snapshot;
-          showSuccessModal = true;
-        }
+      if (removedEvent) {
+        onRemoveSuccess({ eventData: removedEvent });
       }
       removePercent = 50;
       await onSuccess();
@@ -347,7 +322,9 @@
 <div class="remove-liquidity-content">
   {#if hasOpenPositions}
     <div class="remove-warning" role="alert">
-      If you use this tab directly, PnL tracking will stop working for all open positions. To keep track of your PnL and liquidity history, click "Close" on the positions instead of removing liquidity directly.
+      If you use this tab directly, PnL tracking will stop working for all open
+      positions. To keep track of your PnL and liquidity history, click "Close"
+      on the positions instead of removing liquidity directly.
     </div>
   {/if}
   <TradeSettingsRow
@@ -359,16 +336,20 @@
   >
     {#snippet presets()}
       <DexPresetButtons
-        items={removeQuickPresets.map((preset) => ({
-          id: preset.key,
-          label: preset.label,
-          active: preset.percent !== null && removePercent === preset.percent,
-          disabled: preset.disabled,
-          insufficientDollar: preset.insufficientDollar,
-          onClick: () => {
-            if (preset.percent !== null) removePercent = preset.percent;
-          },
-        }) satisfies DexPresetButtonItem)}
+        items={removeQuickPresets.map(
+          (preset) =>
+            ({
+              id: preset.key,
+              label: preset.label,
+              active:
+                preset.percent !== null && removePercent === preset.percent,
+              disabled: preset.disabled,
+              insufficientDollar: preset.insufficientDollar,
+              onClick: () => {
+                if (preset.percent !== null) removePercent = preset.percent;
+              },
+            }) satisfies DexPresetButtonItem,
+        )}
       />
     {/snippet}
     <SwapSettings
@@ -383,7 +364,9 @@
 
   <div class="slider-wrapper">
     <div class="slider-header">
-      <label class="slider-label" for="remove-percent-slider">Amount to remove</label>
+      <label class="slider-label" for="remove-percent-slider"
+        >Amount to remove</label
+      >
       <span class="slider-value">{removePercent}%</span>
     </div>
     <input
@@ -395,7 +378,9 @@
       value={removePercent}
       oninput={(e) => (removePercent = parseInt(e.currentTarget.value, 10))}
       class="percent-slider"
-      aria-describedby={txError && !showErrorModal ? "remove-liquidity-tx-error" : undefined}
+      aria-describedby={txError && !showErrorModal
+        ? "remove-liquidity-tx-error"
+        : undefined}
     />
   </div>
 
@@ -405,29 +390,51 @@
       <div class="preview-token-row">
         <div class="preview-token">
           {#if token0 && getTokenIcon(token0)}
-            <img src={getTokenIcon(token0)!} alt={token0.metadata.symbol} class="preview-token-icon" />
+            <img
+              src={getTokenIcon(token0)!}
+              alt={token0.metadata.symbol}
+              class="preview-token-icon"
+            />
           {:else if token0}
-            <div class="preview-token-icon-placeholder">{token0.metadata.symbol.charAt(0)}</div>
+            <div class="preview-token-icon-placeholder">
+              {token0.metadata.symbol.charAt(0)}
+            </div>
           {/if}
-          <span class="preview-token-amount">{formatAmount(parseFloat(removePreview.amount0Human))}</span>
-          <span class="preview-token-symbol">{token0?.metadata.symbol ?? "?"}</span>
+          <span class="preview-token-amount"
+            >{formatAmount(parseFloat(removePreview.amount0Human))}</span
+          >
+          <span class="preview-token-symbol"
+            >{token0?.metadata.symbol ?? "?"}</span
+          >
         </div>
       </div>
       <div class="preview-token-row">
         <div class="preview-token">
           {#if token1 && getTokenIcon(token1)}
-            <img src={getTokenIcon(token1)!} alt={token1.metadata.symbol} class="preview-token-icon" />
+            <img
+              src={getTokenIcon(token1)!}
+              alt={token1.metadata.symbol}
+              class="preview-token-icon"
+            />
           {:else if token1}
-            <div class="preview-token-icon-placeholder">{token1.metadata.symbol.charAt(0)}</div>
+            <div class="preview-token-icon-placeholder">
+              {token1.metadata.symbol.charAt(0)}
+            </div>
           {/if}
-          <span class="preview-token-amount">{formatAmount(parseFloat(removePreview.amount1Human))}</span>
-          <span class="preview-token-symbol">{token1?.metadata.symbol ?? "?"}</span>
+          <span class="preview-token-amount"
+            >{formatAmount(parseFloat(removePreview.amount1Human))}</span
+          >
+          <span class="preview-token-symbol"
+            >{token1?.metadata.symbol ?? "?"}</span
+          >
         </div>
       </div>
       <div class="preview-total">
         <span class="preview-total-label">Total value</span>
         <span class="preview-total-value">
-          {removePreview.usdValue > 0 ? `$${formatAmount(removePreview.usdValue)}` : "—"}
+          {removePreview.usdValue > 0
+            ? `$${formatAmount(removePreview.usdValue)}`
+            : "—"}
         </span>
       </div>
     </div>
@@ -435,23 +442,35 @@
     <div class="estimation-box">
       <div class="estimation-row">
         <span class="estimation-label">Shares to remove</span>
-        <span class="estimation-value">{formatShares(removePreview.sharesToRemove)}</span>
+        <span class="estimation-value"
+          >{formatShares(removePreview.sharesToRemove)}</span
+        >
       </div>
       <div class="estimation-row">
-        <span class="estimation-label">Min {token0?.metadata.symbol} received</span>
+        <span class="estimation-label"
+          >Min {token0?.metadata.symbol} received</span
+        >
         <span class="estimation-value">
           {#if minAssetsReceivedForTx}
-            {formatBalance(minAssetsReceivedForTx[0].toString(), token0?.metadata.decimals ?? 18)}
+            {formatBalance(
+              minAssetsReceivedForTx[0].toString(),
+              token0?.metadata.decimals ?? 18,
+            )}
           {:else}
             —
           {/if}
         </span>
       </div>
       <div class="estimation-row">
-        <span class="estimation-label">Min {token1?.metadata.symbol} received</span>
+        <span class="estimation-label"
+          >Min {token1?.metadata.symbol} received</span
+        >
         <span class="estimation-value">
           {#if minAssetsReceivedForTx}
-            {formatBalance(minAssetsReceivedForTx[1].toString(), token1?.metadata.decimals ?? 18)}
+            {formatBalance(
+              minAssetsReceivedForTx[1].toString(),
+              token1?.metadata.decimals ?? 18,
+            )}
           {:else}
             —
           {/if}
@@ -482,23 +501,11 @@
     isTransaction={true}
   />
 
-  {#if !onRemoveSuccess}
-    <RemovedLiquidityModal
-      isOpen={showSuccessModal}
-      onClose={() => {
-        showSuccessModal = false;
-        successEventData = null;
-        successSnapshot = null;
-      }}
-      eventData={successEventData}
-      snapshot={successSnapshot}
-      {token0}
-      {token1}
-      isPositionClose={false}
-    />
-  {/if}
-
-  <button class="primary-btn remove-btn" onclick={handleRemoveLiquidity} disabled={!canRemove}>
+  <button
+    class="primary-btn remove-btn"
+    onclick={handleRemoveLiquidity}
+    disabled={!canRemove}
+  >
     {#if isSubmitting}
       <Spinner tone="light" />
       Removing Liquidity...
@@ -511,38 +518,268 @@
 </div>
 
 <style>
-  .remove-liquidity-content { display: flex; flex-direction: column; gap: 0.75rem; }
-  .slider-wrapper { display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1rem 0.875rem; }
-  .slider-header { display: flex; justify-content: space-between; align-items: center; }
-  .slider-label { color: var(--text-secondary); font-size: 0.875rem; }
-  .slider-value { color: var(--text-primary); font-size: 1.5rem; font-weight: 700; font-family: "JetBrains Mono", monospace; }
-  .percent-slider { width: 100%; height: 8px; -webkit-appearance: none; appearance: none; background: var(--border-color); border-radius: 4px; outline: none; cursor: pointer; }
-  .percent-slider:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
-  .percent-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent-primary); cursor: pointer; border: 2px solid var(--bg-card); }
-  .percent-slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--accent-primary); cursor: pointer; border: 2px solid var(--bg-card); }
-  .remove-preview-box { display: flex; flex-direction: column; gap: 0.625rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 0.875rem; }
-  .preview-header { color: var(--text-secondary); font-size: 0.8125rem; font-weight: 500; }
-  .preview-token-row { display: flex; align-items: center; }
-  .preview-token { display: flex; align-items: center; gap: 0.5rem; }
-  .preview-token-icon { width: 1.5rem; height: 1.5rem; border-radius: 50%; object-fit: cover; }
-  .preview-token-icon-placeholder { width: 1.5rem; height: 1.5rem; border-radius: 50%; background: linear-gradient(135deg, var(--accent-primary), #2563eb); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: white; }
-  .preview-token-amount { color: var(--text-primary); font-size: 1rem; font-weight: 600; font-family: "JetBrains Mono", monospace; }
-  .preview-token-symbol { color: var(--text-muted); font-size: 0.875rem; }
-  .preview-total { display: flex; justify-content: space-between; padding-top: 0.625rem; border-top: 1px solid var(--border-color); margin-top: 0.25rem; }
-  .preview-total-label { color: var(--text-secondary); font-size: 0.875rem; }
-  .preview-total-value { color: var(--text-primary); font-size: 1.125rem; font-weight: 700; font-family: "JetBrains Mono", monospace; }
-  .estimation-box { display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 0.875rem 1rem; }
-  .estimation-row { display: flex; justify-content: space-between; align-items: center; }
-  .estimation-label { color: var(--text-secondary); font-size: 0.8125rem; }
-  .estimation-value { font-size: 0.8125rem; color: var(--text-primary); font-weight: 500; font-family: "JetBrains Mono", monospace; }
-  .remove-warning { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 0.75rem; padding: 0.75rem 1rem; font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.4; }
-  .warning-box { border-radius: 0.75rem; padding: 0.75rem 1rem; font-size: 0.8125rem; }
-  .error-box { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; }
-  .primary-btn { width: 100%; padding: 1rem 1.25rem; font-size: 1rem; font-weight: 600; border: none; border-radius: 0.75rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-  .primary-btn.remove-btn { background: #dc2626; }
-  .primary-btn.remove-btn:hover:not(:disabled) { background: #b91c1c; }
-  .primary-btn.remove-btn:disabled { background: rgba(220, 38, 38, 0.45); opacity: 1; cursor: not-allowed; }
-  .primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-  @media (--mobile) { .slider-wrapper { padding: 0.625rem 0.75rem; gap: 0.375rem; } .slider-value { font-size: 1.25rem; } .remove-preview-box { padding: 0.625rem 0.75rem; gap: 0.375rem; } .preview-token-icon, .preview-token-icon-placeholder { width: 1.25rem; height: 1.25rem; font-size: 0.625rem; } .preview-token-amount { font-size: 1rem; } .preview-token-symbol { font-size: 0.75rem; } }
-  @media (--small-mobile) { .slider-wrapper { padding: 0.5rem 0.625rem; gap: 0.25rem; } .slider-value { font-size: 1.125rem; } .percent-slider { height: 6px; } .percent-slider::-webkit-slider-thumb, .percent-slider::-moz-range-thumb { width: 16px; height: 16px; } .remove-preview-box { padding: 0.5rem 0.625rem; gap: 0.25rem; } .preview-token { gap: 0.375rem; } .preview-token-icon, .preview-token-icon-placeholder { width: 1.125rem; height: 1.125rem; font-size: 0.5625rem; } .preview-token-amount { font-size: 0.875rem; } .preview-token-symbol { font-size: 0.75rem; } .preview-total { padding-top: 0.375rem; } }
+  .remove-liquidity-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .slider-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1rem 0.875rem;
+  }
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .slider-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+  .slider-value {
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .percent-slider {
+    width: 100%;
+    height: 8px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border-color);
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+  }
+  .percent-slider:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+  .percent-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-button-small);
+    cursor: pointer;
+    border: 2px solid var(--bg-card);
+  }
+  .percent-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-button-small);
+    cursor: pointer;
+    border: 2px solid var(--bg-card);
+  }
+  .remove-preview-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 0.875rem;
+  }
+  .preview-header {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+  .preview-token-row {
+    display: flex;
+    align-items: center;
+  }
+  .preview-token {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .preview-token-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .preview-token-icon-placeholder {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: white;
+  }
+  .preview-token-amount {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .preview-token-symbol {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+  .preview-total {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: 0.25rem;
+  }
+  .preview-total-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+  .preview-total-value {
+    color: var(--text-primary);
+    font-size: 1.125rem;
+    font-weight: 700;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .estimation-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 0.875rem 1rem;
+  }
+  .estimation-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .estimation-label {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+  }
+  .estimation-value {
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .remove-warning {
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+  .warning-box {
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.8125rem;
+  }
+  .error-box {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
+  }
+  .primary-btn {
+    width: 100%;
+    padding: 1rem 1.25rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .primary-btn.remove-btn {
+    background: #dc2626;
+  }
+  .primary-btn.remove-btn:hover:not(:disabled) {
+    background: #b91c1c;
+  }
+  .primary-btn.remove-btn:disabled {
+    background: rgba(220, 38, 38, 0.45);
+    opacity: 1;
+    cursor: not-allowed;
+  }
+  .primary-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  @media (--mobile) {
+    .slider-wrapper {
+      padding: 0.625rem 0.75rem;
+      gap: 0.375rem;
+    }
+    .slider-value {
+      font-size: 1.25rem;
+    }
+    .remove-preview-box {
+      padding: 0.625rem 0.75rem;
+      gap: 0.375rem;
+    }
+    .preview-token-icon,
+    .preview-token-icon-placeholder {
+      width: 1.25rem;
+      height: 1.25rem;
+      font-size: 0.625rem;
+    }
+    .preview-token-amount {
+      font-size: 1rem;
+    }
+    .preview-token-symbol {
+      font-size: 0.75rem;
+    }
+  }
+  @media (--small-mobile) {
+    .slider-wrapper {
+      padding: 0.5rem 0.625rem;
+      gap: 0.25rem;
+    }
+    .slider-value {
+      font-size: 1.125rem;
+    }
+    .percent-slider {
+      height: 6px;
+    }
+    .percent-slider::-webkit-slider-thumb,
+    .percent-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+    }
+    .remove-preview-box {
+      padding: 0.5rem 0.625rem;
+      gap: 0.25rem;
+    }
+    .preview-token {
+      gap: 0.375rem;
+    }
+    .preview-token-icon,
+    .preview-token-icon-placeholder {
+      width: 1.125rem;
+      height: 1.125rem;
+      font-size: 0.5625rem;
+    }
+    .preview-token-amount {
+      font-size: 0.875rem;
+    }
+    .preview-token-symbol {
+      font-size: 0.75rem;
+    }
+    .preview-total {
+      padding-top: 0.375rem;
+    }
+  }
 </style>

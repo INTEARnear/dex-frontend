@@ -5,11 +5,13 @@
   --bg-input: #0d1421;
   --border-color: #2a3a52;
   --border-focus: #3b82f6;
-  --accent-primary: #2563eb;
+  --accent-primary: #4598f7;
+  --accent-button: #3b82f6;
+  --accent-button-small: #3a75bc;
   --accent-hover: #1d4ed8;
   --accent-glow: rgba(59, 130, 246, 0.4);
   --text-primary: #ffffff;
-  --text-secondary: #94a3b8;
+  --text-secondary: #9fb0c5;
   --text-muted: #8391a8;
 
   font-family: "Outfit", sans-serif;

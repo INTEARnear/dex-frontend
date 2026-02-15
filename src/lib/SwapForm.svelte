@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import { walletStore } from "./walletStore";
   import TokenSelector from "./TokenSelector.svelte";
   import TokenIcon from "./TokenIcon.svelte";
@@ -129,7 +129,7 @@
   let currentRoute = $state<Route | null>(null);
   let isFetchingRoute = $state(false);
   let routeAbortController: AbortController | null = null;
-  let quoteRefreshInterval: number | null = null;
+  let quoteRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
   type SwapMode = "exactIn" | "exactOut";
   let swapMode = $state<SwapMode>("exactIn");
@@ -439,15 +439,12 @@
 
   // Fetch route on input/output change
   $effect(() => {
-    const inToken = inputToken?.account_id;
-    const outToken = outputToken?.account_id;
+    const inToken = inputTokenId;
+    const outToken = outputTokenId;
     const mode = swapMode;
     const _sMode = swapSlippageMode;
     const _sValue = swapSlippageValue;
 
-    // Only read the user-typed amount so that the estimated amount filled in by
-    // fetchRoute doesn't re-trigger this effect (avoids double-fetching).
-    // Not sure if that's how it works in Svelte, but it works.
     const userTypedAmount =
       mode === "exactIn" ? inputAmountHumanReadable : outputAmountHumanReadable;
     const hasValidAmount = userTypedAmount && parseFloat(userTypedAmount) > 0;
@@ -462,15 +459,13 @@
       return;
     }
 
-    fetchRoute();
+    untrack(() => {
+      void fetchRoute();
+    });
   });
 
   // Refresh route every 5 seconds
   $effect(() => {
-    if (quoteRefreshInterval) {
-      clearInterval(quoteRefreshInterval);
-    }
-
     quoteRefreshInterval = setInterval(() => {
       const hasValidAmount =
         swapMode === "exactIn"
@@ -478,7 +473,7 @@
           : outputAmountHumanReadable &&
             parseFloat(outputAmountHumanReadable) > 0;
       if (hasValidAmount && inputToken && outputToken) {
-        fetchRoute();
+        void fetchRoute();
       }
     }, 5000);
 
@@ -1720,12 +1715,12 @@
     width: 100%;
     padding: 1rem;
     margin-top: 0.5rem;
-    background: var(--accent-primary);
+    background: var(--accent-button);
     border: none;
     border-radius: 0.875rem;
     color: white;
-    font-size: 1.125rem;
-    font-weight: 600;
+    font-size: 1.25rem;
+    font-weight: bold;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;

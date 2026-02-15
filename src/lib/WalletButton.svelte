@@ -97,7 +97,7 @@
     gap: 0.5rem;
     padding: 0 1.25rem;
     height: 2.5rem;
-    background: var(--accent-primary);
+    background: var(--accent-button-small);
     border: none;
     border-radius: 0.75rem;
     color: white;

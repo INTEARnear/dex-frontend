@@ -14,8 +14,10 @@
   } from "./shared";
   import type { NormalizedPool } from "./shared";
   import ErrorModal from "../ErrorModal.svelte";
-  import RemovedLiquidityModal from "./RemovedLiquidityModal.svelte";
-  import { parseLiquidityRemovedFromOutcomes } from "./liquidityEvents";
+  import {
+    parseLiquidityRemovedFromOutcomes,
+    type LiquidityRemovedEventData,
+  } from "./liquidityEvents";
   import Spinner from "../Spinner.svelte";
   import {
     formatAmount,
@@ -99,15 +101,17 @@
     closed?: ClosedPosition[];
     poolId: number | null;
     onPositionClose: () => void | Promise<void>;
-    /** Called with success payload when position is closed; when provided, parent owns the success modal */
-    onCloseSuccess?: (payload: {
-      eventData: import("./liquidityEvents").LiquidityRemovedEventData;
-      snapshot: import("./RemovedLiquidityModal.svelte").RemovedLiquiditySnapshot;
+    onCloseSuccess: (payload: {
+      eventData: LiquidityRemovedEventData;
       positionData: {
         asset0_amount: string;
         asset1_amount: string;
         asset0_open_price_usd: number;
         asset1_open_price_usd: number;
+      };
+      prices: {
+        price0Usd: number;
+        price1Usd: number;
       };
     }) => void;
   }
@@ -128,15 +132,6 @@
   let closeError = $state<string | null>(null);
   let hasStoredAuth = $state(false);
   let showCloseErrorModal = $state(false);
-  let showCloseSuccessModal = $state(false);
-  let closeSuccessEventData = $state<import("./liquidityEvents").LiquidityRemovedEventData | null>(null);
-  let closeSuccessSnapshot = $state<import("./RemovedLiquidityModal.svelte").RemovedLiquiditySnapshot | null>(null);
-  let closedPositionForModal = $state<{
-    asset0_amount: string;
-    asset1_amount: string;
-    asset0_open_price_usd: number;
-    asset1_open_price_usd: number;
-  } | null>(null);
 
   $effect(() => {
     const accountId = $walletStore.accountId;
@@ -163,6 +158,15 @@
     isClosing = true;
 
     try {
+      if (token0 === null || token1 === null) {
+        closeError = "Token data not loaded";
+        return;
+      }
+      const prices = {
+        price0Usd: parseFloat(token0.price_usd || "0"),
+        price1Usd: parseFloat(token1.price_usd || "0"),
+      };
+
       let payload: AuthPayload;
 
       const stored = getStoredAuthPayload(accountId);
@@ -263,29 +267,18 @@
       assertOutcomesSucceeded(outcomes);
 
       const removedEvent = parseLiquidityRemovedFromOutcomes(outcomes);
-      if (removedEvent && token0 && token1) {
+      if (removedEvent) {
         const positionData = {
           asset0_amount: pos.asset0_amount,
           asset1_amount: pos.asset1_amount,
           asset0_open_price_usd: pos.asset0_open_price_usd,
           asset1_open_price_usd: pos.asset1_open_price_usd,
         };
-        const snapshot = {
-          symbol0: token0.metadata.symbol,
-          symbol1: token1.metadata.symbol,
-          decimals0: token0.metadata.decimals,
-          decimals1: token1.metadata.decimals,
-          price0Usd: parseFloat(token0.price_usd || "0"),
-          price1Usd: parseFloat(token1.price_usd || "0"),
-        };
-        if (onCloseSuccess) {
-          onCloseSuccess({ eventData: removedEvent, snapshot, positionData });
-        } else {
-          closeSuccessEventData = removedEvent;
-          closedPositionForModal = positionData;
-          closeSuccessSnapshot = snapshot;
-          showCloseSuccessModal = true;
-        }
+        onCloseSuccess({
+          eventData: removedEvent,
+          positionData,
+          prices: prices,
+        });
       }
       await onPositionClose();
     } catch (err) {
@@ -315,98 +308,102 @@
     const price0 = parseFloat(token0.price_usd);
     const price1 = parseFloat(token1.price_usd);
 
-    return open.flatMap((pos) => {
-      const shares = BigInt(pos.shares);
-      if (shares <= 0n || totalPoolShares <= 0n) return [];
+    return open
+      .flatMap((pos) => {
+        const shares = BigInt(pos.shares);
+        if (shares <= 0n || totalPoolShares <= 0n) return [];
 
-      const amount0Raw = (shares * poolBalance0) / totalPoolShares;
-      const amount1Raw = (shares * poolBalance1) / totalPoolShares;
-      const amount0Human = rawAmountToHumanReadable(
-        amount0Raw.toString(),
-        token0.metadata.decimals,
-      );
-      const amount1Human = rawAmountToHumanReadable(
-        amount1Raw.toString(),
-        token1.metadata.decimals,
-      );
-      const amount0Num = parseFloat(amount0Human);
-      const amount1Num = parseFloat(amount1Human);
-      const currentUsd = amount0Num * price0 + amount1Num * price1;
+        const amount0Raw = (shares * poolBalance0) / totalPoolShares;
+        const amount1Raw = (shares * poolBalance1) / totalPoolShares;
+        const amount0Human = rawAmountToHumanReadable(
+          amount0Raw.toString(),
+          token0.metadata.decimals,
+        );
+        const amount1Human = rawAmountToHumanReadable(
+          amount1Raw.toString(),
+          token1.metadata.decimals,
+        );
+        const amount0Num = parseFloat(amount0Human);
+        const amount1Num = parseFloat(amount1Human);
+        const currentUsd = amount0Num * price0 + amount1Num * price1;
 
-      const asset0HumanOpen = rawAmountToHumanReadable(
-        pos.asset0_amount,
-        token0.metadata.decimals,
-      );
-      const asset1HumanOpen = rawAmountToHumanReadable(
-        pos.asset1_amount,
-        token1.metadata.decimals,
-      );
-      const amount0OpenNum = parseFloat(asset0HumanOpen);
-      const amount1OpenNum = parseFloat(asset1HumanOpen);
-      const openUsd =
-        amount0OpenNum * pos.asset0_open_price_usd +
-        amount1OpenNum * pos.asset1_open_price_usd;
-      const valueIfHeld = amount0OpenNum * price0 + amount1OpenNum * price1;
-      const pnl = currentUsd - openUsd;
+        const asset0HumanOpen = rawAmountToHumanReadable(
+          pos.asset0_amount,
+          token0.metadata.decimals,
+        );
+        const asset1HumanOpen = rawAmountToHumanReadable(
+          pos.asset1_amount,
+          token1.metadata.decimals,
+        );
+        const amount0OpenNum = parseFloat(asset0HumanOpen);
+        const amount1OpenNum = parseFloat(asset1HumanOpen);
+        const openUsd =
+          amount0OpenNum * pos.asset0_open_price_usd +
+          amount1OpenNum * pos.asset1_open_price_usd;
+        const valueIfHeld = amount0OpenNum * price0 + amount1OpenNum * price1;
+        const pnl = currentUsd - openUsd;
 
-      const openedAt = new Date(pos.opened_at);
+        const openedAt = new Date(pos.opened_at);
 
-      return [
-        {
-          ...pos,
-          amount0Num,
-          amount1Num,
-          currentUsd,
-          amount0OpenNum,
-          amount1OpenNum,
-          openUsd,
-          valueIfHeld,
-          pnl,
-          openedAt,
-        },
-      ];
-    });
+        return [
+          {
+            ...pos,
+            amount0Num,
+            amount1Num,
+            currentUsd,
+            amount0OpenNum,
+            amount1OpenNum,
+            openUsd,
+            valueIfHeld,
+            pnl,
+            openedAt,
+          },
+        ];
+      })
+      .toSorted((a, b) => b.openedAt.getTime() - a.openedAt.getTime());
   });
 
   const closedWithBreakdown = $derived.by(() => {
     if (!token0 || !token1 || closed.length === 0) return [];
-    return closed.map((pos) => {
-      const closedAt = new Date(pos.closed_at);
-      const openedAt = new Date(pos.opened_at);
-      const asset0ClosedHuman = rawAmountToHumanReadable(
-        pos.closed_asset0_amount,
-        token0.metadata.decimals,
-      );
-      const asset1ClosedHuman = rawAmountToHumanReadable(
-        pos.closed_asset1_amount,
-        token1.metadata.decimals,
-      );
-      const asset0OpenHuman = rawAmountToHumanReadable(
-        pos.asset0_amount,
-        token0.metadata.decimals,
-      );
-      const asset1OpenHuman = rawAmountToHumanReadable(
-        pos.asset1_amount,
-        token1.metadata.decimals,
-      );
-      const openUsd =
-        parseFloat(asset0OpenHuman) * pos.asset0_open_price_usd +
-        parseFloat(asset1OpenHuman) * pos.asset1_open_price_usd;
-      const closedUsd =
-        parseFloat(asset0ClosedHuman) * pos.closed_asset0_price_usd +
-        parseFloat(asset1ClosedHuman) * pos.closed_asset1_price_usd;
-      return {
-        ...pos,
-        closedAt,
-        openedAt,
-        asset0ClosedHuman,
-        asset1ClosedHuman,
-        asset0OpenHuman,
-        asset1OpenHuman,
-        openUsd,
-        closedUsd,
-      };
-    });
+    return closed
+      .map((pos) => {
+        const closedAt = new Date(pos.closed_at);
+        const openedAt = new Date(pos.opened_at);
+        const asset0ClosedHuman = rawAmountToHumanReadable(
+          pos.closed_asset0_amount,
+          token0.metadata.decimals,
+        );
+        const asset1ClosedHuman = rawAmountToHumanReadable(
+          pos.closed_asset1_amount,
+          token1.metadata.decimals,
+        );
+        const asset0OpenHuman = rawAmountToHumanReadable(
+          pos.asset0_amount,
+          token0.metadata.decimals,
+        );
+        const asset1OpenHuman = rawAmountToHumanReadable(
+          pos.asset1_amount,
+          token1.metadata.decimals,
+        );
+        const openUsd =
+          parseFloat(asset0OpenHuman) * pos.asset0_open_price_usd +
+          parseFloat(asset1OpenHuman) * pos.asset1_open_price_usd;
+        const closedUsd =
+          parseFloat(asset0ClosedHuman) * pos.closed_asset0_price_usd +
+          parseFloat(asset1ClosedHuman) * pos.closed_asset1_price_usd;
+        return {
+          ...pos,
+          closedAt,
+          openedAt,
+          asset0ClosedHuman,
+          asset1ClosedHuman,
+          asset0OpenHuman,
+          asset1OpenHuman,
+          openUsd,
+          closedUsd,
+        };
+      })
+      .toSorted((a, b) => b.closedAt.getTime() - a.closedAt.getTime());
   });
 </script>
 
@@ -427,24 +424,6 @@
       message={closeError ?? ""}
       isTransaction={true}
     />
-
-    {#if !onCloseSuccess}
-      <RemovedLiquidityModal
-        isOpen={showCloseSuccessModal}
-        onClose={() => {
-          showCloseSuccessModal = false;
-          closeSuccessEventData = null;
-          closedPositionForModal = null;
-          closeSuccessSnapshot = null;
-        }}
-        eventData={closeSuccessEventData}
-        snapshot={closeSuccessSnapshot}
-        {token0}
-        {token1}
-        isPositionClose={true}
-        positionData={closedPositionForModal}
-      />
-    {/if}
 
     {#if open.length > 0 && positionsWithBreakdown.length > 0}
       <div class="positions-table">
