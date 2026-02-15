@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { walletStore } from "../walletStore";
+  import { CLOSE_POSITION_AUTH_STORAGE_KEY, walletStore } from "../walletStore";
   import type { Token } from "../types";
   import {
     XykRemoveLiquidityArgsSchema,
@@ -28,7 +28,6 @@
 
   const NEP413_MESSAGE = "Sign in to Intear DEX for LP position tracking";
   const NEP413_RECIPIENT = "dex.intea.rs";
-  const STORAGE_KEY_PREFIX = "intear_dex_close_position_auth_";
 
   function uint8ArrayToBase64(bytes: Uint8Array): string {
     let binary = "";
@@ -47,19 +46,18 @@
 
   function getStoredAuthPayload(accountId: string): AuthPayload | null {
     try {
-      const stored = localStorage.getItem(`${STORAGE_KEY_PREFIX}${accountId}`);
+      const stored = localStorage.getItem(CLOSE_POSITION_AUTH_STORAGE_KEY);
       if (!stored) return null;
-      return JSON.parse(stored) as AuthPayload;
+      const parsed = JSON.parse(stored) as AuthPayload;
+      if (parsed.account_id !== accountId) return null;
+      return parsed;
     } catch {
       return null;
     }
   }
 
-  function saveAuthPayload(accountId: string, payload: AuthPayload) {
-    localStorage.setItem(
-      `${STORAGE_KEY_PREFIX}${accountId}`,
-      JSON.stringify(payload),
-    );
+  function saveAuthPayload(payload: AuthPayload) {
+    localStorage.setItem(CLOSE_POSITION_AUTH_STORAGE_KEY, JSON.stringify(payload));
   }
 
   export interface OpenPosition {
@@ -185,7 +183,7 @@
           public_key: signed.publicKey,
           nonce: uint8ArrayToBase64(nonce),
         };
-        saveAuthPayload(accountId, payload);
+        saveAuthPayload(payload);
         hasStoredAuth = true;
         return;
       }
@@ -251,11 +249,11 @@
           receiverId: DEX_CONTRACT_ID,
           actions: [
             {
-              type: "FunctionCall" as const,
+              type: "FunctionCall",
               params: {
                 methodName: "execute_operations",
                 args: { operations },
-                gas: "120" + "0".repeat(12),
+                gas: "120" + "0".repeat(12), // 120 TGas
                 deposit: "1",
               },
             },

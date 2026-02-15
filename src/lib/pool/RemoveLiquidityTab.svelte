@@ -285,11 +285,11 @@
           receiverId: DEX_CONTRACT_ID,
           actions: [
             {
-              type: "FunctionCall" as const,
+              type: "FunctionCall",
               params: {
                 methodName: "execute_operations",
                 args: { operations },
-                gas: "120" + "0".repeat(12),
+                gas: "120" + "0".repeat(12), // 120 TGas
                 deposit: "1",
               },
             },

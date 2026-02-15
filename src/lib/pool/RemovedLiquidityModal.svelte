@@ -19,26 +19,17 @@
     eventData: LiquidityRemovedEventData | null;
     token0: Token | null;
     token1: Token | null;
-    /** If true (position close), show PnL */
-    isPositionClose: boolean;
-    /** Required for PnL when isPositionClose */
-    positionData?: PositionData | null;
-    closePrices?: {
-      price0Usd: number;
-      price1Usd: number;
-    } | null;
+    positionData?: {
+      data: PositionData | null;
+      prices: {
+        price0Usd: number;
+        price1Usd: number;
+      } | null;
+    };
   }
 
-  let {
-    isOpen,
-    onClose,
-    eventData,
-    token0,
-    token1,
-    isPositionClose,
-    positionData,
-    closePrices,
-  }: Props = $props();
+  let { isOpen, onClose, eventData, token0, token1, positionData }: Props =
+    $props();
 
   const chatwootModalVisibility = createChatwootModalVisibilityController();
 
@@ -55,13 +46,8 @@
     return { token0, token1 };
   });
   const requiredPrices = $derived.by(() => {
-    if (!isOpen || !eventData || !isPositionClose) return null;
-    if (!closePrices) {
-      throw new Error(
-        "RemovedLiquidityModal: closePrices is required for position close",
-      );
-    }
-    return closePrices;
+    if (!isOpen || !eventData || !positionData) return null;
+    return positionData.prices;
   });
   const decimals0 = $derived(requiredTokens?.token0.metadata.decimals ?? 0);
   const decimals1 = $derived(requiredTokens?.token1.metadata.decimals ?? 0);
@@ -71,14 +57,18 @@
   const price1 = $derived(requiredPrices?.price1Usd ?? 0);
 
   const removed0Human = $derived(
-    eventData ? rawAmountToHumanReadable(eventData.removed_amount_0, decimals0) : null,
+    eventData
+      ? rawAmountToHumanReadable(eventData.removed_amount_0, decimals0)
+      : null,
   );
   const removed1Human = $derived(
-    eventData ? rawAmountToHumanReadable(eventData.removed_amount_1, decimals1) : null,
+    eventData
+      ? rawAmountToHumanReadable(eventData.removed_amount_1, decimals1)
+      : null,
   );
 
   const pnlUsd = $derived.by(() => {
-    if (!isPositionClose || !eventData || !positionData) return null;
+    if (!eventData || !positionData || !positionData.data) return null;
     if (!requiredPrices) return null;
 
     const currentValue =
@@ -86,14 +76,14 @@
       parseFloat(removed1Human ?? "0") * price1;
 
     const amount0Open = parseFloat(
-      rawAmountToHumanReadable(positionData.asset0_amount, decimals0),
+      rawAmountToHumanReadable(positionData.data.asset0_amount, decimals0),
     );
     const amount1Open = parseFloat(
-      rawAmountToHumanReadable(positionData.asset1_amount, decimals1),
+      rawAmountToHumanReadable(positionData.data.asset1_amount, decimals1),
     );
     const openValue =
-      amount0Open * positionData.asset0_open_price_usd +
-      amount1Open * positionData.asset1_open_price_usd;
+      amount0Open * positionData.data.asset0_open_price_usd +
+      amount1Open * positionData.data.asset1_open_price_usd;
 
     const pnl = currentValue - openValue;
     return Number.isFinite(pnl) ? pnl : null;
@@ -125,19 +115,23 @@
     <span class="tokens-label">You received</span>
     <div class="token-row">
       <span class="token-amount"
-        >{removed0Human !== null ? formatAmount(parseFloat(removed0Human)) : "—"}</span
+        >{removed0Human !== null
+          ? formatAmount(parseFloat(removed0Human))
+          : "—"}</span
       >
       <span class="token-symbol">{symbol0}</span>
     </div>
     <div class="token-row">
       <span class="token-amount"
-        >{removed1Human !== null ? formatAmount(parseFloat(removed1Human)) : "—"}</span
+        >{removed1Human !== null
+          ? formatAmount(parseFloat(removed1Human))
+          : "—"}</span
       >
       <span class="token-symbol">{symbol1}</span>
     </div>
   </div>
 
-  {#if isPositionClose && pnlUsd !== null}
+  {#if positionData && pnlUsd !== null}
     <div
       class="pnl-row"
       class:pnl-positive={pnlUsd > 0}

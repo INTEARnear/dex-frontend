@@ -1,3 +1,5 @@
+import { parseNep297FromLog } from "../nep297";
+
 export interface LiquidityAddedEventData {
   pool_id: number;
   asset_0: string;
@@ -45,19 +47,9 @@ type DexEventData = {
   };
 };
 
-function parseEventFromLog(log: string): DexEventData | null {
-  if (typeof log !== "string" || !log.startsWith("EVENT_JSON:")) return null;
-  try {
-    return JSON.parse(log.slice("EVENT_JSON:".length)) as DexEventData;
-  } catch {
-    return null;
-  }
-}
-
-function extractLiquidityEvent(
+export function parseLiquidityAddedFromOutcomes(
   outcomes: unknown,
-  eventName: "liquidity_added" | "liquidity_removed",
-): LiquidityAddedEventData | LiquidityRemovedEventData | null {
+): LiquidityAddedEventData | null {
   if (!outcomes || !Array.isArray(outcomes)) return null;
 
   for (const outcome of outcomes) {
@@ -68,17 +60,17 @@ function extractLiquidityEvent(
       if (!logs || !Array.isArray(logs)) continue;
 
       for (const log of logs) {
-        const eventData = parseEventFromLog(log);
+        const eventData = parseNep297FromLog<DexEventData>(log);
         if (!eventData) continue;
 
         if (
           eventData.standard === "inteardex" &&
           eventData.event === "dex_event" &&
-          eventData.data?.event?.event === eventName
+          eventData.data?.event?.event === "liquidity_added"
         ) {
           const data = eventData.data.event.data;
           if (data && typeof data === "object") {
-            return data as LiquidityAddedEventData | LiquidityRemovedEventData;
+            return data as LiquidityAddedEventData;
           }
         }
       }
@@ -88,20 +80,35 @@ function extractLiquidityEvent(
   return null;
 }
 
-export function parseLiquidityAddedFromOutcomes(
-  outcomes: unknown,
-): LiquidityAddedEventData | null {
-  return extractLiquidityEvent(
-    outcomes,
-    "liquidity_added",
-  ) as LiquidityAddedEventData | null;
-}
-
 export function parseLiquidityRemovedFromOutcomes(
   outcomes: unknown,
 ): LiquidityRemovedEventData | null {
-  return extractLiquidityEvent(
-    outcomes,
-    "liquidity_removed",
-  ) as LiquidityRemovedEventData | null;
+  if (!outcomes || !Array.isArray(outcomes)) return null;
+
+  for (const outcome of outcomes) {
+    if (!outcome?.receipts_outcome) continue;
+
+    for (const receiptOutcome of outcome.receipts_outcome) {
+      const logs = receiptOutcome.outcome?.logs;
+      if (!logs || !Array.isArray(logs)) continue;
+
+      for (const log of logs) {
+        const eventData = parseNep297FromLog<DexEventData>(log);
+        if (!eventData) continue;
+
+        if (
+          eventData.standard === "inteardex" &&
+          eventData.event === "dex_event" &&
+          eventData.data?.event?.event === "liquidity_removed"
+        ) {
+          const data = eventData.data.event.data;
+          if (data && typeof data === "object") {
+            return data as LiquidityRemovedEventData;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
 }

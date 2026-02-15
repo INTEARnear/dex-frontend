@@ -23,6 +23,7 @@
     serializeToBase64,
     type XykCreatePoolArgs,
   } from "./xykSchemas";
+  import { NEP297_EVENT_JSON_PREFIX, parseNep297FromLog } from "./nep297";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
 
   const DEX_CONTRACT_ID = "dex.intear.near";
@@ -82,24 +83,22 @@
         for (const log of logs) {
           if (typeof log !== "string") continue;
 
-          const eventPrefix = "EVENT_JSON:";
-          if (!log.startsWith(eventPrefix)) continue;
+          if (!log.startsWith(NEP297_EVENT_JSON_PREFIX)) continue;
 
-          try {
-            const eventData = JSON.parse(log.slice(eventPrefix.length));
-
-            if (
-              eventData.standard === "inteardex" &&
-              eventData.event === "dex_event" &&
-              eventData.data?.event?.event === "pool_updated"
-            ) {
-              const poolId = eventData.data.event.data.pool_id;
-              if (typeof poolId === "number") {
-                return poolId;
-              }
-            }
-          } catch {
+          const eventData = parseNep297FromLog<any>(log);
+          if (!eventData) {
             throw new Error("Unexpected invalid nep-297 from dex.intear.near");
+          }
+
+          if (
+            eventData.standard === "inteardex" &&
+            eventData.event === "dex_event" &&
+            eventData.data?.event?.event === "pool_updated"
+          ) {
+            const poolId = eventData.data.event.data.pool_id;
+            if (typeof poolId === "number") {
+              return poolId;
+            }
           }
         }
       }

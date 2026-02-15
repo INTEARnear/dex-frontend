@@ -20,6 +20,7 @@
     formatUsdValue,
     ROUTER_API,
   } from "./utils";
+  import { parseNep297FromLog } from "./nep297";
   import {
     AUTO_MAX_SLIPPAGE_PERCENT,
     AUTO_MIN_SLIPPAGE_PERCENT,
@@ -344,8 +345,14 @@
 
       if (swapSlippageMode === "auto") {
         params.set("slippage_type", "Auto");
-        params.set("min_slippage", (AUTO_MIN_SLIPPAGE_PERCENT / 100).toFixed(3));
-        params.set("max_slippage", (AUTO_MAX_SLIPPAGE_PERCENT / 100).toFixed(3));
+        params.set(
+          "min_slippage",
+          (AUTO_MIN_SLIPPAGE_PERCENT / 100).toFixed(3),
+        );
+        params.set(
+          "max_slippage",
+          (AUTO_MAX_SLIPPAGE_PERCENT / 100).toFixed(3),
+        );
       } else {
         params.set("slippage_type", "Fixed");
         params.set("slippage", String(swapSlippageValue / 100));
@@ -631,33 +638,27 @@
 
       for (const log of logs) {
         // NEP-297 + NEP-141
-        if (log.startsWith("EVENT_JSON:")) {
-          try {
-            const eventJson = JSON.parse(log.slice("EVENT_JSON:".length));
-            if (
-              eventJson.standard === "nep141" &&
-              eventJson.event === "ft_transfer"
-            ) {
-              for (const data of eventJson.data || []) {
-                if (data.new_owner_id === accountId) {
-                  transfers.push({
-                    tokenId: executorId,
-                    amountRaw: data.amount,
-                    direction: "in",
-                    receiptId,
-                  });
-                } else if (data.old_owner_id === accountId) {
-                  transfers.push({
-                    tokenId: executorId,
-                    amountRaw: data.amount,
-                    direction: "out",
-                    receiptId,
-                  });
-                }
-              }
+        const eventJson = parseNep297FromLog<any>(log);
+        if (
+          eventJson?.standard === "nep141" &&
+          eventJson.event === "ft_transfer"
+        ) {
+          for (const data of eventJson.data || []) {
+            if (data.new_owner_id === accountId) {
+              transfers.push({
+                tokenId: executorId,
+                amountRaw: data.amount,
+                direction: "in",
+                receiptId,
+              });
+            } else if (data.old_owner_id === accountId) {
+              transfers.push({
+                tokenId: executorId,
+                amountRaw: data.amount,
+                direction: "out",
+                receiptId,
+              });
             }
-          } catch (e) {
-            // Invalid JSON, ignore
           }
         }
 
@@ -881,7 +882,7 @@
             if ("FunctionCall" in action) {
               const fc = action.FunctionCall;
               return {
-                type: "FunctionCall" as const,
+                type: "FunctionCall",
                 params: {
                   methodName: fc.method_name,
                   args: JSON.parse(atob(fc.args)),
@@ -1401,7 +1402,9 @@
     <button
       class="swap-btn"
       onclick={handleSwap}
-      aria-describedby={showPriceImpactWarning ? "swap-price-impact-warning" : undefined}
+      aria-describedby={showPriceImpactWarning
+        ? "swap-price-impact-warning"
+        : undefined}
       disabled={!hasValidAmount ||
         isSwapping ||
         !inputToken ||

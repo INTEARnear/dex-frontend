@@ -85,8 +85,6 @@
 
   let showAddSuccessModal = $state(false);
   let addSuccessEventData = $state<LiquidityAddedEventData | null>(null);
-  let addSuccessAttached0 = $state<bigint>(0n);
-  let addSuccessAttached1 = $state<bigint>(0n);
 
   let showRemoveSuccessModal = $state(false);
   let removeSuccessEventData = $state<LiquidityRemovedEventData | null>(null);
@@ -354,8 +352,6 @@
                 onSuccess={async () => {}}
                 onAddSuccess={(payload) => {
                   addSuccessEventData = payload.eventData;
-                  addSuccessAttached0 = payload.attached0;
-                  addSuccessAttached1 = payload.attached1;
                   showAddSuccessModal = true;
                 }}
                 {isConnecting}
@@ -372,8 +368,6 @@
               onSuccess={async () => {}}
               onAddSuccess={(payload) => {
                 addSuccessEventData = payload.eventData;
-                addSuccessAttached0 = payload.attached0;
-                addSuccessAttached1 = payload.attached1;
                 showAddSuccessModal = true;
               }}
               {isConnecting}
@@ -416,8 +410,6 @@
     {token0}
     {token1}
     isPrivatePool={!!poolData?.ownerId}
-    attachedAmount0Raw={addSuccessAttached0}
-    attachedAmount1Raw={addSuccessAttached1}
   />
 
   <RemovedLiquidityModal
@@ -429,7 +421,6 @@
     eventData={removeSuccessEventData}
     {token0}
     {token1}
-    isPositionClose={false}
   />
 
   <RemovedLiquidityModal
@@ -443,9 +434,7 @@
     eventData={closeSuccessEventData}
     {token0}
     {token1}
-    isPositionClose={true}
-    positionData={closedPositionForModal}
-    closePrices={closeSuccessPrices}
+    positionData={{ data: closedPositionForModal, prices: closeSuccessPrices }}
   />
 </div>
 

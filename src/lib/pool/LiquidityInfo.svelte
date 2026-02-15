@@ -69,9 +69,7 @@
           {formatAmount(breakdown.amount0)}
         </span>
         <span class="your-liquidity-usd">
-          {breakdown.usd0 > 0
-            ? `$${formatAmount(breakdown.usd0)}`
-            : "—"}
+          {breakdown.usd0 > 0 ? `$${formatAmount(breakdown.usd0)}` : "—"}
         </span>
       </div>
     </div>
@@ -82,18 +80,14 @@
           {formatAmount(breakdown.amount1)}
         </span>
         <span class="your-liquidity-usd">
-          {breakdown.usd1 > 0
-            ? `$${formatAmount(breakdown.usd1)}`
-            : "—"}
+          {breakdown.usd1 > 0 ? `$${formatAmount(breakdown.usd1)}` : "—"}
         </span>
       </div>
     </div>
     <div class="your-liquidity-total">
       <span class="your-liquidity-total-label">Total</span>
       <span class="your-liquidity-total-value">
-        {breakdown.totalUsd > 0
-          ? `$${formatAmount(breakdown.totalUsd)}`
-          : "—"}
+        {breakdown.totalUsd > 0 ? `$${formatAmount(breakdown.totalUsd)}` : "—"}
       </span>
     </div>
   </aside>

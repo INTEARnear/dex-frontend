@@ -44,6 +44,7 @@
     saveAmountPresetsConfig,
     saveSwapSettingsConfig,
   } from "../swapConfig";
+  import type { ConnectorAction } from "@hot-labs/near-connect";
 
   function loadRiskAwarenessConfig(): boolean {
     try {
@@ -107,8 +108,8 @@
   const initialSwap = loadSwapSettingsConfig();
   const initialPresets = loadAmountPresetsConfig();
 
-  let amount0Human = $state("");
-  let amount1Human = $state("");
+  let amount0HumanReadable = $state("");
+  let amount1HumanReadable = $state("");
   let isRatioInverted = $state(false);
   let swapSettingsOpen = $state(false);
   let swapSlippageMode = $state<SlippageMode>(initialSwap.mode);
@@ -176,14 +177,14 @@
   const amount0Raw = $derived.by(() => {
     if (!token0) return 0n;
     return BigInt(
-      humanReadableToRawAmount(amount0Human, token0.metadata.decimals),
+      humanReadableToRawAmount(amount0HumanReadable, token0.metadata.decimals),
     );
   });
 
   const amount1Raw = $derived.by(() => {
     if (!token1) return 0n;
     return BigInt(
-      humanReadableToRawAmount(amount1Human, token1.metadata.decimals),
+      humanReadableToRawAmount(amount1HumanReadable, token1.metadata.decimals),
     );
   });
 
@@ -291,10 +292,10 @@
   }
 
   const activePresetIndex = $derived.by(() => {
-    if (!token0 || !amount0Human) return null;
+    if (!token0 || !amount0HumanReadable) return null;
     for (let i = 0; i < amountPresets.length; i++) {
       const expected = computePresetAmount(amountPresets[i]);
-      if (expected !== null && expected === amount0Human) return i;
+      if (expected !== null && expected === amount0HumanReadable) return i;
     }
     return null;
   });
@@ -347,10 +348,10 @@
   });
 
   const amount0Usd = $derived(
-    token0 ? formatUsdValue(amount0Human, token0.price_usd) : null,
+    token0 ? formatUsdValue(amount0HumanReadable, token0.price_usd) : null,
   );
   const amount1Usd = $derived(
-    token1 ? formatUsdValue(amount1Human, token1.price_usd) : null,
+    token1 ? formatUsdValue(amount1HumanReadable, token1.price_usd) : null,
   );
 
   const token0BalanceDisplay = $derived.by(() => {
@@ -364,14 +365,14 @@
   });
 
   function setAmount0AndRecalculate(nextAmount0: string) {
-    amount0Human = sanitizeAmountInput(nextAmount0);
+    amount0HumanReadable = sanitizeAmountInput(nextAmount0);
     if (!poolRatio || !token1) return;
-    const amountNum = parseFloat(amount0Human);
+    const amountNum = parseFloat(amount0HumanReadable);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      amount1Human = "";
+      amount1HumanReadable = "";
       return;
     }
-    amount1Human = formatByDecimals(
+    amount1HumanReadable = formatByDecimals(
       amountNum * poolRatio,
       token1.metadata.decimals,
     );
@@ -382,14 +383,14 @@
   }
 
   function onAmount1Input(value: string) {
-    amount1Human = sanitizeAmountInput(value);
+    amount1HumanReadable = sanitizeAmountInput(value);
     if (!poolRatio || !token0) return;
-    const amountNum = parseFloat(amount1Human);
+    const amountNum = parseFloat(amount1HumanReadable);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      amount0Human = "";
+      amount0HumanReadable = "";
       return;
     }
-    amount0Human = formatByDecimals(
+    amount0HumanReadable = formatByDecimals(
       amountNum / poolRatio,
       token0.metadata.decimals,
     );
@@ -400,13 +401,13 @@
     if (amount === null) return;
     const fallbackRatio = getPriceRatioFallback();
     if (!poolRatio && fallbackRatio && token1) {
-      amount0Human = sanitizeAmountInput(amount);
-      const amountNum = parseFloat(amount0Human);
+      amount0HumanReadable = sanitizeAmountInput(amount);
+      const amountNum = parseFloat(amount0HumanReadable);
       if (!Number.isFinite(amountNum) || amountNum <= 0) {
-        amount1Human = "";
+        amount1HumanReadable = "";
         return;
       }
-      amount1Human = formatByDecimals(
+      amount1HumanReadable = formatByDecimals(
         amountNum * fallbackRatio,
         token1.metadata.decimals,
       );
@@ -479,15 +480,7 @@
 
       const transactions: Array<{
         receiverId: string;
-        actions: Array<{
-          type: "FunctionCall";
-          params: {
-            methodName: string;
-            args: Record<string, unknown>;
-            gas: string;
-            deposit: string;
-          };
-        }>;
+        actions: Array<ConnectorAction>;
       }> = [];
 
       if (!areRegisteredForUser || !areRegisteredForXyk) {
@@ -498,7 +491,7 @@
             params: {
               methodName: "register_assets",
               args: { asset_ids: [...assetsToEnsure] },
-              gas: "10" + "0".repeat(12),
+              gas: "10" + "0".repeat(12), // 10 TGas
               deposit: "1",
             },
           });
@@ -509,7 +502,7 @@
             params: {
               methodName: "register_assets",
               args: { asset_ids: [...assetsToEnsure], for: { Dex: DEX_ID } },
-              gas: "10" + "0".repeat(12),
+              gas: "10" + "0".repeat(12), // 10 TGas
               deposit: "1",
             },
           });
@@ -522,7 +515,7 @@
               params: {
                 methodName: "storage_deposit",
                 args: { registration_only: true },
-                gas: "10" + "0".repeat(12),
+                gas: "10" + "0".repeat(12), // 10 TGas
                 deposit: STORAGE_DEPOSIT_NEAR.toString(),
               },
             },
@@ -549,7 +542,7 @@
               params: {
                 methodName: "storage_deposit",
                 args: { account_id: DEX_CONTRACT_ID, registration_only: true },
-                gas: "10" + "0".repeat(12),
+                gas: "10" + "0".repeat(12), // 10 TGas
                 deposit: "125" + "0".repeat(24 - 5),
               },
             },
@@ -562,7 +555,7 @@
                   amount: amountRaw.toString(),
                   msg: "",
                 },
-                gas: "40" + "0".repeat(12),
+                gas: "40" + "0".repeat(12), // 40 TGas
                 deposit: "1",
               },
             },
@@ -616,7 +609,7 @@
             params: {
               methodName: "execute_operations",
               args: { operations },
-              gas: "120" + "0".repeat(12),
+              gas: "120" + "0".repeat(12), // 120 TGas
               deposit: executeDeposit,
             },
           },
@@ -637,8 +630,8 @@
           attached1: lastAttachedAmount1,
         });
       }
-      amount0Human = "";
-      amount1Human = "";
+      amount0HumanReadable = "";
+      amount1HumanReadable = "";
       await onSuccess();
     } catch (submitError) {
       console.error("Add liquidity failed:", submitError);
@@ -740,7 +733,7 @@
         id="asset0-amount"
         type="text"
         placeholder="0.00"
-        value={amount0Human}
+        value={amount0HumanReadable}
         oninput={(e) => onAmount0Input(e.currentTarget.value)}
         disabled={!$walletStore.isConnected}
         aria-describedby={isPrivate && $walletStore.isConnected && !isOwner
@@ -765,7 +758,7 @@
         id="asset1-amount"
         type="text"
         placeholder="0.00"
-        value={amount1Human}
+        value={amount1HumanReadable}
         oninput={(e) => onAmount1Input(e.currentTarget.value)}
         disabled={!$walletStore.isConnected}
         aria-describedby={isPrivate && $walletStore.isConnected && !isOwner

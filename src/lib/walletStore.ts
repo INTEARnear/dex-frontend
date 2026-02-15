@@ -8,6 +8,12 @@ interface WalletState {
   wallet: NearWalletBase | null;
 }
 
+export const CLOSE_POSITION_AUTH_STORAGE_KEY = "intear_dex_close_position_auth";
+
+function clearDisconnectedAccountStorage() {
+  localStorage.removeItem(CLOSE_POSITION_AUTH_STORAGE_KEY);
+}
+
 function createWalletStore() {
   const { subscribe, set, update } = writable<WalletState>({
     isConnected: false,
@@ -291,6 +297,7 @@ function createWalletStore() {
 
   connector.on("wallet:signIn", async (event) => {
     if (!event.accounts || event.accounts.length === 0) {
+      clearDisconnectedAccountStorage();
       set({
         isConnected: false,
         accountId: null,
@@ -307,6 +314,7 @@ function createWalletStore() {
   });
 
   connector.on("wallet:signOut", async () => {
+    clearDisconnectedAccountStorage();
     set({
       isConnected: false,
       accountId: null,
@@ -347,6 +355,7 @@ function createWalletStore() {
     disconnect: async () => {
       try {
         await connector.disconnect();
+        clearDisconnectedAccountStorage();
       } catch (error) {
         console.error("Failed to disconnect wallet:", error);
         throw error;
