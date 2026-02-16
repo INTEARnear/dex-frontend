@@ -4,6 +4,12 @@ import type { Token } from "./types";
 export const PRICES_API = "https://prices.intear.tech";
 export const ROUTER_API = "https://router.intear.tech";
 
+export function formatApy(apy: number): string {
+  if (apy === 0) return "0%";
+  if (apy < 0.01) return "<0.01%";
+  return `${apy.toFixed(2)}%`;
+}
+
 /**
  * Format a number with up to 6 significant digits, capped at 8 decimal places.
  */

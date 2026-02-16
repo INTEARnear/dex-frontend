@@ -22,6 +22,7 @@
   import ResponsiveTooltip from "../ResponsiveTooltip.svelte";
   import {
     formatAmount,
+    formatApy,
     formatRelativeDate,
     rawAmountToHumanReadable,
   } from "../utils";
@@ -428,6 +429,15 @@ interface PositionBreakdown {
 
         const openedAt = new Date(pos.opened_at);
 
+        const nowTime = Date.now();
+        const durationMs = nowTime - openedAt.getTime();
+        const durationYears = durationMs / (1000 * 60 * 60 * 24 * 365.25);
+        let feesApyPercent: number | null = null;
+        if (breakdown.openUsd > 0 && durationYears > 0) {
+          const totalReturn = breakdown.feesRevenueUsd / breakdown.openUsd;
+          feesApyPercent = (totalReturn / durationYears) * 100;
+        }
+
         return [
           {
             ...pos,
@@ -440,6 +450,7 @@ interface PositionBreakdown {
             valueIfHeld: breakdown.valueIfHeldNowUsd,
             impermanentLossUsd: breakdown.impermanentLossUsd,
             feesRevenueUsd: breakdown.feesRevenueUsd,
+            feesApyPercent,
             priceGainUsd: breakdown.priceGainUsd,
             pnl,
             openedAt,
@@ -475,9 +486,6 @@ interface PositionBreakdown {
         const amount1OpenNum = parseFloat(asset1OpenHuman);
         const amount0ClosedNum = parseFloat(asset0ClosedHuman);
         const amount1ClosedNum = parseFloat(asset1ClosedHuman);
-        const openUsd =
-          amount0OpenNum * pos.asset0_open_price_usd +
-          amount1OpenNum * pos.asset1_open_price_usd;
         const closedUsd =
           amount0ClosedNum * pos.closed_asset0_price_usd +
           amount1ClosedNum * pos.closed_asset1_price_usd;
@@ -491,6 +499,15 @@ interface PositionBreakdown {
           positionValueNowUsd: closedUsd,
           totalPnlUsd: pos.closed_profit_usd,
         });
+
+        const durationMs = closedAt.getTime() - openedAt.getTime();
+        const durationYears = durationMs / (1000 * 60 * 60 * 24 * 365.25);
+        let feesApyPercent: number | null = null;
+        if (breakdown.openUsd > 0 && durationYears > 0) {
+          const totalReturn = breakdown.feesRevenueUsd / breakdown.openUsd;
+          feesApyPercent = (totalReturn / durationYears) * 100;
+        }
+
         return {
           ...pos,
           closedAt,
@@ -504,6 +521,7 @@ interface PositionBreakdown {
           valueIfHeldClosed: breakdown.valueIfHeldNowUsd,
           impermanentLossUsd: breakdown.impermanentLossUsd,
           feesRevenueUsd: breakdown.feesRevenueUsd,
+          feesApyPercent,
           priceGainUsd: breakdown.priceGainUsd,
         };
       })
@@ -813,6 +831,11 @@ interface PositionBreakdown {
                             : pos.feesRevenueUsd < 0
                               ? "-"
                               : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                          {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
+                            <span class="apy-badge">
+                              ({formatApy(pos.feesApyPercent)} APY)
+                            </span>
+                          {/if}
                         </span>
                       </div>
                     {/snippet}
@@ -831,6 +854,14 @@ interface PositionBreakdown {
                                 ? "-"
                                 : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
                           </span>
+                          {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
+                            , which annualizes to
+                            <span
+                              class="detail-tooltip-inline-value"
+                            >
+                              {formatApy(pos.feesApyPercent)} APY
+                            </span>
+                          {/if}
                         </div>
                       </div>
                     {/snippet}
@@ -1295,6 +1326,11 @@ interface PositionBreakdown {
                             : pos.feesRevenueUsd < 0
                               ? "-"
                               : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                          {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
+                            <span class="apy-badge">
+                              ({formatApy(pos.feesApyPercent)} APY)
+                            </span>
+                          {/if}
                         </span>
                       </div>
                     {/snippet}
@@ -1313,6 +1349,14 @@ interface PositionBreakdown {
                                 ? "-"
                                 : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
                           </span>
+                          {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
+                            , which annualized to
+                            <span
+                              class="detail-tooltip-inline-value"
+                            >
+                              {formatApy(pos.feesApyPercent)} APY
+                            </span>
+                          {/if}
                         </div>
                       </div>
                     {/snippet}
@@ -1668,6 +1712,12 @@ interface PositionBreakdown {
 
   .detail-value.pnl-negative {
     color: #ef4444;
+  }
+
+  .apy-badge {
+    font-size: 0.875rem;
+    margin-left: 0.375rem;
+    font-weight: 500;
   }
 
   @media (--mobile) {
