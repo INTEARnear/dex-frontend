@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { replaceState } from "$app/navigation";
   import { page } from "$app/state";
   import PoolInfo from "../../lib/pool/PoolInfo.svelte";
   import LiquidityInfo from "../../lib/pool/LiquidityInfo.svelte";
@@ -79,6 +80,7 @@
   let closedPositions = $state<ClosedPosition[]>([]);
   let hasUntracked = $state(false);
   let isLoading = $state(true);
+  let isWaitingForPool = $state(false);
   let error = $state<string | null>(null);
   let isConnecting = $state(false);
   let activeTab = $state<LiquidityTab>("add");
@@ -125,11 +127,13 @@
   async function fetchPoolData(
     poolId: number,
     accountId?: string | null,
+    allow404WhileCreating = false,
     background = false,
   ): Promise<void> {
     const requestId = ++activePoolRequestId;
     if (!background) {
       isLoading = true;
+      isWaitingForPool = false;
       error = null;
     }
 
@@ -153,6 +157,8 @@
       ]);
 
       if (requestId !== activePoolRequestId) return;
+      isWaitingForPool = false;
+      error = null;
       poolData = normalized;
       const openSum = (data.open ?? []).reduce(
         (acc, p) => acc + BigInt(p.shares),
@@ -175,8 +181,19 @@
         openPositions = [];
         closedPositions = [];
         hasUntracked = false;
-        error =
+        const message =
           fetchError instanceof Error ? fetchError.message : "Unknown error";
+        if (allow404WhileCreating && message === "Failed to fetch pool: HTTP 404") {
+          // Newly created pool can briefly return 404 before indexer catches up
+          isWaitingForPool = true;
+          error = null;
+        } else {
+          isWaitingForPool = false;
+          error =
+            message === "Failed to fetch pool: HTTP 404"
+              ? "Pool not found"
+              : message;
+        }
       }
     } finally {
       if (requestId === activePoolRequestId && !background) {
@@ -203,6 +220,9 @@
   }
 
   const parsedPoolId = $derived(parsePoolId(page.url.searchParams.get("id")));
+  const isCreateRedirect = $derived(
+    page.url.searchParams.get("fromCreate") === "1",
+  );
   const token0Id = $derived(
     poolData ? assetIdToTokenId(poolData.assets[0].asset_id) : null,
   );
@@ -231,6 +251,7 @@
     const accountId = $walletStore.accountId;
     if (id === null) {
       isLoading = false;
+      isWaitingForPool = false;
       error = "Invalid pool ID. Expected ?id=PLACH-<number>";
       poolData = null;
       userSharesRaw = null;
@@ -239,13 +260,13 @@
       hasUntracked = false;
       return;
     }
-    fetchPoolData(id, accountId);
+    fetchPoolData(id, accountId, isCreateRedirect);
 
     tokenHubStore.updateBalancesEvery(1000);
     tokenHubStore.updatePricesEvery(3000);
 
     const interval = setInterval(() => {
-      fetchPoolData(id, accountId ?? undefined, true);
+      fetchPoolData(id, accountId ?? undefined, isCreateRedirect, true);
     }, 1000);
     return () => {
       clearInterval(interval);
@@ -253,10 +274,17 @@
       tokenHubStore.updatePricesEvery(10_000);
     };
   });
+
+  $effect(() => {
+    if (!isCreateRedirect || !poolData) return;
+    const cleanUrl = new URL(page.url);
+    cleanUrl.searchParams.delete("fromCreate");
+    replaceState(cleanUrl, page.state);
+  });
 </script>
 
 <div class="pool-page">
-  {#if isLoading}
+  {#if isLoading || isWaitingForPool}
     <div class="loading">
       <Spinner size={28} borderWidth={3} />
       <p>Loading pool...</p>

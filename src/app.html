@@ -22,14 +22,20 @@
       content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR."
     />
     <meta property="og:url" content="https://dex.intear.tech" />
-    <meta property="og:image" content="https://dex.intear.tech/intear-logo.svg" />
+    <meta
+      property="og:image"
+      content="https://dex.intear.tech/intear-logo.svg"
+    />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Intear DEX" />
     <meta
       name="twitter:description"
       content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR."
     />
-    <meta name="twitter:image" content="https://dex.intear.tech/intear-logo.svg" />
+    <meta
+      name="twitter:image"
+      content="https://dex.intear.tech/intear-logo.svg"
+    />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
@@ -180,9 +186,13 @@
         }
 
         if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", bindSupportButtonClick, {
-            once: true,
-          });
+          document.addEventListener(
+            "DOMContentLoaded",
+            bindSupportButtonClick,
+            {
+              once: true,
+            },
+          );
         } else {
           bindSupportButtonClick();
         }

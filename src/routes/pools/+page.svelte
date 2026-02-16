@@ -334,7 +334,7 @@
 <CreatePoolModal
   isOpen={showCreatePoolModal}
   onClose={() => (showCreatePoolModal = false)}
-  onSuccess={(poolId) => goto(`/pool?id=PLACH-${poolId}`)}
+  onSuccess={(poolId) => goto(`/pool?id=PLACH-${poolId}&fromCreate=1`)}
 />
 
 <style>
