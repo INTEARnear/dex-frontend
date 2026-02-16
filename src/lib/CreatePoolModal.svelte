@@ -427,9 +427,7 @@
           type: "FunctionCall" as const,
           params: {
             methodName: "storage_deposit",
-            args: {
-              registration_only: true,
-            },
+            args: {},
             gas: "10" + "0".repeat(12), // 10 TGas
             deposit: "1" + "0".repeat(24 - 2), // 0.01 NEAR
           },

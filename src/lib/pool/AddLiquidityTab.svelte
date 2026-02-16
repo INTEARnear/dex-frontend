@@ -458,15 +458,12 @@
       const nearFromLiquidity =
         (poolData.assets[0].asset_id === "near" ? amount0Raw : 0n) +
         (poolData.assets[1].asset_id === "near" ? amount1Raw : 0n);
-      const nearForOps =
-        nearFromLiquidity +
-        (needsRegisterLiquidity ? STORAGE_DEPOSIT_NEAR : 0n);
 
       const assetsToEnsure = new Set<string>([
         poolData.assets[0].asset_id,
         poolData.assets[1].asset_id,
       ]);
-      if (nearForOps > 0n) assetsToEnsure.add("near");
+      if (nearFromLiquidity > 0n) assetsToEnsure.add("near");
 
       const areRegisteredForUser = await checkAreAssetsRegistered(
         { Account: accountId },
@@ -513,7 +510,7 @@
               type: "FunctionCall" as const,
               params: {
                 methodName: "storage_deposit",
-                args: { registration_only: true },
+                args: {},
                 gas: "10" + "0".repeat(12), // 10 TGas
                 deposit: STORAGE_DEPOSIT_NEAR.toString(),
               },
@@ -599,7 +596,7 @@
         },
       });
 
-      const executeDeposit = (nearForOps + 1n).toString();
+      const executeDeposit = (nearFromLiquidity + 1n).toString();
       transactions.push({
         receiverId: DEX_CONTRACT_ID,
         actions: [
