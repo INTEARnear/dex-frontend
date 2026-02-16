@@ -629,9 +629,7 @@ function createTokenHubStore() {
       setError("search", null);
       try {
         const accountId = currentWalletAccount;
-        const accParam = accountId
-          ? `&acc=${accountId}`
-          : "";
+        const accParam = accountId ? `&acc=${accountId}` : "";
         const response = await fetch(
           `${PRICES_API}/token-search?q=${encodeURIComponent(normalized)}&n=100${accParam}`,
         );
