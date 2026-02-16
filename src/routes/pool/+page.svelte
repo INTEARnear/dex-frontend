@@ -252,7 +252,7 @@
     if (id === null) {
       isLoading = false;
       isWaitingForPool = false;
-      error = "Invalid pool ID. Expected ?id=PLACH-<number>";
+      error = "Invalid pool ID";
       poolData = null;
       userSharesRaw = null;
       openPositions = [];

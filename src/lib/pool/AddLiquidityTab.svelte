@@ -81,7 +81,7 @@
     poolData: NormalizedPool | null;
     token0: Token | null;
     token1: Token | null;
-    poolId: number | null;
+    poolId: number;
     needsRegisterLiquidity: boolean;
     onSuccess: () => Promise<void>;
     onAddSuccess: (payload: {
@@ -443,8 +443,7 @@
       !poolData ||
       !token0 ||
       !token1 ||
-      !canSubmit ||
-      !poolId
+      !canSubmit
     )
       return;
     if (!isPoolEmpty && !minSharesRawForTx) return;
