@@ -19,6 +19,7 @@
     type LiquidityRemovedEventData,
   } from "./liquidityEvents";
   import Spinner from "../Spinner.svelte";
+  import ResponsiveTooltip from "../ResponsiveTooltip.svelte";
   import {
     formatAmount,
     formatRelativeDate,
@@ -74,14 +75,14 @@
     totalPnlUsd?: number;
   }
 
-  interface PositionBreakdown {
-    openUsd: number;
-    valueIfHeldNowUsd: number;
-    impermanentLossUsd: number;
-    feesRevenueUsd: number;
-    priceGainUsd: number;
-    totalPnlUsd: number;
-  }
+interface PositionBreakdown {
+  openUsd: number;
+  valueIfHeldNowUsd: number;
+  impermanentLossUsd: number;
+  feesRevenueUsd: number;
+  priceGainUsd: number;
+  totalPnlUsd: number;
+}
 
   function computePositionBreakdown({
     amount0OpenNum,
@@ -97,12 +98,37 @@
       amount0OpenNum * price0OpenUsd + amount1OpenNum * price1OpenUsd;
     const valueIfHeldNowUsd =
       amount0OpenNum * price0NowUsd + amount1OpenNum * price1NowUsd;
-    const compositionPnlUsd = positionValueNowUsd - valueIfHeldNowUsd;
-    const impermanentLossUsd = Math.min(compositionPnlUsd, 0);
-    const feesRevenueUsd = Math.max(compositionPnlUsd, 0);
     const totalPnl =
       totalPnlUsd === undefined ? positionValueNowUsd - openUsd : totalPnlUsd;
-    const priceGainUsd = totalPnl - impermanentLossUsd - feesRevenueUsd;
+    let valueIfNoFeeLpNowUsd = valueIfHeldNowUsd;
+    if (
+      amount0OpenNum >= 0 &&
+      amount1OpenNum >= 0 &&
+      price0OpenUsd > 0 &&
+      price1OpenUsd > 0 &&
+      price0NowUsd > 0 &&
+      price1NowUsd > 0
+    ) {
+      const openRelativePrice = price0OpenUsd / price1OpenUsd;
+      const nowRelativePrice = price0NowUsd / price1NowUsd;
+      const relativePriceChange = nowRelativePrice / openRelativePrice;
+      if (Number.isFinite(relativePriceChange) && relativePriceChange > 0) {
+        const sqrtPriceChange = Math.sqrt(relativePriceChange);
+        const amount0NoFeeNow = amount0OpenNum / sqrtPriceChange;
+        const amount1NoFeeNow = amount1OpenNum * sqrtPriceChange;
+        const valueNoFeeNowUsd =
+          amount0NoFeeNow * price0NowUsd + amount1NoFeeNow * price1NowUsd;
+        if (Number.isFinite(valueNoFeeNowUsd)) {
+          valueIfNoFeeLpNowUsd = valueNoFeeNowUsd;
+        }
+      }
+    }
+    const impermanentLossUsd = Math.min(
+      valueIfNoFeeLpNowUsd - valueIfHeldNowUsd,
+      0,
+    );
+    const priceGainUsd = valueIfHeldNowUsd - openUsd;
+    const feesRevenueUsd = totalPnl - priceGainUsd - impermanentLossUsd;
 
     return {
       openUsd,
@@ -533,112 +559,323 @@
             {#if isExpanded}
               <div class="position-details">
                 <div class="details-grid">
-                  <div class="detail-item">
-                    <span class="detail-label">Opened</span>
-                    <span class="detail-value">
-                      {pos.openedAt.toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Prices when opened</span>
-                    <span class="detail-value">
-                      {(token0?.metadata.symbol ?? "?") +
-                        ": $" +
-                        formatAmount(pos.asset0_open_price_usd)}
-                      <br />
-                      {(token1?.metadata.symbol ?? "?") +
-                        ": $" +
-                        formatAmount(pos.asset1_open_price_usd)}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Prices now</span>
-                    <span class="detail-value">
-                      {(token0?.metadata.symbol ?? "?") +
-                        ": $" +
-                        formatAmount(parseFloat(token0?.price_usd ?? "0"))}
-                      <br />
-                      {(token1?.metadata.symbol ?? "?") +
-                        ": $" +
-                        formatAmount(parseFloat(token1?.price_usd ?? "0"))}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Amounts when opened</span>
-                    <span class="detail-value">
-                      {formatAmount(pos.amount0OpenNum)}
-                      {token0?.metadata.symbol ?? "?"}
-                      + {formatAmount(pos.amount1OpenNum)}
-                      {token1?.metadata.symbol ?? "?"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Amounts now</span>
-                    <span class="detail-value">
-                      {formatAmount(pos.amount0Num)}
-                      {token0?.metadata.symbol ?? "?"}
-                      +
-                      {formatAmount(pos.amount1Num)}
-                      {token1?.metadata.symbol ?? "?"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Value when opened</span>
-                    <span class="detail-value">
-                      {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Value if just held tokens</span>
-                    <span class="detail-value">
-                      {pos.valueIfHeld > 0
-                        ? `$${formatAmount(pos.valueIfHeld)}`
-                        : "—"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Impermanent Loss</span>
-                    <span
-                      class="detail-value"
-                      class:pnl-negative={pos.impermanentLossUsd < 0}
-                    >
-                      {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
-                        Math.abs(pos.impermanentLossUsd),
-                      )}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Fees Revenue</span>
-                    <span
-                      class="detail-value"
-                      class:pnl-positive={pos.feesRevenueUsd > 0}
-                      class:pnl-negative={pos.feesRevenueUsd < 0}
-                    >
-                      {pos.feesRevenueUsd > 0
-                        ? "+"
-                        : pos.feesRevenueUsd < 0
-                          ? "-"
-                          : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Price Change</span>
-                    <span
-                      class="detail-value"
-                      class:pnl-positive={pos.priceGainUsd > 0}
-                      class:pnl-negative={pos.priceGainUsd < 0}
-                    >
-                      {pos.priceGainUsd > 0
-                        ? "+"
-                        : pos.priceGainUsd < 0
-                          ? "-"
-                          : ""}${formatAmount(Math.abs(pos.priceGainUsd))}
-                    </span>
-                  </div>
-                  <div class="detail-item">
+                  <ResponsiveTooltip
+                    title="Opened At"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Opened At</span>
+                        <span class="detail-value">
+                          {pos.openedAt.toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          You opened this position at
+                          <span class="detail-tooltip-inline-value">
+                            {pos.openedAt.toLocaleString(undefined, {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Prices when opened"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Prices when opened</span>
+                        <span class="detail-value">
+                          {(token0?.metadata.symbol ?? "?") +
+                            ": $" +
+                            formatAmount(pos.asset0_open_price_usd)}
+                          <br />
+                          {(token1?.metadata.symbol ?? "?") +
+                            ": $" +
+                            formatAmount(pos.asset1_open_price_usd)}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          At open, prices were
+                          <span class="detail-tooltip-inline-value detail-tooltip-value-multiline">
+                            {(token0?.metadata.symbol ?? "?") +
+                              ": $" +
+                              formatAmount(pos.asset0_open_price_usd)}
+                            <br />
+                            {(token1?.metadata.symbol ?? "?") +
+                              ": $" +
+                              formatAmount(pos.asset1_open_price_usd)}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Prices now"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Prices now</span>
+                        <span class="detail-value">
+                          {(token0?.metadata.symbol ?? "?") +
+                            ": $" +
+                            formatAmount(parseFloat(token0?.price_usd ?? "0"))}
+                          <br />
+                          {(token1?.metadata.symbol ?? "?") +
+                            ": $" +
+                            formatAmount(parseFloat(token1?.price_usd ?? "0"))}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          Current prices are
+                          <span class="detail-tooltip-inline-value detail-tooltip-value-multiline">
+                            {(token0?.metadata.symbol ?? "?") +
+                              ": $" +
+                              formatAmount(parseFloat(token0?.price_usd ?? "0"))}
+                            <br />
+                            {(token1?.metadata.symbol ?? "?") +
+                              ": $" +
+                              formatAmount(parseFloat(token1?.price_usd ?? "0"))}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Amounts when opened"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Amounts when opened</span>
+                        <span class="detail-value">
+                          {formatAmount(pos.amount0OpenNum)}
+                          {token0?.metadata.symbol ?? "?"}
+                          + {formatAmount(pos.amount1OpenNum)}
+                          {token1?.metadata.symbol ?? "?"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          You supplied
+                          <span class="detail-tooltip-inline-value">
+                            {formatAmount(pos.amount0OpenNum)}
+                            {token0?.metadata.symbol ?? "?"}
+                            + {formatAmount(pos.amount1OpenNum)}
+                            {token1?.metadata.symbol ?? "?"}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Amounts now"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Amounts now</span>
+                        <span class="detail-value">
+                          {formatAmount(pos.amount0Num)}
+                          {token0?.metadata.symbol ?? "?"}
+                          +
+                          {formatAmount(pos.amount1Num)}
+                          {token1?.metadata.symbol ?? "?"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          This position currently represents
+                          <span class="detail-tooltip-inline-value">
+                            {formatAmount(pos.amount0Num)}
+                            {token0?.metadata.symbol ?? "?"}
+                            +
+                            {formatAmount(pos.amount1Num)}
+                            {token1?.metadata.symbol ?? "?"}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Value when opened"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Value when opened</span>
+                        <span class="detail-value">
+                          {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          When you opened this position, it was worth
+                          <span class="detail-tooltip-inline-value">
+                            {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Value if held tokens"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Value if held tokens</span>
+                        <span class="detail-value">
+                          {pos.valueIfHeld > 0 ? `$${formatAmount(pos.valueIfHeld)}` : "—"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          If you just held the tokens, without providing liquidity, this would now be worth
+                          <span class="detail-tooltip-inline-value">
+                            {pos.valueIfHeld > 0 ? `$${formatAmount(pos.valueIfHeld)}` : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Impermanent Loss"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Impermanent Loss</span>
+                        <span
+                          class="detail-value"
+                          class:pnl-negative={pos.impermanentLossUsd < 0}
+                        >
+                          {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
+                            Math.abs(pos.impermanentLossUsd),
+                          )}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          The ideal scenario for liquidity providers is when there is volume, but prices stay the same, or increase / decrease together. But if the prices move differently, you accumulate impermanent loss. It's called impermanent loss because if prices return to the original ratio, the loss will be gone. Your impermanent loss is currently
+                          <span
+                            class="detail-tooltip-inline-value"
+                            class:detail-tooltip-value-negative={pos.impermanentLossUsd < 0}
+                          >
+                            {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
+                              Math.abs(pos.impermanentLossUsd),
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Fees Revenue"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Fees Revenue</span>
+                        <span
+                          class="detail-value"
+                          class:pnl-positive={pos.feesRevenueUsd > 0}
+                          class:pnl-negative={pos.feesRevenueUsd < 0}
+                        >
+                          {pos.feesRevenueUsd > 0
+                            ? "+"
+                            : pos.feesRevenueUsd < 0
+                              ? "-"
+                              : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          If the pool has fees, each liquidity provider earns a share of each trade, proportionate to the amount of liquidity they provide, and that's the primary source of revenue for liquidity providers. Your revenue from fees is currently
+                          <span
+                            class="detail-tooltip-inline-value"
+                            class:detail-tooltip-value-positive={pos.feesRevenueUsd > 0}
+                            class:detail-tooltip-value-negative={pos.feesRevenueUsd < 0}
+                          >
+                            {pos.feesRevenueUsd > 0
+                              ? "+"
+                              : pos.feesRevenueUsd < 0
+                                ? "-"
+                                : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Price Change"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Price Change</span>
+                        <span
+                          class="detail-value"
+                          class:pnl-positive={pos.priceGainUsd > 0}
+                          class:pnl-negative={pos.priceGainUsd < 0}
+                        >
+                          {pos.priceGainUsd > 0
+                            ? "+"
+                            : pos.priceGainUsd < 0
+                              ? "-"
+                              : ""}${formatAmount(Math.abs(pos.priceGainUsd))}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          Your liquidity position is represented by a certain share of tokens in the pool. If the price of these tokens goes up, value of your position goes up as well. Currently, your PnL from price change is
+                          <span
+                            class="detail-tooltip-inline-value"
+                            class:detail-tooltip-value-positive={pos.priceGainUsd > 0}
+                            class:detail-tooltip-value-negative={pos.priceGainUsd < 0}
+                          >
+                            {pos.priceGainUsd > 0
+                              ? "+"
+                              : pos.priceGainUsd < 0
+                                ? "-"
+                                : ""}${formatAmount(Math.abs(pos.priceGainUsd))}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <div class="detail-item detail-item-static">
                     <span class="detail-label">Transaction</span>
                     <a
                       href="https://nearblocks.io/txns/{pos.transaction_hash}"
@@ -649,20 +886,45 @@
                       View on NearBlocks ↗
                     </a>
                   </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Net PnL</span>
-                    <span
-                      class="detail-value"
-                      class:pnl-positive={pos.pnl > 0}
-                      class:pnl-negative={pos.pnl < 0}
-                    >
-                      {pos.pnl > 0
-                        ? "+"
-                        : pos.pnl < 0
-                          ? "-"
-                          : ""}${formatAmount(Math.abs(pos.pnl))}
-                    </span>
-                  </div>
+
+                  <ResponsiveTooltip
+                    title="Net PnL"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Net PnL</span>
+                        <span
+                          class="detail-value"
+                          class:pnl-positive={pos.pnl > 0}
+                          class:pnl-negative={pos.pnl < 0}
+                        >
+                          {pos.pnl > 0
+                            ? "+"
+                            : pos.pnl < 0
+                              ? "-"
+                              : ""}${formatAmount(Math.abs(pos.pnl))}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          Your net PnL (including all factors above) from this position is currently
+                          <span
+                            class="detail-tooltip-inline-value"
+                            class:detail-tooltip-value-positive={pos.pnl > 0}
+                            class:detail-tooltip-value-negative={pos.pnl < 0}
+                          >
+                            {pos.pnl > 0
+                              ? "+"
+                              : pos.pnl < 0
+                                ? "-"
+                                : ""}${formatAmount(Math.abs(pos.pnl))}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
                 </div>
                 <button
                   type="button"
@@ -724,128 +986,378 @@
             {#if isExpanded}
               <div class="position-details">
                 <div class="details-grid">
-                  <div class="detail-item">
-                    <span class="detail-label">Closed</span>
-                    <span class="detail-value">
-                      {pos.closedAt.toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Prices when opened</span>
-                    <span class="detail-value">
-                      {(token0?.metadata.symbol ?? "?") +
-                        ": $" +
-                        formatAmount(pos.asset0_open_price_usd)}
-                      <br />
-                      {(token1?.metadata.symbol ?? "?") +
-                        ": $" +
-                        formatAmount(pos.asset1_open_price_usd)}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Prices when closed</span>
-                    <span class="detail-value">
-                      {(token0?.metadata.symbol ?? "?") +
-                        ": $" +
-                        formatAmount(pos.closed_asset0_price_usd)}
-                      <br />
-                      {(token1?.metadata.symbol ?? "?") +
-                        ": $" +
-                        formatAmount(pos.closed_asset1_price_usd)}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Amounts when opened</span>
-                    <span class="detail-value">
-                      {formatAmount(parseFloat(pos.asset0OpenHuman))}
-                      {token0?.metadata.symbol ?? "?"}
-                      + {formatAmount(parseFloat(pos.asset1OpenHuman))}
-                      {token1?.metadata.symbol ?? "?"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Amounts when closed</span>
-                    <span class="detail-value">
-                      {formatAmount(parseFloat(pos.asset0ClosedHuman))}
-                      {token0?.metadata.symbol ?? "?"}
-                      + {formatAmount(parseFloat(pos.asset1ClosedHuman))}
-                      {token1?.metadata.symbol ?? "?"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Opened</span>
-                    <span class="detail-value">
-                      {pos.openedAt.toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Value when opened</span>
-                    <span class="detail-value">
-                      {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Value when closed</span>
-                    <span class="detail-value">
-                      {pos.closedUsd > 0
-                        ? `$${formatAmount(pos.closedUsd)}`
-                        : "—"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Value if just held tokens</span>
-                    <span class="detail-value">
-                      {pos.valueIfHeldClosed > 0
-                        ? `$${formatAmount(pos.valueIfHeldClosed)}`
-                        : "—"}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Impermanent Loss</span>
-                    <span
-                      class="detail-value"
-                      class:pnl-negative={pos.impermanentLossUsd < 0}
-                    >
-                      {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
-                        Math.abs(pos.impermanentLossUsd),
-                      )}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Fees Revenue</span>
-                    <span
-                      class="detail-value"
-                      class:pnl-positive={pos.feesRevenueUsd > 0}
-                      class:pnl-negative={pos.feesRevenueUsd < 0}
-                    >
-                      {pos.feesRevenueUsd > 0
-                        ? "+"
-                        : pos.feesRevenueUsd < 0
-                          ? "-"
-                          : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
-                    </span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Price Change</span>
-                    <span
-                      class="detail-value"
-                      class:pnl-positive={pos.priceGainUsd > 0}
-                      class:pnl-negative={pos.priceGainUsd < 0}
-                    >
-                      {pos.priceGainUsd > 0
-                        ? "+"
-                        : pos.priceGainUsd < 0
-                          ? "-"
-                          : ""}${formatAmount(Math.abs(pos.priceGainUsd))}
-                    </span>
-                  </div>
-                  <div class="detail-item">
+                  <ResponsiveTooltip
+                    title="Opened at"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Opened at</span>
+                        <span class="detail-value">
+                          {pos.openedAt.toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          You opened this position at
+                          <span class="detail-tooltip-inline-value">
+                            {pos.openedAt.toLocaleString(undefined, {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Closed at"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Closed at</span>
+                        <span class="detail-value">
+                          {pos.closedAt.toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          You closed this position at
+                          <span class="detail-tooltip-inline-value">
+                            {pos.closedAt.toLocaleString(undefined, {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Prices when opened"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Prices when opened</span>
+                        <span class="detail-value">
+                          {(token0?.metadata.symbol ?? "?") +
+                            ": $" +
+                            formatAmount(pos.asset0_open_price_usd)}
+                          <br />
+                          {(token1?.metadata.symbol ?? "?") +
+                            ": $" +
+                            formatAmount(pos.asset1_open_price_usd)}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          At open, prices were
+                          <span class="detail-tooltip-inline-value detail-tooltip-value-multiline">
+                            {(token0?.metadata.symbol ?? "?") +
+                              ": $" +
+                              formatAmount(pos.asset0_open_price_usd)}
+                            <br />
+                            {(token1?.metadata.symbol ?? "?") +
+                              ": $" +
+                              formatAmount(pos.asset1_open_price_usd)}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Prices when closed"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Prices when closed</span>
+                        <span class="detail-value">
+                          {(token0?.metadata.symbol ?? "?") +
+                            ": $" +
+                            formatAmount(pos.closed_asset0_price_usd)}
+                          <br />
+                          {(token1?.metadata.symbol ?? "?") +
+                            ": $" +
+                            formatAmount(pos.closed_asset1_price_usd)}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          At close, prices were
+                          <span class="detail-tooltip-inline-value detail-tooltip-value-multiline">
+                            {(token0?.metadata.symbol ?? "?") +
+                              ": $" +
+                              formatAmount(pos.closed_asset0_price_usd)}
+                            <br />
+                            {(token1?.metadata.symbol ?? "?") +
+                              ": $" +
+                              formatAmount(pos.closed_asset1_price_usd)}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Amounts when opened"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Amounts when opened</span>
+                        <span class="detail-value">
+                          {formatAmount(parseFloat(pos.asset0OpenHuman))}
+                          {token0?.metadata.symbol ?? "?"}
+                          + {formatAmount(parseFloat(pos.asset1OpenHuman))}
+                          {token1?.metadata.symbol ?? "?"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          You supplied
+                          <span class="detail-tooltip-inline-value">
+                            {formatAmount(parseFloat(pos.asset0OpenHuman))}
+                            {token0?.metadata.symbol ?? "?"}
+                            + {formatAmount(parseFloat(pos.asset1OpenHuman))}
+                            {token1?.metadata.symbol ?? "?"}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Amounts when closed"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Amounts when closed</span>
+                        <span class="detail-value">
+                          {formatAmount(parseFloat(pos.asset0ClosedHuman))}
+                          {token0?.metadata.symbol ?? "?"}
+                          + {formatAmount(parseFloat(pos.asset1ClosedHuman))}
+                          {token1?.metadata.symbol ?? "?"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          You received
+                          <span class="detail-tooltip-inline-value">
+                            {formatAmount(parseFloat(pos.asset0ClosedHuman))}
+                            {token0?.metadata.symbol ?? "?"}
+                            + {formatAmount(parseFloat(pos.asset1ClosedHuman))}
+                            {token1?.metadata.symbol ?? "?"}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Value when opened"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Value when opened</span>
+                        <span class="detail-value">
+                          {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          When you opened this position, it was worth
+                          <span class="detail-tooltip-inline-value">
+                            {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Value when closed"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Value when closed</span>
+                        <span class="detail-value">
+                          {pos.closedUsd > 0 ? `$${formatAmount(pos.closedUsd)}` : "—"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          When you closed this position, it was worth
+                          <span class="detail-tooltip-inline-value">
+                            {pos.closedUsd > 0 ? `$${formatAmount(pos.closedUsd)}` : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Value if held tokens"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Value if held tokens</span>
+                        <span class="detail-value">
+                          {pos.valueIfHeldClosed > 0
+                            ? `$${formatAmount(pos.valueIfHeldClosed)}`
+                            : "—"}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          If you just held the tokens, without providing liquidity, this would be worth
+                          <span class="detail-tooltip-inline-value">
+                            {pos.valueIfHeldClosed > 0
+                              ? `$${formatAmount(pos.valueIfHeldClosed)}`
+                              : "—"}
+                          </span>
+                          at the time you closed this position.
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Impermanent Loss"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Impermanent Loss</span>
+                        <span
+                          class="detail-value"
+                          class:pnl-negative={pos.impermanentLossUsd < 0}
+                        >
+                          {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
+                            Math.abs(pos.impermanentLossUsd),
+                          )}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          The ideal scenario for liquidity providers is when there is volume, but prices stay the same, or increase / decrease together. But if the prices move differently, you accumulate impermanent loss. It's called impermanent loss because if prices return to the original ratio, the loss will be gone. Your impermanent loss for this position was
+                          <span
+                            class="detail-tooltip-inline-value"
+                            class:detail-tooltip-value-negative={pos.impermanentLossUsd < 0}
+                          >
+                            {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
+                              Math.abs(pos.impermanentLossUsd),
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Fees Revenue"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Fees Revenue</span>
+                        <span
+                          class="detail-value"
+                          class:pnl-positive={pos.feesRevenueUsd > 0}
+                          class:pnl-negative={pos.feesRevenueUsd < 0}
+                        >
+                          {pos.feesRevenueUsd > 0
+                            ? "+"
+                            : pos.feesRevenueUsd < 0
+                              ? "-"
+                              : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          If the pool has fees, each liquidity provider earns a share of each trade, proportionate to the amount of liquidity they provide, and that's the primary source of revenue for liquidity providers. Your revenue from fees for this position was
+                          <span
+                            class="detail-tooltip-inline-value"
+                            class:detail-tooltip-value-positive={pos.feesRevenueUsd > 0}
+                            class:detail-tooltip-value-negative={pos.feesRevenueUsd < 0}
+                          >
+                            {pos.feesRevenueUsd > 0
+                              ? "+"
+                              : pos.feesRevenueUsd < 0
+                                ? "-"
+                                : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <ResponsiveTooltip
+                    title="Price Change"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Price Change</span>
+                        <span
+                          class="detail-value"
+                          class:pnl-positive={pos.priceGainUsd > 0}
+                          class:pnl-negative={pos.priceGainUsd < 0}
+                        >
+                          {pos.priceGainUsd > 0
+                            ? "+"
+                            : pos.priceGainUsd < 0
+                              ? "-"
+                              : ""}${formatAmount(Math.abs(pos.priceGainUsd))}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          Your liquidity position is represented by a certain share of tokens in the pool. If the price of these tokens goes up, value of your position goes up as well. Your PnL from price change for this position was
+                          <span
+                            class="detail-tooltip-inline-value"
+                            class:detail-tooltip-value-positive={pos.priceGainUsd > 0}
+                            class:detail-tooltip-value-negative={pos.priceGainUsd < 0}
+                          >
+                            {pos.priceGainUsd > 0
+                              ? "+"
+                              : pos.priceGainUsd < 0
+                                ? "-"
+                                : ""}${formatAmount(Math.abs(pos.priceGainUsd))}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
+
+                  <div class="detail-item detail-item-static">
                     <span class="detail-label">Transactions</span>
                     <a
                       href="https://nearblocks.io/txns/{pos.transaction_hash}"
@@ -864,20 +1376,45 @@
                       Close ↗
                     </a>
                   </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Net PnL</span>
-                    <span
-                      class="detail-value"
-                      class:pnl-positive={pos.closed_profit_usd > 0}
-                      class:pnl-negative={pos.closed_profit_usd < 0}
-                    >
-                      {pos.closed_profit_usd > 0
-                        ? "+"
-                        : pos.closed_profit_usd < 0
-                          ? "-"
-                          : ""}${formatAmount(Math.abs(pos.closed_profit_usd))}
-                    </span>
-                  </div>
+
+                  <ResponsiveTooltip
+                    title="Net PnL"
+                  >
+                    {#snippet children()}
+                      <div class="detail-item">
+                        <span class="detail-label">Net PnL</span>
+                        <span
+                          class="detail-value"
+                          class:pnl-positive={pos.closed_profit_usd > 0}
+                          class:pnl-negative={pos.closed_profit_usd < 0}
+                        >
+                          {pos.closed_profit_usd > 0
+                            ? "+"
+                            : pos.closed_profit_usd < 0
+                              ? "-"
+                              : ""}${formatAmount(Math.abs(pos.closed_profit_usd))}
+                        </span>
+                      </div>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="detail-tooltip-content">
+                        <div class="detail-tooltip-description">
+                          Your net PnL (including all factors above) from this position was
+                          <span
+                            class="detail-tooltip-inline-value"
+                            class:detail-tooltip-value-positive={pos.closed_profit_usd > 0}
+                            class:detail-tooltip-value-negative={pos.closed_profit_usd < 0}
+                          >
+                            {pos.closed_profit_usd > 0
+                              ? "+"
+                              : pos.closed_profit_usd < 0
+                                ? "-"
+                                : ""}${formatAmount(Math.abs(pos.closed_profit_usd))}
+                          </span>
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
                 </div>
               </div>
             {/if}
@@ -1057,20 +1594,55 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding-top: 0.5rem;
+    padding: 0.5rem;
     border-top: 1px solid var(--border-color);
-    margin-left: 1.5rem;
   }
 
   .detail-item {
     display: flex;
     flex-direction: column;
     gap: 0.125rem;
+    cursor: help;
+  }
+
+  .detail-item-static {
+    cursor: default;
   }
 
   .detail-label {
     color: var(--text-muted);
     font-size: 0.875rem;
+  }
+
+  .detail-item:hover .detail-label {
+    color: var(--text-secondary);
+  }
+
+  .detail-tooltip-content {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.35;
+  }
+
+  .detail-tooltip-description {
+    margin-bottom: 0.5rem;
+  }
+
+  .detail-tooltip-inline-value {
+    font-weight: 600;
+  }
+
+  .detail-tooltip-value-multiline {
+    text-align: right;
+  }
+
+  .detail-tooltip-value-positive {
+    color: var(--success, #22c55e);
+  }
+
+  .detail-tooltip-value-negative {
+    color: var(--error, #ef4444);
   }
 
   .detail-value {
@@ -1118,6 +1690,7 @@
 
     .details-grid {
       margin-left: 0;
+      padding: 0.25rem;
     }
   }
 

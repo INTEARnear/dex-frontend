@@ -405,6 +405,7 @@
     mobileTooltipToken = null;
     longPressActive = false;
   }
+
 </script>
 
 {#if isOpen}
@@ -536,7 +537,7 @@
       </div>
       {#if hoveredToken && (!isMobile || !supportsTouch)}
         <div
-          class="token-tooltip token-tooltip-floating"
+          class="token-tooltip"
           role="tooltip"
           style={`left: ${tooltipX}px; top: ${tooltipY}px;`}
         >

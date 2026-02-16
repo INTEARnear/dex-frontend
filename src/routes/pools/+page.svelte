@@ -482,7 +482,6 @@
     color: inherit;
     cursor: pointer;
     user-select: none;
-    -webkit-user-select: none;
   }
 
   .pool-card:hover {
