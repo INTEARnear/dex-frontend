@@ -140,7 +140,7 @@
     try {
       let url = `${DEX_BACKEND_API}/track/positions/${poolId}`;
       if (accountId) {
-        url += `?accountId=${encodeURIComponent(accountId)}`;
+        url += `?accountId=${accountId}`;
       }
       const response = await fetch(url);
       if (!response.ok)

@@ -476,7 +476,7 @@ function createTokenHubStore() {
     setError("balances", null);
     try {
       const response = await fetch(
-        `${PRICES_API}/get-user-tokens?account_id=${encodeURIComponent(accountId)}&native=true`,
+        `${PRICES_API}/get-user-tokens?account_id=${accountId}&native=true`,
       );
       if (!response.ok) {
         throw new Error(`Failed to fetch balances: HTTP ${response.status}`);
@@ -522,7 +522,7 @@ function createTokenHubStore() {
     accountId: string,
   ): Promise<UserTokenResponse[]> {
     const response = await fetch(
-      `${PRICES_API}/get-user-tokens?account_id=${encodeURIComponent(accountId)}&native=true`,
+      `${PRICES_API}/get-user-tokens?account_id=${accountId}&native=true`,
     );
     if (!response.ok) {
       throw new Error(
@@ -630,7 +630,7 @@ function createTokenHubStore() {
       try {
         const accountId = currentWalletAccount;
         const accParam = accountId
-          ? `&acc=${encodeURIComponent(accountId)}`
+          ? `&acc=${accountId}`
           : "";
         const response = await fetch(
           `${PRICES_API}/token-search?q=${encodeURIComponent(normalized)}&n=100${accParam}`,

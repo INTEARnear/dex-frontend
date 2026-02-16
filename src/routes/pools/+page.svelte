@@ -3,7 +3,7 @@
   import { goto } from "$app/navigation";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
-  import { formatFeePercent, formatLiquidity } from "../../lib/utils";
+  import { formatAmount, formatFeePercent, formatLiquidity } from "../../lib/utils";
   import type { TokenInfo, AssetWithBalance, XykPool } from "../../lib/types";
   import CreatePoolModal from "../../lib/CreatePoolModal.svelte";
   import Spinner from "../../lib/Spinner.svelte";
@@ -17,6 +17,11 @@
     assets: [AssetWithBalance, AssetWithBalance];
     totalFeePercent: number;
     tokens: [TokenInfo | null, TokenInfo | null];
+    ownedLiquidityUsd?: number;
+  }
+
+  interface PoolWithOwnedLiquidity extends XykPool {
+    owned_liquidity_usd?: string;
   }
 
   let pools = $state<PoolDisplay[]>([]);
@@ -32,6 +37,7 @@
 
   const accountId = $derived($walletStore.accountId);
   let isConnecting = $state(false);
+  let fetchId = 0;
 
   async function handleConnectWallet() {
     isConnecting = true;
@@ -45,17 +51,13 @@
   }
 
   function buildPoolsWithCachedTokens(poolList: PoolDisplay[]): PoolDisplay[] {
-    return poolList.map((pool) => {
-      const tokens: [TokenInfo | null, TokenInfo | null] = [
+    return poolList.map((pool) => ({
+      ...pool,
+      tokens: [
         tokenHubStore.selectToken(pool.assets[0].asset_id),
         tokenHubStore.selectToken(pool.assets[1].asset_id),
-      ];
-
-      return {
-        ...pool,
-        tokens,
-      };
-    });
+      ] as [TokenInfo | null, TokenInfo | null],
+    }));
   }
 
   function clearTokenDisplayFallbackTimer() {
@@ -65,10 +67,13 @@
     }
   }
 
-  function startTokenDisplayFallbackTimer(poolList: PoolDisplay[]) {
+  function startTokenDisplayFallbackTimer(
+    poolList: PoolDisplay[],
+    requestId: number,
+  ) {
     clearTokenDisplayFallbackTimer();
     tokenDisplayFallbackTimer = setTimeout(() => {
-      if (isLoadingTokens) {
+      if (isLoadingTokens && requestId === fetchId) {
         pools = buildPoolsWithCachedTokens(poolList);
         canDisplayPools = true;
       }
@@ -94,18 +99,25 @@
   }
 
   async function fetchPools() {
+    const id = ++fetchId;
     isFetchingPools = true;
     isLoadingTokens = false;
     canDisplayPools = false;
     error = null;
 
     try {
-      const response = await fetch(`${DEX_BACKEND_API}/pools/all`);
+      const url = accountId
+        ? `${DEX_BACKEND_API}/pools/all?accountId=${accountId}`
+        : `${DEX_BACKEND_API}/pools/all`;
+      const response = await fetch(url);
+      if (id !== fetchId) return;
+
       if (!response.ok) {
         throw new Error("Failed to fetch pools");
       }
 
-      const data: XykPool[] = await response.json();
+      const data: PoolWithOwnedLiquidity[] = await response.json();
+      if (id !== fetchId) return;
 
       const processedPools: PoolDisplay[] = [];
 
@@ -125,6 +137,11 @@
             })
             .reduce((acc, [, fee]) => acc + fee, 0) / 10000;
 
+        const ownedUsd =
+          pool.owned_liquidity_usd !== undefined
+            ? parseFloat(pool.owned_liquidity_usd)
+            : undefined;
+
         processedPools.push({
           id: pool.id,
           ownerId:
@@ -135,9 +152,11 @@
               : pool.pool.Public!.assets,
           totalFeePercent,
           tokens: [null, null],
+          ownedLiquidityUsd: Number.isFinite(ownedUsd) ? ownedUsd : undefined,
         });
       }
 
+      if (id !== fetchId) return;
       pools = processedPools;
       isFetchingPools = false;
 
@@ -147,39 +166,49 @@
       }
 
       isLoadingTokens = true;
-      startTokenDisplayFallbackTimer(processedPools);
-      await loadAllPoolTokens(processedPools);
+      startTokenDisplayFallbackTimer(processedPools, id);
+      await loadAllPoolTokens(processedPools, id);
+      if (id !== fetchId) return;
       isLoadingTokens = false;
       canDisplayPools = true;
       clearTokenDisplayFallbackTimer();
     } catch (e) {
+      if (id !== fetchId) return;
       error = "Error getting pools, try again";
       console.error("Error fetching pools:", e);
       canDisplayPools = true;
       isLoadingTokens = false;
       clearTokenDisplayFallbackTimer();
     } finally {
-      isFetchingPools = false;
+      if (id === fetchId) {
+        isFetchingPools = false;
+      }
     }
   }
 
-  async function loadAllPoolTokens(poolList: PoolDisplay[]) {
+  async function loadAllPoolTokens(poolList: PoolDisplay[], requestId: number) {
     const uniqueAssetIds = Array.from(
       new Set(poolList.flatMap((pool) => pool.assets.map((a) => a.asset_id))),
     );
 
     await tokenHubStore.refreshTokens();
+    if (requestId !== fetchId) return;
     await Promise.allSettled(
       uniqueAssetIds.map((assetId) => tokenHubStore.ensureTokenByAssetId(assetId)),
     );
+    if (requestId !== fetchId) return;
 
     pools = buildPoolsWithCachedTokens(poolList);
   }
 
+  $effect(() => {
+    void accountId;
+    fetchPools();
+  });
+
   onMount(() => {
     tokenHubStore.updatePricesEvery(10_000);
     tokenHubStore.updateBalancesEvery(5_000);
-    fetchPools();
   });
 
   onDestroy(() => {
@@ -324,6 +353,11 @@
 
           <div class="pool-footer">
             <span class="pool-id">Pool #{pool.id}</span>
+            {#if pool.ownedLiquidityUsd !== undefined}
+              <span class="your-liquidity-value">
+                {"$" + formatAmount(pool.ownedLiquidityUsd)}
+              </span>
+            {/if}
           </div>
         </a>
       {/each}
@@ -617,11 +651,21 @@
     font-family: "JetBrains Mono", monospace;
   }
 
+  .your-liquidity-value {
+    padding: 0.25rem 0.625rem;
+    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
+    color: white;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
   .pool-footer {
     padding-top: 0.75rem;
     border-top: 1px solid var(--border-color);
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .pool-id {
