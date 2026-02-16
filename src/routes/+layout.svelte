@@ -4,7 +4,6 @@
   import { siX, siTelegram, siGithub } from "simple-icons";
   import { page } from "$app/state";
   import { tokenHubStore } from "../lib/tokenHubStore";
-  import "../app.css";
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js");

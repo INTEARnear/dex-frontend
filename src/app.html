@@ -1,261 +1,757 @@
 <!doctype html>
 <html lang="en" style="background-color: #0a0e17">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/intear-logo.svg" />
-    <meta
-      name="description"
-      content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR."
-    />
-    <meta
-      name="keywords"
-      content="Intear DEX, NEAR DEX, token swap, liquidity pools, DeFi, NEAR"
-    />
-    <meta name="robots" content="index,follow" />
-    <meta name="theme-color" content="#0a0e17" />
-    <link rel="canonical" href="https://dex.intear.tech" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Intear DEX" />
-    <meta property="og:title" content="Intear DEX" />
-    <meta
-      property="og:description"
-      content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR."
-    />
-    <meta property="og:url" content="https://dex.intear.tech" />
-    <meta
-      property="og:image"
-      content="https://dex.intear.tech/intear-logo.svg"
-    />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Intear DEX" />
-    <meta
-      name="twitter:description"
-      content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR."
-    />
-    <meta
-      name="twitter:image"
-      content="https://dex.intear.tech/intear-logo.svg"
-    />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    />
-    <title>Intear DEX</title>
-    <style>
-      html,
-      body {
-        background-color: #0a0e17;
-        color: #ffffff;
-        margin: 0;
-        padding: 0;
-      }
-      #support-chat-button {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: #1f93ff;
-        border: none;
-        border-radius: 100px;
-        border-width: 0;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
-        cursor: pointer;
-        height: 64px;
-        overflow: hidden;
-        padding: 0;
-        user-select: none;
-        width: 64px;
-        z-index: 2147483000;
-      }
-      #support-chat-button:hover {
-        background: #1f93ff;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      }
-      #support-chat-button:disabled {
-        cursor: wait;
-      }
-      #support-chat-button svg {
-        all: revert;
-        height: 24px;
-        margin: 20px;
-        width: 24px;
-      }
-      #support-chat-button.support-chat-button--loading {
-        opacity: 0.85;
-      }
-    </style>
-    <link
-      rel="preload"
-      href="/fonts/jetbrains-mono-latin.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      href="/fonts/outfit-latin.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      href="https://wallet.intear.tech/near-selector.js"
-      as="script"
-    />
-    <script>
-      (function () {
-        var BASE_URL = "https://app.chatwoot.com";
-        var WEBSITE_TOKEN = "rWhhtHuth6NLdgiiePdWqerD";
-        var SDK_SCRIPT_ID = "chatwoot-sdk-script";
-        var SUPPORT_BUTTON_ID = "support-chat-button";
-        var sdkLoadPromise = null;
-        var sdkReadyPromise = null;
-        var sdkInitialized = false;
 
-        window.chatwootSettings = {
-          position: "right",
-          type: "standard",
-          launcherTitle: "Chat with us",
-          hideMessageBubble: true,
-        };
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/intear-logo.svg" />
+  <meta name="description" content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR." />
+  <meta name="keywords" content="Intear DEX, NEAR DEX, token swap, liquidity pools, DeFi, NEAR" />
+  <meta name="robots" content="index,follow" />
+  <meta name="theme-color" content="#0a0e17" />
+  <link rel="canonical" href="https://dex.intear.tech" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Intear DEX" />
+  <meta property="og:title" content="Intear DEX" />
+  <meta property="og:description"
+    content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR." />
+  <meta property="og:url" content="https://dex.intear.tech" />
+  <meta property="og:image" content="https://dex.intear.tech/intear-logo.svg" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Intear DEX" />
+  <meta name="twitter:description"
+    content="Swap tokens, provide liquidity, and track positions on Intear DEX for NEAR." />
+  <meta name="twitter:image" content="https://dex.intear.tech/intear-logo.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Intear DEX</title>
+  <style>
+    html,
+    body {
+      background-color: #0a0e17;
+      color: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
 
-        function loadChatwootSdk() {
-          if (window.chatwootSDK) {
-            return Promise.resolve();
-          }
+    #support-chat-button {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1f93ff;
+      border: none;
+      border-radius: 100px;
+      border-width: 0;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+      cursor: pointer;
+      height: 64px;
+      overflow: hidden;
+      padding: 0;
+      user-select: none;
+      width: 64px;
+      z-index: 2147483000;
+    }
 
-          if (sdkLoadPromise) {
-            return sdkLoadPromise;
-          }
+    #support-chat-button:hover {
+      background: #1f93ff;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
 
-          sdkLoadPromise = new Promise(function (resolve, reject) {
-            var existingScript = document.getElementById(SDK_SCRIPT_ID);
-            if (existingScript) {
-              existingScript.addEventListener("load", resolve, { once: true });
-              existingScript.addEventListener(
-                "error",
-                function () {
-                  reject(new Error("Failed to load Chatwoot SDK"));
-                },
-                { once: true },
-              );
-              return;
-            }
+    #support-chat-button:disabled {
+      cursor: wait;
+    }
 
-            var script = document.createElement("script");
-            script.id = SDK_SCRIPT_ID;
-            script.src = BASE_URL + "/packs/js/sdk.js";
-            script.async = true;
-            script.onload = resolve;
-            script.onerror = function () {
-              reject(new Error("Failed to load Chatwoot SDK"));
-            };
-            document.head.appendChild(script);
-          });
+    #support-chat-button svg {
+      all: revert;
+      height: 24px;
+      margin: 20px;
+      width: 24px;
+    }
 
+    #support-chat-button.support-chat-button--loading {
+      opacity: 0.85;
+    }
+
+    /* cyrillic-ext */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-cyrillic-ext.woff2) format("woff2");
+      unicode-range:
+        U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+    }
+
+    /* cyrillic */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-cyrillic.woff2) format("woff2");
+      unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+    }
+
+    /* greek */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-greek.woff2) format("woff2");
+      unicode-range:
+        U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+    }
+
+    /* vietnamese */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-vietnamese.woff2) format("woff2");
+      unicode-range:
+        U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
+        U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329,
+        U+1EA0-1EF9, U+20AB;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    /* cyrillic-ext */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-cyrillic-ext.woff2) format("woff2");
+      unicode-range:
+        U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+    }
+
+    /* cyrillic */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-cyrillic.woff2) format("woff2");
+      unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+    }
+
+    /* greek */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-greek.woff2) format("woff2");
+      unicode-range:
+        U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+    }
+
+    /* vietnamese */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-vietnamese.woff2) format("woff2");
+      unicode-range:
+        U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
+        U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329,
+        U+1EA0-1EF9, U+20AB;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    /* cyrillic-ext */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-cyrillic-ext.woff2) format("woff2");
+      unicode-range:
+        U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+    }
+
+    /* cyrillic */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-cyrillic.woff2) format("woff2");
+      unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+    }
+
+    /* greek */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-greek.woff2) format("woff2");
+      unicode-range:
+        U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+    }
+
+    /* vietnamese */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-vietnamese.woff2) format("woff2");
+      unicode-range:
+        U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
+        U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329,
+        U+1EA0-1EF9, U+20AB;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    /* cyrillic-ext */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-cyrillic-ext.woff2) format("woff2");
+      unicode-range:
+        U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+    }
+
+    /* cyrillic */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-cyrillic.woff2) format("woff2");
+      unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+    }
+
+    /* greek */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-greek.woff2) format("woff2");
+      unicode-range:
+        U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+    }
+
+    /* vietnamese */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-vietnamese.woff2) format("woff2");
+      unicode-range:
+        U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
+        U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329,
+        U+1EA0-1EF9, U+20AB;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/jetbrains-mono-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 300;
+      font-display: swap;
+      src: url(/fonts/outfit-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 300;
+      font-display: swap;
+      src: url(/fonts/outfit-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/outfit-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/outfit-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(/fonts/outfit-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(/fonts/outfit-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(/fonts/outfit-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(/fonts/outfit-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    /* latin-ext */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/outfit-latin-ext.woff2) format("woff2");
+      unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+        U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+        U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+
+    /* latin */
+    @font-face {
+      font-family: "Outfit";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/outfit-latin.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+    }
+
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #111827;
+      --bg-card: #1a2332;
+      --bg-input: #0d1421;
+      --border-color: #2a3a52;
+      --border-focus: #3b82f6;
+      --accent-primary: #4598f7;
+      --accent-button: #3b82f6;
+      --accent-button-small: #3a75bc;
+      --accent-hover: #1d4ed8;
+      --accent-glow: rgba(59, 130, 246, 0.4);
+      --text-primary: #ffffff;
+      --text-secondary: #9fb0c5;
+      --text-muted: #8391a8;
+
+      font-family: "Outfit", sans-serif;
+      line-height: 1.5;
+      font-weight: 400;
+      color-scheme: dark;
+      color: var(--text-primary);
+      background-color: var(--bg-primary);
+
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 280px;
+      min-height: 100dvh;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%,
+          rgba(59, 130, 246, 0.15),
+          transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%,
+          rgba(59, 130, 246, 0.08),
+          transparent),
+        var(--bg-primary);
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    #app {
+      width: 100%;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      padding: 2rem;
+      box-sizing: border-box;
+    }
+
+    @media (--mobile) {
+      #app {
+        padding: 1rem 0.75rem;
+      }
+    }
+
+    @media (--short-screen) {
+      #app {
+        min-height: auto;
+        padding: 1rem 0.75rem;
+        gap: 1rem;
+      }
+    }
+
+    @media (--landscape-mobile) {
+      #app {
+        gap: 0.75rem;
+        padding: 0.75rem;
+      }
+    }
+
+    input[type="number"] {
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    [role="button"]:focus-visible {
+      outline: 2px solid var(--border-focus) !important;
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    .footer img {
+      display: none;
+    }
+  </style>
+  <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="https://wallet.intear.tech/near-selector.js" as="script" />
+  <script>
+    (function () {
+      var BASE_URL = "https://app.chatwoot.com";
+      var WEBSITE_TOKEN = "rWhhtHuth6NLdgiiePdWqerD";
+      var SDK_SCRIPT_ID = "chatwoot-sdk-script";
+      var SUPPORT_BUTTON_ID = "support-chat-button";
+      var sdkLoadPromise = null;
+      var sdkReadyPromise = null;
+      var sdkInitialized = false;
+
+      window.chatwootSettings = {
+        position: "right",
+        type: "standard",
+        launcherTitle: "Chat with us",
+        hideMessageBubble: true,
+      };
+
+      function loadChatwootSdk() {
+        if (window.chatwootSDK) {
+          return Promise.resolve();
+        }
+
+        if (sdkLoadPromise) {
           return sdkLoadPromise;
         }
 
-        function waitForChatwootReady() {
-          if (window.$chatwoot?.hasLoaded) {
-            return Promise.resolve();
+        sdkLoadPromise = new Promise(function (resolve, reject) {
+          var existingScript = document.getElementById(SDK_SCRIPT_ID);
+          if (existingScript) {
+            existingScript.addEventListener("load", resolve, { once: true });
+            existingScript.addEventListener(
+              "error",
+              function () {
+                reject(new Error("Failed to load Chatwoot SDK"));
+              },
+              { once: true },
+            );
+            return;
           }
 
-          if (sdkReadyPromise) {
-            return sdkReadyPromise;
-          }
+          var script = document.createElement("script");
+          script.id = SDK_SCRIPT_ID;
+          script.src = BASE_URL + "/packs/js/sdk.js";
+          script.async = true;
+          script.onload = resolve;
+          script.onerror = function () {
+            reject(new Error("Failed to load Chatwoot SDK"));
+          };
+          document.head.appendChild(script);
+        });
 
-          sdkReadyPromise = new Promise(function (resolve) {
-            window.addEventListener("chatwoot:ready", resolve, { once: true });
-          });
+        return sdkLoadPromise;
+      }
 
+      function waitForChatwootReady() {
+        if (window.$chatwoot?.hasLoaded) {
+          return Promise.resolve();
+        }
+
+        if (sdkReadyPromise) {
           return sdkReadyPromise;
         }
 
-        function initializeChatwoot() {
-          if (sdkInitialized) {
-            return waitForChatwootReady();
-          }
+        sdkReadyPromise = new Promise(function (resolve) {
+          window.addEventListener("chatwoot:ready", resolve, { once: true });
+        });
 
-          window.chatwootSDK.run({
-            websiteToken: WEBSITE_TOKEN,
-            baseUrl: BASE_URL,
-          });
-          sdkInitialized = true;
+        return sdkReadyPromise;
+      }
 
+      function initializeChatwoot() {
+        if (sdkInitialized) {
           return waitForChatwootReady();
         }
 
-        async function openSupportChat() {
-          var supportButton = document.getElementById(SUPPORT_BUTTON_ID);
-          if (!supportButton) {
-            return;
-          }
+        window.chatwootSDK.run({
+          websiteToken: WEBSITE_TOKEN,
+          baseUrl: BASE_URL,
+        });
+        sdkInitialized = true;
 
-          supportButton.disabled = true;
-          supportButton.classList.add("support-chat-button--loading");
+        return waitForChatwootReady();
+      }
 
-          try {
-            await loadChatwootSdk();
-            await initializeChatwoot();
-            if (window.$chatwoot?.toggle) {
-              window.$chatwoot.toggle("open");
-            }
-          } catch (error) {
-            console.error(error);
-          } finally {
-            supportButton.disabled = false;
-            supportButton.classList.remove("support-chat-button--loading");
-          }
+      async function openSupportChat() {
+        var supportButton = document.getElementById(SUPPORT_BUTTON_ID);
+        if (!supportButton) {
+          return;
         }
 
-        function bindSupportButtonClick() {
-          var supportButton = document.getElementById(SUPPORT_BUTTON_ID);
-          if (!supportButton) {
-            return;
+        supportButton.disabled = true;
+        supportButton.classList.add("support-chat-button--loading");
+
+        try {
+          await loadChatwootSdk();
+          await initializeChatwoot();
+          if (window.$chatwoot?.toggle) {
+            window.$chatwoot.toggle("open");
           }
+        } catch (error) {
+          console.error(error);
+        } finally {
+          supportButton.disabled = false;
+          supportButton.classList.remove("support-chat-button--loading");
+        }
+      }
 
-          supportButton.addEventListener("click", openSupportChat);
+      function bindSupportButtonClick() {
+        var supportButton = document.getElementById(SUPPORT_BUTTON_ID);
+        if (!supportButton) {
+          return;
         }
 
-        if (document.readyState === "loading") {
-          document.addEventListener(
-            "DOMContentLoaded",
-            bindSupportButtonClick,
-            {
-              once: true,
-            },
-          );
-        } else {
-          bindSupportButtonClick();
-        }
-      })();
-    </script>
-    %sveltekit.head%
-  </head>
+        supportButton.addEventListener("click", openSupportChat);
+      }
 
-  <body data-sveltekit-preload-data="hover">
-    <div id="app">%sveltekit.body%</div>
-    <button
-      id="support-chat-button"
-      class="support-chat-button"
-      type="button"
-      aria-label="Open support chat"
-      title="Open support chat"
-    >
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 240 240"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <path
-          d="M240.808 240.808H122.123C56.6994 240.808 3.45695 187.562 3.45695 122.122C3.45695 56.7031 56.6994 3.45697 122.124 3.45697C187.566 3.45697 240.808 56.7031 240.808 122.122V240.808Z"
-          fill="#FFFFFF"
-        />
-      </svg>
-    </button>
-  </body>
+      if (document.readyState === "loading") {
+        document.addEventListener(
+          "DOMContentLoaded",
+          bindSupportButtonClick,
+          {
+            once: true,
+          },
+        );
+      } else {
+        bindSupportButtonClick();
+      }
+    })();
+  </script>
+  %sveltekit.head%
+</head>
+
+<body data-sveltekit-preload-data="hover">
+  <div id="app">%sveltekit.body%</div>
+  <button id="support-chat-button" class="support-chat-button" type="button" aria-label="Open support chat"
+    title="Open support chat">
+    <svg width="24" height="24" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path
+        d="M240.808 240.808H122.123C56.6994 240.808 3.45695 187.562 3.45695 122.122C3.45695 56.7031 56.6994 3.45697 122.124 3.45697C187.566 3.45697 240.808 56.7031 240.808 122.122V240.808Z"
+        fill="#FFFFFF" />
+    </svg>
+  </button>
+</body>
+
 </html>
