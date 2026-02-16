@@ -168,7 +168,7 @@
         ? BigInt(data.untracked.shares)
         : 0n;
       const totalShares = openSum + untrackedAmount;
-      userSharesRaw = totalShares > 0n ? totalShares.toString() : null;
+      userSharesRaw = totalShares.toString();
       openPositions = data.open ?? [];
       closedPositions = data.closed ?? [];
       hasUntracked = !!(data.untracked && BigInt(data.untracked.shares) > 0n);
@@ -183,7 +183,10 @@
         hasUntracked = false;
         const message =
           fetchError instanceof Error ? fetchError.message : "Unknown error";
-        if (allow404WhileCreating && message === "Failed to fetch pool: HTTP 404") {
+        if (
+          allow404WhileCreating &&
+          message === "Failed to fetch pool: HTTP 404"
+        ) {
           // Newly created pool can briefly return 404 before indexer catches up
           isWaitingForPool = true;
           error = null;
@@ -241,10 +244,24 @@
       closedPositions.length === 0 &&
       !hasUntracked,
   );
-  const hasUserShares = $derived(
-    userSharesRaw !== null && BigInt(userSharesRaw) > 0n,
-  );
   const isPrivate = $derived(poolData?.ownerId !== null);
+  const userHasLiquidity = $derived.by(() => {
+    if (isPrivate) {
+      return (
+        poolData?.assets[0].balance &&
+        poolData?.assets[1].balance &&
+        BigInt(poolData.assets[0].balance) > 0n &&
+        BigInt(poolData.assets[1].balance) > 0n
+      );
+    } else {
+      return (
+        userSharesRaw !== null &&
+        BigInt(userSharesRaw) > 0n &&
+        poolData?.totalSharesRaw &&
+        BigInt(poolData.totalSharesRaw) > 0n
+      );
+    }
+  });
 
   $effect(() => {
     const id = parsedPoolId;
@@ -324,7 +341,7 @@
 
       <section class="deposit-card" class:disabled={!$walletStore.isConnected}>
         <div class="card-header">
-          {#if hasUserShares && !isPrivate}
+          {#if userHasLiquidity}
             <div
               class="liquidity-tabs"
               role="tablist"
@@ -364,8 +381,8 @@
           {/if}
         </div>
 
-        {#if activeTab === "add" || !hasUserShares || isPrivate}
-          {#if hasUserShares && !isPrivate}
+        {#if activeTab === "add" || !userHasLiquidity}
+          {#if userHasLiquidity}
             <div
               id="add-liquidity-panel"
               role="tabpanel"

@@ -6,8 +6,8 @@ export const ROUTER_API = "https://router.intear.tech";
 
 export function formatApy(apy: number): string {
   if (apy === 0) return "0%";
-  if (apy < 0.01) return "<0.01%";
-  return `${apy.toFixed(2)}%`;
+  if (apy < 0.001) return "<0.001%";
+  return apy.toFixed(3).replace(/\.?0+$/, "") + "%";
 }
 
 /**

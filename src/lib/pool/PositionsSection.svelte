@@ -68,76 +68,86 @@
   interface PositionBreakdownParams {
     amount0OpenNum: number;
     amount1OpenNum: number;
+    amount0ClosedNum: number;
+    amount1ClosedNum: number;
     price0OpenUsd: number;
     price1OpenUsd: number;
     price0NowUsd: number;
     price1NowUsd: number;
-    positionValueNowUsd: number;
-    totalPnlUsd?: number;
   }
 
-interface PositionBreakdown {
-  openUsd: number;
-  valueIfHeldNowUsd: number;
-  impermanentLossUsd: number;
-  feesRevenueUsd: number;
-  priceGainUsd: number;
-  totalPnlUsd: number;
-}
+  interface PositionBreakdown {
+    openUsd: number;
+    valueIfHeldNowUsd: number;
+    impermanentLossUsd: number;
+    feesRevenueUsd: number;
+    priceGainUsd: number;
+    totalPnlUsd: number;
+  }
 
   function computePositionBreakdown({
     amount0OpenNum,
     amount1OpenNum,
+    amount0ClosedNum,
+    amount1ClosedNum,
     price0OpenUsd,
     price1OpenUsd,
     price0NowUsd,
     price1NowUsd,
-    positionValueNowUsd,
-    totalPnlUsd,
   }: PositionBreakdownParams): PositionBreakdown {
     const openUsd =
       amount0OpenNum * price0OpenUsd + amount1OpenNum * price1OpenUsd;
+    const closedUsd =
+      amount0ClosedNum * price0NowUsd + amount1ClosedNum * price1NowUsd;
     const valueIfHeldNowUsd =
       amount0OpenNum * price0NowUsd + amount1OpenNum * price1NowUsd;
-    const totalPnl =
-      totalPnlUsd === undefined ? positionValueNowUsd - openUsd : totalPnlUsd;
-    let valueIfNoFeeLpNowUsd = valueIfHeldNowUsd;
+    const totalPnlUsd = closedUsd - openUsd;
+
+    const entryRatio = amount0OpenNum / amount1OpenNum;
+    const exitRatio = amount0ClosedNum / amount1ClosedNum;
+
     if (
-      amount0OpenNum >= 0 &&
-      amount1OpenNum >= 0 &&
-      price0OpenUsd > 0 &&
-      price1OpenUsd > 0 &&
-      price0NowUsd > 0 &&
-      price1NowUsd > 0
+      !Number.isFinite(entryRatio) ||
+      !Number.isFinite(exitRatio) ||
+      entryRatio <= 0 ||
+      exitRatio <= 0 ||
+      !Number.isFinite(price0NowUsd) ||
+      !Number.isFinite(price1NowUsd)
     ) {
-      const openRelativePrice = price0OpenUsd / price1OpenUsd;
-      const nowRelativePrice = price0NowUsd / price1NowUsd;
-      const relativePriceChange = nowRelativePrice / openRelativePrice;
-      if (Number.isFinite(relativePriceChange) && relativePriceChange > 0) {
-        const sqrtPriceChange = Math.sqrt(relativePriceChange);
-        const amount0NoFeeNow = amount0OpenNum / sqrtPriceChange;
-        const amount1NoFeeNow = amount1OpenNum * sqrtPriceChange;
-        const valueNoFeeNowUsd =
-          amount0NoFeeNow * price0NowUsd + amount1NoFeeNow * price1NowUsd;
-        if (Number.isFinite(valueNoFeeNowUsd)) {
-          valueIfNoFeeLpNowUsd = valueNoFeeNowUsd;
-        }
-      }
+      return {
+        openUsd,
+        valueIfHeldNowUsd,
+        impermanentLossUsd: 0,
+        feesRevenueUsd: 0,
+        priceGainUsd: totalPnlUsd,
+        totalPnlUsd,
+      };
     }
-    const impermanentLossUsd = Math.min(
-      valueIfNoFeeLpNowUsd - valueIfHeldNowUsd,
-      0,
-    );
-    const priceGainUsd = valueIfHeldNowUsd - openUsd;
-    const feesRevenueUsd = totalPnl - priceGainUsd - impermanentLossUsd;
+
+    const ratioChangeSqrt = Math.sqrt(exitRatio / entryRatio);
+    const amount0NoFeeClose = amount0OpenNum * ratioChangeSqrt;
+    const amount1NoFeeClose = amount1OpenNum / ratioChangeSqrt;
+
+    const impermanentLossAmount0 = amount0NoFeeClose - amount0OpenNum;
+    const impermanentLossAmount1 = amount1NoFeeClose - amount1OpenNum;
+    const impermanentLossUsd =
+      impermanentLossAmount0 * price0NowUsd +
+      impermanentLossAmount1 * price1NowUsd;
+
+    const feesAmount0 = amount0ClosedNum - amount0NoFeeClose;
+    const feesAmount1 = amount1ClosedNum - amount1NoFeeClose;
+    const feesRevenueUsd =
+      feesAmount0 * price0NowUsd + feesAmount1 * price1NowUsd;
+
+    const priceGainUsd = totalPnlUsd - impermanentLossUsd - feesRevenueUsd;
 
     return {
       openUsd,
       valueIfHeldNowUsd,
       impermanentLossUsd,
-      feesRevenueUsd,
+      feesRevenueUsd: feesRevenueUsd,
       priceGainUsd,
-      totalPnlUsd: totalPnl,
+      totalPnlUsd,
     };
   }
 
@@ -423,7 +433,8 @@ interface PositionBreakdown {
           price1OpenUsd: pos.asset1_open_price_usd,
           price0NowUsd: price0,
           price1NowUsd: price1,
-          positionValueNowUsd: currentUsd,
+          amount0ClosedNum: amount0Num,
+          amount1ClosedNum: amount1Num,
         });
         const pnl = breakdown.totalPnlUsd;
 
@@ -492,12 +503,12 @@ interface PositionBreakdown {
         const breakdown = computePositionBreakdown({
           amount0OpenNum,
           amount1OpenNum,
+          amount0ClosedNum,
+          amount1ClosedNum,
           price0OpenUsd: pos.asset0_open_price_usd,
           price1OpenUsd: pos.asset1_open_price_usd,
           price0NowUsd: pos.closed_asset0_price_usd,
           price1NowUsd: pos.closed_asset1_price_usd,
-          positionValueNowUsd: closedUsd,
-          totalPnlUsd: pos.closed_profit_usd,
         });
 
         const durationMs = closedAt.getTime() - openedAt.getTime();
@@ -577,9 +588,7 @@ interface PositionBreakdown {
             {#if isExpanded}
               <div class="position-details">
                 <div class="details-grid">
-                  <ResponsiveTooltip
-                    title="Opened At"
-                  >
+                  <ResponsiveTooltip title="Opened At">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Opened At</span>
@@ -606,9 +615,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Prices when opened"
-                  >
+                  <ResponsiveTooltip title="Prices when opened">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Prices when opened</span>
@@ -627,7 +634,9 @@ interface PositionBreakdown {
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
                           At open, prices were
-                          <span class="detail-tooltip-inline-value detail-tooltip-value-multiline">
+                          <span
+                            class="detail-tooltip-inline-value detail-tooltip-value-multiline"
+                          >
                             {(token0?.metadata.symbol ?? "?") +
                               ": $" +
                               formatAmount(pos.asset0_open_price_usd)}
@@ -641,9 +650,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Prices now"
-                  >
+                  <ResponsiveTooltip title="Prices now">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Prices now</span>
@@ -662,23 +669,27 @@ interface PositionBreakdown {
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
                           Current prices are
-                          <span class="detail-tooltip-inline-value detail-tooltip-value-multiline">
+                          <span
+                            class="detail-tooltip-inline-value detail-tooltip-value-multiline"
+                          >
                             {(token0?.metadata.symbol ?? "?") +
                               ": $" +
-                              formatAmount(parseFloat(token0?.price_usd ?? "0"))}
+                              formatAmount(
+                                parseFloat(token0?.price_usd ?? "0"),
+                              )}
                             <br />
                             {(token1?.metadata.symbol ?? "?") +
                               ": $" +
-                              formatAmount(parseFloat(token1?.price_usd ?? "0"))}
+                              formatAmount(
+                                parseFloat(token1?.price_usd ?? "0"),
+                              )}
                           </span>
                         </div>
                       </div>
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Amounts when opened"
-                  >
+                  <ResponsiveTooltip title="Amounts when opened">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Amounts when opened</span>
@@ -705,9 +716,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Amounts now"
-                  >
+                  <ResponsiveTooltip title="Amounts now">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Amounts now</span>
@@ -736,14 +745,14 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Value when opened"
-                  >
+                  <ResponsiveTooltip title="Value when opened">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Value when opened</span>
                         <span class="detail-value">
-                          {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
+                          {pos.openUsd > 0
+                            ? `$${formatAmount(pos.openUsd)}`
+                            : "—"}
                         </span>
                       </div>
                     {/snippet}
@@ -752,39 +761,42 @@ interface PositionBreakdown {
                         <div class="detail-tooltip-description">
                           When you opened this position, it was worth
                           <span class="detail-tooltip-inline-value">
-                            {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
+                            {pos.openUsd > 0
+                              ? `$${formatAmount(pos.openUsd)}`
+                              : "—"}
                           </span>
                         </div>
                       </div>
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Value if held tokens"
-                  >
+                  <ResponsiveTooltip title="Value if held tokens">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Value if held tokens</span>
                         <span class="detail-value">
-                          {pos.valueIfHeld > 0 ? `$${formatAmount(pos.valueIfHeld)}` : "—"}
+                          {pos.valueIfHeld > 0
+                            ? `$${formatAmount(pos.valueIfHeld)}`
+                            : "—"}
                         </span>
                       </div>
                     {/snippet}
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          If you just held the tokens, without providing liquidity, this would now be worth
+                          If you just held the tokens, without providing
+                          liquidity, this would now be worth
                           <span class="detail-tooltip-inline-value">
-                            {pos.valueIfHeld > 0 ? `$${formatAmount(pos.valueIfHeld)}` : "—"}
+                            {pos.valueIfHeld > 0
+                              ? `$${formatAmount(pos.valueIfHeld)}`
+                              : "—"}
                           </span>
                         </div>
                       </div>
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Impermanent Loss"
-                  >
+                  <ResponsiveTooltip title="Impermanent Loss">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Impermanent Loss</span>
@@ -801,12 +813,21 @@ interface PositionBreakdown {
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          The ideal scenario for liquidity providers is when there is volume, but prices stay the same, or increase / decrease together. But if the prices move differently, you accumulate impermanent loss. It's called impermanent loss because if prices return to the original ratio, the loss will be gone. Your impermanent loss is currently
+                          The ideal scenario for liquidity providers is when
+                          there is volume, but prices stay the same, or increase
+                          / decrease together. But if the prices move
+                          differently, you accumulate impermanent loss. It's
+                          called impermanent loss because if prices return to
+                          the original ratio, the loss will be gone. Your
+                          impermanent loss is currently
                           <span
                             class="detail-tooltip-inline-value"
-                            class:detail-tooltip-value-negative={pos.impermanentLossUsd < 0}
+                            class:detail-tooltip-value-negative={pos.impermanentLossUsd <
+                              0}
                           >
-                            {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
+                            {pos.impermanentLossUsd < 0
+                              ? "-"
+                              : ""}${formatAmount(
                               Math.abs(pos.impermanentLossUsd),
                             )}
                           </span>
@@ -815,9 +836,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Fees Revenue"
-                  >
+                  <ResponsiveTooltip title="Fees Revenue">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Fees Revenue</span>
@@ -842,23 +861,29 @@ interface PositionBreakdown {
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          If the pool has fees, each liquidity provider earns a share of each trade, proportionate to the amount of liquidity they provide, and that's the primary source of revenue for liquidity providers. Your revenue from fees is currently
+                          If the pool has fees, each liquidity provider earns a
+                          share of each trade, proportionate to the amount of
+                          liquidity they provide, and that's the primary source
+                          of revenue for liquidity providers. Your revenue from
+                          fees is currently
                           <span
                             class="detail-tooltip-inline-value"
-                            class:detail-tooltip-value-positive={pos.feesRevenueUsd > 0}
-                            class:detail-tooltip-value-negative={pos.feesRevenueUsd < 0}
+                            class:detail-tooltip-value-positive={pos.feesRevenueUsd >
+                              0}
+                            class:detail-tooltip-value-negative={pos.feesRevenueUsd <
+                              0}
                           >
                             {pos.feesRevenueUsd > 0
                               ? "+"
                               : pos.feesRevenueUsd < 0
                                 ? "-"
-                                : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                                : ""}${formatAmount(
+                              Math.abs(pos.feesRevenueUsd),
+                            )}
                           </span>
                           {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
                             , which annualizes to
-                            <span
-                              class="detail-tooltip-inline-value"
-                            >
+                            <span class="detail-tooltip-inline-value">
                               {formatApy(pos.feesApyPercent)} APY
                             </span>
                           {/if}
@@ -867,9 +892,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Price Change"
-                  >
+                  <ResponsiveTooltip title="Price Change">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Price Change</span>
@@ -889,11 +912,16 @@ interface PositionBreakdown {
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          Your liquidity position is represented by a certain share of tokens in the pool. If the price of these tokens goes up, value of your position goes up as well. Currently, your PnL from price change is
+                          Your liquidity position is represented by a certain
+                          share of tokens in the pool. If the price of these
+                          tokens goes up, value of your position goes up as
+                          well. Currently, your PnL from price change is
                           <span
                             class="detail-tooltip-inline-value"
-                            class:detail-tooltip-value-positive={pos.priceGainUsd > 0}
-                            class:detail-tooltip-value-negative={pos.priceGainUsd < 0}
+                            class:detail-tooltip-value-positive={pos.priceGainUsd >
+                              0}
+                            class:detail-tooltip-value-negative={pos.priceGainUsd <
+                              0}
                           >
                             {pos.priceGainUsd > 0
                               ? "+"
@@ -918,9 +946,7 @@ interface PositionBreakdown {
                     </a>
                   </div>
 
-                  <ResponsiveTooltip
-                    title="Net PnL"
-                  >
+                  <ResponsiveTooltip title="Net PnL">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Net PnL</span>
@@ -940,7 +966,8 @@ interface PositionBreakdown {
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          Your net PnL (including all factors above) from this position is currently
+                          Your net PnL (including all factors above) from this
+                          position is currently
                           <span
                             class="detail-tooltip-inline-value"
                             class:detail-tooltip-value-positive={pos.pnl > 0}
@@ -1017,9 +1044,7 @@ interface PositionBreakdown {
             {#if isExpanded}
               <div class="position-details">
                 <div class="details-grid">
-                  <ResponsiveTooltip
-                    title="Opened at"
-                  >
+                  <ResponsiveTooltip title="Opened at">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Opened at</span>
@@ -1046,9 +1071,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Closed at"
-                  >
+                  <ResponsiveTooltip title="Closed at">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Closed at</span>
@@ -1075,9 +1098,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Prices when opened"
-                  >
+                  <ResponsiveTooltip title="Prices when opened">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Prices when opened</span>
@@ -1096,7 +1117,9 @@ interface PositionBreakdown {
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
                           At open, prices were
-                          <span class="detail-tooltip-inline-value detail-tooltip-value-multiline">
+                          <span
+                            class="detail-tooltip-inline-value detail-tooltip-value-multiline"
+                          >
                             {(token0?.metadata.symbol ?? "?") +
                               ": $" +
                               formatAmount(pos.asset0_open_price_usd)}
@@ -1110,9 +1133,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Prices when closed"
-                  >
+                  <ResponsiveTooltip title="Prices when closed">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Prices when closed</span>
@@ -1131,7 +1152,9 @@ interface PositionBreakdown {
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
                           At close, prices were
-                          <span class="detail-tooltip-inline-value detail-tooltip-value-multiline">
+                          <span
+                            class="detail-tooltip-inline-value detail-tooltip-value-multiline"
+                          >
                             {(token0?.metadata.symbol ?? "?") +
                               ": $" +
                               formatAmount(pos.closed_asset0_price_usd)}
@@ -1145,9 +1168,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Amounts when opened"
-                  >
+                  <ResponsiveTooltip title="Amounts when opened">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Amounts when opened</span>
@@ -1174,9 +1195,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Amounts when closed"
-                  >
+                  <ResponsiveTooltip title="Amounts when closed">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Amounts when closed</span>
@@ -1203,14 +1222,14 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Value when opened"
-                  >
+                  <ResponsiveTooltip title="Value when opened">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Value when opened</span>
                         <span class="detail-value">
-                          {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
+                          {pos.openUsd > 0
+                            ? `$${formatAmount(pos.openUsd)}`
+                            : "—"}
                         </span>
                       </div>
                     {/snippet}
@@ -1219,21 +1238,23 @@ interface PositionBreakdown {
                         <div class="detail-tooltip-description">
                           When you opened this position, it was worth
                           <span class="detail-tooltip-inline-value">
-                            {pos.openUsd > 0 ? `$${formatAmount(pos.openUsd)}` : "—"}
+                            {pos.openUsd > 0
+                              ? `$${formatAmount(pos.openUsd)}`
+                              : "—"}
                           </span>
                         </div>
                       </div>
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Value when closed"
-                  >
+                  <ResponsiveTooltip title="Value when closed">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Value when closed</span>
                         <span class="detail-value">
-                          {pos.closedUsd > 0 ? `$${formatAmount(pos.closedUsd)}` : "—"}
+                          {pos.closedUsd > 0
+                            ? `$${formatAmount(pos.closedUsd)}`
+                            : "—"}
                         </span>
                       </div>
                     {/snippet}
@@ -1242,16 +1263,16 @@ interface PositionBreakdown {
                         <div class="detail-tooltip-description">
                           When you closed this position, it was worth
                           <span class="detail-tooltip-inline-value">
-                            {pos.closedUsd > 0 ? `$${formatAmount(pos.closedUsd)}` : "—"}
+                            {pos.closedUsd > 0
+                              ? `$${formatAmount(pos.closedUsd)}`
+                              : "—"}
                           </span>
                         </div>
                       </div>
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Value if held tokens"
-                  >
+                  <ResponsiveTooltip title="Value if held tokens">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Value if held tokens</span>
@@ -1265,7 +1286,8 @@ interface PositionBreakdown {
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          If you just held the tokens, without providing liquidity, this would be worth
+                          If you just held the tokens, without providing
+                          liquidity, this would be worth
                           <span class="detail-tooltip-inline-value">
                             {pos.valueIfHeldClosed > 0
                               ? `$${formatAmount(pos.valueIfHeldClosed)}`
@@ -1277,9 +1299,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Impermanent Loss"
-                  >
+                  <ResponsiveTooltip title="Impermanent Loss">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Impermanent Loss</span>
@@ -1296,12 +1316,21 @@ interface PositionBreakdown {
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          The ideal scenario for liquidity providers is when there is volume, but prices stay the same, or increase / decrease together. But if the prices move differently, you accumulate impermanent loss. It's called impermanent loss because if prices return to the original ratio, the loss will be gone. Your impermanent loss for this position was
+                          The ideal scenario for liquidity providers is when
+                          there is volume, but prices stay the same, or increase
+                          / decrease together. But if the prices move
+                          differently, you accumulate impermanent loss. It's
+                          called impermanent loss because if prices return to
+                          the original ratio, the loss will be gone. Your
+                          impermanent loss for this position was
                           <span
                             class="detail-tooltip-inline-value"
-                            class:detail-tooltip-value-negative={pos.impermanentLossUsd < 0}
+                            class:detail-tooltip-value-negative={pos.impermanentLossUsd <
+                              0}
                           >
-                            {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
+                            {pos.impermanentLossUsd < 0
+                              ? "-"
+                              : ""}${formatAmount(
                               Math.abs(pos.impermanentLossUsd),
                             )}
                           </span>
@@ -1310,9 +1339,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Fees Revenue"
-                  >
+                  <ResponsiveTooltip title="Fees Revenue">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Fees Revenue</span>
@@ -1337,23 +1364,29 @@ interface PositionBreakdown {
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          If the pool has fees, each liquidity provider earns a share of each trade, proportionate to the amount of liquidity they provide, and that's the primary source of revenue for liquidity providers. Your revenue from fees for this position was
+                          If the pool has fees, each liquidity provider earns a
+                          share of each trade, proportionate to the amount of
+                          liquidity they provide, and that's the primary source
+                          of revenue for liquidity providers. Your revenue from
+                          fees for this position was
                           <span
                             class="detail-tooltip-inline-value"
-                            class:detail-tooltip-value-positive={pos.feesRevenueUsd > 0}
-                            class:detail-tooltip-value-negative={pos.feesRevenueUsd < 0}
+                            class:detail-tooltip-value-positive={pos.feesRevenueUsd >
+                              0}
+                            class:detail-tooltip-value-negative={pos.feesRevenueUsd <
+                              0}
                           >
                             {pos.feesRevenueUsd > 0
                               ? "+"
                               : pos.feesRevenueUsd < 0
                                 ? "-"
-                                : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                                : ""}${formatAmount(
+                              Math.abs(pos.feesRevenueUsd),
+                            )}
                           </span>
                           {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
                             , which annualized to
-                            <span
-                              class="detail-tooltip-inline-value"
-                            >
+                            <span class="detail-tooltip-inline-value">
                               {formatApy(pos.feesApyPercent)} APY
                             </span>
                           {/if}
@@ -1362,9 +1395,7 @@ interface PositionBreakdown {
                     {/snippet}
                   </ResponsiveTooltip>
 
-                  <ResponsiveTooltip
-                    title="Price Change"
-                  >
+                  <ResponsiveTooltip title="Price Change">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Price Change</span>
@@ -1384,11 +1415,16 @@ interface PositionBreakdown {
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          Your liquidity position is represented by a certain share of tokens in the pool. If the price of these tokens goes up, value of your position goes up as well. Your PnL from price change for this position was
+                          Your liquidity position is represented by a certain
+                          share of tokens in the pool. If the price of these
+                          tokens goes up, value of your position goes up as
+                          well. Your PnL from price change for this position was
                           <span
                             class="detail-tooltip-inline-value"
-                            class:detail-tooltip-value-positive={pos.priceGainUsd > 0}
-                            class:detail-tooltip-value-negative={pos.priceGainUsd < 0}
+                            class:detail-tooltip-value-positive={pos.priceGainUsd >
+                              0}
+                            class:detail-tooltip-value-negative={pos.priceGainUsd <
+                              0}
                           >
                             {pos.priceGainUsd > 0
                               ? "+"
@@ -1421,9 +1457,7 @@ interface PositionBreakdown {
                     </a>
                   </div>
 
-                  <ResponsiveTooltip
-                    title="Net PnL"
-                  >
+                  <ResponsiveTooltip title="Net PnL">
                     {#snippet children()}
                       <div class="detail-item">
                         <span class="detail-label">Net PnL</span>
@@ -1436,24 +1470,31 @@ interface PositionBreakdown {
                             ? "+"
                             : pos.closed_profit_usd < 0
                               ? "-"
-                              : ""}${formatAmount(Math.abs(pos.closed_profit_usd))}
+                              : ""}${formatAmount(
+                            Math.abs(pos.closed_profit_usd),
+                          )}
                         </span>
                       </div>
                     {/snippet}
                     {#snippet content()}
                       <div class="detail-tooltip-content">
                         <div class="detail-tooltip-description">
-                          Your net PnL (including all factors above) from this position was
+                          Your net PnL (including all factors above) from this
+                          position was
                           <span
                             class="detail-tooltip-inline-value"
-                            class:detail-tooltip-value-positive={pos.closed_profit_usd > 0}
-                            class:detail-tooltip-value-negative={pos.closed_profit_usd < 0}
+                            class:detail-tooltip-value-positive={pos.closed_profit_usd >
+                              0}
+                            class:detail-tooltip-value-negative={pos.closed_profit_usd <
+                              0}
                           >
                             {pos.closed_profit_usd > 0
                               ? "+"
                               : pos.closed_profit_usd < 0
                                 ? "-"
-                                : ""}${formatAmount(Math.abs(pos.closed_profit_usd))}
+                                : ""}${formatAmount(
+                              Math.abs(pos.closed_profit_usd),
+                            )}
                           </span>
                         </div>
                       </div>

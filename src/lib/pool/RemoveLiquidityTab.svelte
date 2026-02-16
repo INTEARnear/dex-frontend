@@ -158,25 +158,32 @@
   });
 
   const removePreview = $derived.by(() => {
+    const isPrivate = poolData?.ownerId !== null;
     if (
       !poolData ||
       !token0 ||
       !token1 ||
       !userSharesRaw ||
-      !poolData.totalSharesRaw
+      (!poolData.totalSharesRaw && !isPrivate)
     )
       return null;
     const userShares = BigInt(userSharesRaw);
-    const totalPoolShares = BigInt(poolData.totalSharesRaw);
+    const totalPoolShares = BigInt(poolData.totalSharesRaw ?? "0");
     const poolBalance0 = BigInt(poolData.assets[0].balance);
     const poolBalance1 = BigInt(poolData.assets[1].balance);
-    if (totalPoolShares <= 0n) return null;
+    if (totalPoolShares <= 0n && !isPrivate) return null;
 
     const sharesToRemove = (userShares * BigInt(removePercent)) / 100n;
-    if (sharesToRemove <= 0n) return null;
+    if (sharesToRemove <= 0n && !isPrivate) return null;
 
-    const amount0Raw = (sharesToRemove * poolBalance0) / totalPoolShares;
-    const amount1Raw = (sharesToRemove * poolBalance1) / totalPoolShares;
+    const amount0Raw =
+      totalPoolShares === 0n
+        ? (poolBalance0 * BigInt(removePercent)) / 100n
+        : (sharesToRemove * poolBalance0) / totalPoolShares;
+    const amount1Raw =
+      totalPoolShares === 0n
+        ? (poolBalance1 * BigInt(removePercent)) / 100n
+        : (sharesToRemove * poolBalance1) / totalPoolShares;
 
     const amount0Human = rawAmountToHumanReadable(
       amount0Raw.toString(),
@@ -220,10 +227,13 @@
     )
       return false;
     if (!poolData || !token0 || !token1) return false;
-    if (!userSharesRaw || BigInt(userSharesRaw) <= 0n) return false;
+    const isPrivate = poolData.ownerId !== null;
+    if (!userSharesRaw || (BigInt(userSharesRaw) <= 0n && !isPrivate))
+      return false;
     if (removePercent <= 0 || removePercent > 100) return false;
     if (isSubmitting) return false;
-    if (!removePreview || removePreview.sharesToRemove <= 0n) return false;
+    if (!removePreview || (removePreview.sharesToRemove <= 0n && !isPrivate))
+      return false;
     return true;
   });
 
@@ -254,7 +264,7 @@
       !canRemove ||
       !removePreview ||
       !minAssetsReceivedForTx ||
-      !poolId
+      poolId === null
     )
       return;
 
@@ -264,6 +274,7 @@
     try {
       const wallet = $walletStore.wallet;
 
+      const isPrivate = poolData?.ownerId !== null;
       const operations = [
         {
           DexCall: {
@@ -273,7 +284,7 @@
               pool_id: poolId,
               shares_to_remove:
                 removePercent === 100 ? null : removePreview.sharesToRemove,
-              min_assets_received: minAssetsReceivedForTx,
+              min_assets_received: isPrivate ? null : minAssetsReceivedForTx,
             }),
             attached_assets: {} as Record<string, string>,
           },
