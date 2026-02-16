@@ -57,7 +57,61 @@
   }
 
   function saveAuthPayload(payload: AuthPayload) {
-    localStorage.setItem(CLOSE_POSITION_AUTH_STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(
+      CLOSE_POSITION_AUTH_STORAGE_KEY,
+      JSON.stringify(payload),
+    );
+  }
+
+  interface PositionBreakdownParams {
+    amount0OpenNum: number;
+    amount1OpenNum: number;
+    price0OpenUsd: number;
+    price1OpenUsd: number;
+    price0NowUsd: number;
+    price1NowUsd: number;
+    positionValueNowUsd: number;
+    totalPnlUsd?: number;
+  }
+
+  interface PositionBreakdown {
+    openUsd: number;
+    valueIfHeldNowUsd: number;
+    impermanentLossUsd: number;
+    feesRevenueUsd: number;
+    priceGainUsd: number;
+    totalPnlUsd: number;
+  }
+
+  function computePositionBreakdown({
+    amount0OpenNum,
+    amount1OpenNum,
+    price0OpenUsd,
+    price1OpenUsd,
+    price0NowUsd,
+    price1NowUsd,
+    positionValueNowUsd,
+    totalPnlUsd,
+  }: PositionBreakdownParams): PositionBreakdown {
+    const openUsd =
+      amount0OpenNum * price0OpenUsd + amount1OpenNum * price1OpenUsd;
+    const valueIfHeldNowUsd =
+      amount0OpenNum * price0NowUsd + amount1OpenNum * price1NowUsd;
+    const compositionPnlUsd = positionValueNowUsd - valueIfHeldNowUsd;
+    const impermanentLossUsd = Math.min(compositionPnlUsd, 0);
+    const feesRevenueUsd = Math.max(compositionPnlUsd, 0);
+    const totalPnl =
+      totalPnlUsd === undefined ? positionValueNowUsd - openUsd : totalPnlUsd;
+    const priceGainUsd = totalPnl - impermanentLossUsd - feesRevenueUsd;
+
+    return {
+      openUsd,
+      valueIfHeldNowUsd,
+      impermanentLossUsd,
+      feesRevenueUsd,
+      priceGainUsd,
+      totalPnlUsd: totalPnl,
+    };
   }
 
   export interface OpenPosition {
@@ -335,11 +389,16 @@
         );
         const amount0OpenNum = parseFloat(asset0HumanOpen);
         const amount1OpenNum = parseFloat(asset1HumanOpen);
-        const openUsd =
-          amount0OpenNum * pos.asset0_open_price_usd +
-          amount1OpenNum * pos.asset1_open_price_usd;
-        const valueIfHeld = amount0OpenNum * price0 + amount1OpenNum * price1;
-        const pnl = currentUsd - openUsd;
+        const breakdown = computePositionBreakdown({
+          amount0OpenNum,
+          amount1OpenNum,
+          price0OpenUsd: pos.asset0_open_price_usd,
+          price1OpenUsd: pos.asset1_open_price_usd,
+          price0NowUsd: price0,
+          price1NowUsd: price1,
+          positionValueNowUsd: currentUsd,
+        });
+        const pnl = breakdown.totalPnlUsd;
 
         const openedAt = new Date(pos.opened_at);
 
@@ -351,8 +410,11 @@
             currentUsd,
             amount0OpenNum,
             amount1OpenNum,
-            openUsd,
-            valueIfHeld,
+            openUsd: breakdown.openUsd,
+            valueIfHeld: breakdown.valueIfHeldNowUsd,
+            impermanentLossUsd: breakdown.impermanentLossUsd,
+            feesRevenueUsd: breakdown.feesRevenueUsd,
+            priceGainUsd: breakdown.priceGainUsd,
             pnl,
             openedAt,
           },
@@ -383,12 +445,26 @@
           pos.asset1_amount,
           token1.metadata.decimals,
         );
+        const amount0OpenNum = parseFloat(asset0OpenHuman);
+        const amount1OpenNum = parseFloat(asset1OpenHuman);
+        const amount0ClosedNum = parseFloat(asset0ClosedHuman);
+        const amount1ClosedNum = parseFloat(asset1ClosedHuman);
         const openUsd =
-          parseFloat(asset0OpenHuman) * pos.asset0_open_price_usd +
-          parseFloat(asset1OpenHuman) * pos.asset1_open_price_usd;
+          amount0OpenNum * pos.asset0_open_price_usd +
+          amount1OpenNum * pos.asset1_open_price_usd;
         const closedUsd =
-          parseFloat(asset0ClosedHuman) * pos.closed_asset0_price_usd +
-          parseFloat(asset1ClosedHuman) * pos.closed_asset1_price_usd;
+          amount0ClosedNum * pos.closed_asset0_price_usd +
+          amount1ClosedNum * pos.closed_asset1_price_usd;
+        const breakdown = computePositionBreakdown({
+          amount0OpenNum,
+          amount1OpenNum,
+          price0OpenUsd: pos.asset0_open_price_usd,
+          price1OpenUsd: pos.asset1_open_price_usd,
+          price0NowUsd: pos.closed_asset0_price_usd,
+          price1NowUsd: pos.closed_asset1_price_usd,
+          positionValueNowUsd: closedUsd,
+          totalPnlUsd: pos.closed_profit_usd,
+        });
         return {
           ...pos,
           closedAt,
@@ -397,8 +473,12 @@
           asset1ClosedHuman,
           asset0OpenHuman,
           asset1OpenHuman,
-          openUsd,
+          openUsd: breakdown.openUsd,
           closedUsd,
+          valueIfHeldClosed: breakdown.valueIfHeldNowUsd,
+          impermanentLossUsd: breakdown.impermanentLossUsd,
+          feesRevenueUsd: breakdown.feesRevenueUsd,
+          priceGainUsd: breakdown.priceGainUsd,
         };
       })
       .toSorted((a, b) => b.closedAt.getTime() - a.closedAt.getTime());
@@ -519,27 +599,68 @@
                         : "—"}
                     </span>
                   </div>
-                  {#if pos.transaction_hash}
-                    <div class="detail-item">
-                      <span class="detail-label">Transaction</span>
-                      <a
-                        href="https://nearblocks.io/txns/{pos.transaction_hash}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="detail-link"
-                      >
-                        View on NearBlocks ↗
-                      </a>
-                    </div>
-                  {/if}
                   <div class="detail-item">
-                    <span class="detail-label">PnL</span>
+                    <span class="detail-label">Impermanent Loss</span>
+                    <span
+                      class="detail-value"
+                      class:pnl-negative={pos.impermanentLossUsd < 0}
+                    >
+                      {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
+                        Math.abs(pos.impermanentLossUsd),
+                      )}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Fees Revenue</span>
+                    <span
+                      class="detail-value"
+                      class:pnl-positive={pos.feesRevenueUsd > 0}
+                      class:pnl-negative={pos.feesRevenueUsd < 0}
+                    >
+                      {pos.feesRevenueUsd > 0
+                        ? "+"
+                        : pos.feesRevenueUsd < 0
+                          ? "-"
+                          : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Price Change</span>
+                    <span
+                      class="detail-value"
+                      class:pnl-positive={pos.priceGainUsd > 0}
+                      class:pnl-negative={pos.priceGainUsd < 0}
+                    >
+                      {pos.priceGainUsd > 0
+                        ? "+"
+                        : pos.priceGainUsd < 0
+                          ? "-"
+                          : ""}${formatAmount(Math.abs(pos.priceGainUsd))}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Transaction</span>
+                    <a
+                      href="https://nearblocks.io/txns/{pos.transaction_hash}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="detail-link"
+                    >
+                      View on NearBlocks ↗
+                    </a>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Net PnL</span>
                     <span
                       class="detail-value"
                       class:pnl-positive={pos.pnl > 0}
                       class:pnl-negative={pos.pnl < 0}
                     >
-                      {pos.pnl > 0 ? "+" : ""}${formatAmount(pos.pnl)}
+                      {pos.pnl > 0
+                        ? "+"
+                        : pos.pnl < 0
+                          ? "-"
+                          : ""}${formatAmount(Math.abs(pos.pnl))}
                     </span>
                   </div>
                 </div>
@@ -677,42 +798,84 @@
                         : "—"}
                     </span>
                   </div>
-                  {#if pos.transaction_hash}
-                    <div class="detail-item">
-                      <span class="detail-label">Open transaction</span>
-                      <a
-                        href="https://nearblocks.io/txns/{pos.transaction_hash}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="detail-link"
-                      >
-                        View on NearBlocks ↗
-                      </a>
-                    </div>
-                  {/if}
-                  {#if pos.closed_transaction_hash}
-                    <div class="detail-item">
-                      <span class="detail-label">Close transaction</span>
-                      <a
-                        href="https://nearblocks.io/txns/{pos.closed_transaction_hash}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="detail-link"
-                      >
-                        View on NearBlocks ↗
-                      </a>
-                    </div>
-                  {/if}
                   <div class="detail-item">
-                    <span class="detail-label">Profit / Loss</span>
+                    <span class="detail-label">Value if just held tokens</span>
+                    <span class="detail-value">
+                      {pos.valueIfHeldClosed > 0
+                        ? `$${formatAmount(pos.valueIfHeldClosed)}`
+                        : "—"}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Impermanent Loss</span>
+                    <span
+                      class="detail-value"
+                      class:pnl-negative={pos.impermanentLossUsd < 0}
+                    >
+                      {pos.impermanentLossUsd < 0 ? "-" : ""}${formatAmount(
+                        Math.abs(pos.impermanentLossUsd),
+                      )}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Fees Revenue</span>
+                    <span
+                      class="detail-value"
+                      class:pnl-positive={pos.feesRevenueUsd > 0}
+                      class:pnl-negative={pos.feesRevenueUsd < 0}
+                    >
+                      {pos.feesRevenueUsd > 0
+                        ? "+"
+                        : pos.feesRevenueUsd < 0
+                          ? "-"
+                          : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Price Change</span>
+                    <span
+                      class="detail-value"
+                      class:pnl-positive={pos.priceGainUsd > 0}
+                      class:pnl-negative={pos.priceGainUsd < 0}
+                    >
+                      {pos.priceGainUsd > 0
+                        ? "+"
+                        : pos.priceGainUsd < 0
+                          ? "-"
+                          : ""}${formatAmount(Math.abs(pos.priceGainUsd))}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Transactions</span>
+                    <a
+                      href="https://nearblocks.io/txns/{pos.transaction_hash}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="detail-link"
+                    >
+                      Open ↗
+                    </a>
+                    <a
+                      href="https://nearblocks.io/txns/{pos.closed_transaction_hash}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="detail-link"
+                    >
+                      Close ↗
+                    </a>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Net PnL</span>
                     <span
                       class="detail-value"
                       class:pnl-positive={pos.closed_profit_usd > 0}
                       class:pnl-negative={pos.closed_profit_usd < 0}
                     >
-                      {pos.closed_profit_usd > 0 ? "+" : ""}${formatAmount(
-                        pos.closed_profit_usd,
-                      )}
+                      {pos.closed_profit_usd > 0
+                        ? "+"
+                        : pos.closed_profit_usd < 0
+                          ? "-"
+                          : ""}${formatAmount(Math.abs(pos.closed_profit_usd))}
                     </span>
                   </div>
                 </div>
