@@ -145,7 +145,7 @@
       openUsd,
       valueIfHeldNowUsd,
       impermanentLossUsd,
-      feesRevenueUsd: feesRevenueUsd,
+      feesRevenueUsd,
       priceGainUsd,
       totalPnlUsd,
     };
