@@ -8,8 +8,8 @@ export type StatsTimeframe = (typeof STATS_TIMEFRAMES)[number];
 
 export type StatsSelection =
   | { kind: "total" }
-  | { kind: "pool"; poolId: number }
-  | { kind: "asset"; assetId: string };
+  | { kind: "pool"; poolId: number | null }
+  | { kind: "asset"; assetId: string | null };
 
 export interface StatsRouteState {
   tab: StatsTab;
@@ -54,14 +54,14 @@ export interface StatsTotalReadyData {
 export interface StatsPoolReadyData {
   kind: "pool";
   items: StatsPoolListItem[];
-  selectedPoolId: number;
+  selectedPoolId: number | null;
   series: StatsSeriesPoint[];
 }
 
 export interface StatsAssetReadyData {
   kind: "asset";
   items: StatsAssetListItem[];
-  selectedAssetId: string;
+  selectedAssetId: string | null;
   series: StatsSeriesPoint[];
 }
 

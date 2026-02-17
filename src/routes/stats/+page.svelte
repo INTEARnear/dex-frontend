@@ -86,18 +86,6 @@
     reloadNonce += 1;
   }
 
-  function defaultPoolIdFromCurrentState(): number {
-    if (pageState.status !== "ready") return 0;
-    if (pageState.data.kind !== "pool") return 0;
-    return pageState.data.items[0]?.poolId ?? 0;
-  }
-
-  function defaultAssetIdFromCurrentState(): string {
-    if (pageState.status !== "ready") return "near";
-    if (pageState.data.kind !== "asset") return "near";
-    return pageState.data.items[0]?.assetId ?? "near";
-  }
-
   function handleTabChange(tab: StatsTab) {
     setRouteState(withTab(routeState, tab));
   }
@@ -108,12 +96,12 @@
 
   function handlePoolScopeClick() {
     if (routeState.selection.kind === "pool") return;
-    setRouteState(withPoolSelection(routeState, defaultPoolIdFromCurrentState()));
+    setRouteState(withPoolSelection(routeState, null));
   }
 
   function handleAssetScopeClick() {
     if (routeState.selection.kind === "asset") return;
-    setRouteState(withAssetSelection(routeState, defaultAssetIdFromCurrentState()));
+    setRouteState(withAssetSelection(routeState, null));
   }
 
   function handleTimeframeChange(timeframe: StatsTimeframe) {
@@ -124,11 +112,19 @@
     if (!/^\d+$/.test(poolIdRaw)) return;
     const poolId = Number.parseInt(poolIdRaw, 10);
     if (!Number.isFinite(poolId) || poolId < 0) return;
+    if (routeState.selection.kind === "pool" && routeState.selection.poolId === poolId) {
+      setRouteState(withPoolSelection(routeState, null));
+      return;
+    }
     setRouteState(withPoolSelection(routeState, poolId));
   }
 
   function handleAssetSelect(assetId: string) {
     if (!assetId) return;
+    if (routeState.selection.kind === "asset" && routeState.selection.assetId === assetId) {
+      setRouteState(withAssetSelection(routeState, null));
+      return;
+    }
     setRouteState(withAssetSelection(routeState, assetId));
   }
 
@@ -142,12 +138,14 @@
     }
 
     if (state.selection.kind === "pool") {
-      const [items, series] = await Promise.all([
+      const items =
         state.tab === "Volume"
-          ? fetchVolumePoolItems(state.timeframe)
-          : fetchTvlPoolItems(),
-        fetchPoolSeries(state.tab, state.selection.poolId, state.timeframe),
-      ]);
+          ? await fetchVolumePoolItems(state.timeframe)
+          : await fetchTvlPoolItems();
+      const series =
+        state.selection.poolId === null
+          ? []
+          : await fetchPoolSeries(state.tab, state.selection.poolId, state.timeframe);
 
       return {
         kind: "pool",
@@ -157,12 +155,14 @@
       } satisfies StatsPoolReadyData;
     }
 
-    const [items, series] = await Promise.all([
+    const items =
       state.tab === "Volume"
-        ? fetchVolumeAssetItems(state.timeframe)
-        : fetchTvlAssetItems(),
-      fetchAssetSeries(state.tab, state.selection.assetId, state.timeframe),
-    ]);
+        ? await fetchVolumeAssetItems(state.timeframe)
+        : await fetchTvlAssetItems();
+    const series =
+      state.selection.assetId === null
+        ? []
+        : await fetchAssetSeries(state.tab, state.selection.assetId, state.timeframe);
 
     return {
       kind: "asset",
@@ -236,20 +236,22 @@
 
     if (readyState.data.kind === "pool") {
       const selectedPoolId = readyState.data.selectedPoolId;
+      if (selectedPoolId === null) return;
       const poolItems = readyState.data.items;
       const exists = poolItems.some((item) => item.poolId === selectedPoolId);
-      if (!exists && poolItems.length > 0) {
-        setRouteState(withPoolSelection(readyState.route, poolItems[0].poolId));
+      if (!exists) {
+        setRouteState(withPoolSelection(readyState.route, null));
       }
       return;
     }
 
     if (readyState.data.kind === "asset") {
       const selectedAssetId = readyState.data.selectedAssetId;
+      if (selectedAssetId === null) return;
       const assetItems = readyState.data.items;
       const exists = assetItems.some((item) => item.assetId === selectedAssetId);
-      if (!exists && assetItems.length > 0) {
-        setRouteState(withAssetSelection(readyState.route, assetItems[0].assetId));
+      if (!exists) {
+        setRouteState(withAssetSelection(readyState.route, null));
       }
     }
   });
@@ -306,7 +308,9 @@
       <ExpandableEntityStatsList
         title={poolListTitle(routeState.tab)}
         items={poolListSnapshot.items}
-        selectedKey={String(routeState.selection.poolId)}
+        selectedKey={
+          routeState.selection.poolId === null ? null : String(routeState.selection.poolId)
+        }
         timeframe={routeState.timeframe}
         metricLabel={metricLabel(routeState.tab)}
         chartSummaryMode={chartSummaryMode(routeState.tab)}
@@ -345,7 +349,11 @@
       <ExpandableEntityStatsList
         title={poolListTitle(pageState.route.tab)}
         items={poolListSnapshot.items}
-        selectedKey={String(pageState.route.selection.poolId)}
+        selectedKey={
+          pageState.route.selection.poolId === null
+            ? null
+            : String(pageState.route.selection.poolId)
+        }
         timeframe={pageState.route.timeframe}
         metricLabel={metricLabel(pageState.route.tab)}
         chartSummaryMode={chartSummaryMode(pageState.route.tab)}
@@ -404,7 +412,9 @@
     <ExpandableEntityStatsList
       title={poolListTitle(pageState.route.tab)}
       items={pageState.data.items}
-      selectedKey={String(pageState.data.selectedPoolId)}
+      selectedKey={
+        pageState.data.selectedPoolId === null ? null : String(pageState.data.selectedPoolId)
+      }
       timeframe={routeState.timeframe}
       metricLabel={metricLabel(pageState.route.tab)}
       chartSummaryMode={chartSummaryMode(pageState.route.tab)}

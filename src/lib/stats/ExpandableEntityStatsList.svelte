@@ -2,6 +2,7 @@
   import { flip } from "svelte/animate";
   import { cubicOut } from "svelte/easing";
   import { slide } from "svelte/transition";
+  import { ChevronRight } from "lucide-svelte";
   import Spinner from "../Spinner.svelte";
   import TokenIcon from "../TokenIcon.svelte";
   import { formatLiquidity } from "../utils";
@@ -98,7 +99,9 @@
               <span class="secondary">{item.secondaryLabel}</span>
             </span>
             <span class="entity-metric">{formatLiquidity(item.valueUsd)}</span>
-            <span class="expand-indicator" class:rotated={expanded}>▸</span>
+            <span class="expand-indicator" class:rotated={expanded} aria-hidden="true">
+              <ChevronRight size="1em" strokeWidth={2.25} />
+            </span>
           </button>
 
           {#if expanded}
@@ -241,7 +244,11 @@
 
   .expand-indicator {
     color: var(--text-muted);
-    font-size: 0.7rem;
+    font-size: 1.3rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
     transition:
       transform 0.2s ease,

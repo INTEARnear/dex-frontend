@@ -20,6 +20,7 @@ function parseTimeframe(rawValue: string | null): StatsTimeframe {
 
 function parsePoolId(rawValue: string | null): number | null {
   if (!rawValue) return null;
+  if (rawValue === "None") return null;
   if (!/^\d+$/.test(rawValue)) return null;
   const parsed = Number.parseInt(rawValue, 10);
   if (!Number.isFinite(parsed) || parsed < 0) return null;
@@ -28,6 +29,7 @@ function parsePoolId(rawValue: string | null): number | null {
 
 function parseAssetId(rawValue: string | null): string | null {
   if (!rawValue) return null;
+  if (rawValue === "None") return null;
   const trimmed = rawValue.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
@@ -37,14 +39,18 @@ export function buildStatsRouteState(
 ): StatsRouteState {
   const tab = parseTab(searchParams.get("tab"));
   const timeframe = parseTimeframe(searchParams.get("timeframe"));
-  const poolId = parsePoolId(searchParams.get("pool"));
-  const assetId = parseAssetId(searchParams.get("asset"));
+  const rawPool = searchParams.get("pool");
+  const rawAsset = searchParams.get("asset");
+  const hasPoolParam = rawPool !== null;
+  const hasAssetParam = rawAsset !== null;
+  const poolId = parsePoolId(rawPool);
+  const assetId = parseAssetId(rawAsset);
 
-  if (poolId !== null) {
+  if (hasPoolParam) {
     return { tab, timeframe, selection: { kind: "pool", poolId } };
   }
 
-  if (assetId !== null) {
+  if (hasAssetParam) {
     return { tab, timeframe, selection: { kind: "asset", assetId } };
   }
 
@@ -59,9 +65,12 @@ export function buildStatsSearchParams(
   params.set("timeframe", state.timeframe);
 
   if (state.selection.kind === "pool") {
-    params.set("pool", String(state.selection.poolId));
+    params.set(
+      "pool",
+      state.selection.poolId === null ? "None" : String(state.selection.poolId),
+    );
   } else if (state.selection.kind === "asset") {
-    params.set("asset", state.selection.assetId);
+    params.set("asset", state.selection.assetId ?? "None");
   }
 
   return params;
@@ -102,14 +111,14 @@ export function withTotalSelection(state: StatsRouteState): StatsRouteState {
 
 export function withPoolSelection(
   state: StatsRouteState,
-  poolId: number,
+  poolId: number | null,
 ): StatsRouteState {
   return { ...state, selection: { kind: "pool", poolId } };
 }
 
 export function withAssetSelection(
   state: StatsRouteState,
-  assetId: string,
+  assetId: string | null,
 ): StatsRouteState {
   return { ...state, selection: { kind: "asset", assetId } };
 }
