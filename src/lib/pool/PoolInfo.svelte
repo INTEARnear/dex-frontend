@@ -1,18 +1,32 @@
 <script lang="ts">
   import TokenIcon from "../TokenIcon.svelte";
   import type { Token } from "../types";
-  import type { NormalizedPool } from "./shared";
-  import { formatFeePercent, formatLiquidity } from "../utils";
+  import {
+    calculatePoolFeesApyPercent,
+    getPoolFeeFractionDecimal,
+    type NormalizedPool,
+  } from "./shared";
+  import { formatApy, formatFeePercent, formatLiquidity } from "../utils";
 
   interface Props {
     poolData: NormalizedPool | null;
+    volume24hUsd: number;
+    volume7dUsd: number;
     token0: Token | null;
     token1: Token | null;
     poolId: number | null;
     accountId: string | null;
   }
 
-  let { poolData, token0, token1, poolId, accountId }: Props = $props();
+  let {
+    poolData,
+    volume24hUsd,
+    volume7dUsd,
+    token0,
+    token1,
+    poolId,
+    accountId,
+  }: Props = $props();
 
   const liquidityUsd = $derived.by(() => {
     if (!poolData || !token0 || !token1) return 0;
@@ -44,6 +58,17 @@
         .reduce((acc, [, fee]) => acc + fee, 0) / 10000
     );
   });
+  const poolFeeFractionDecimal = $derived.by(() => {
+    if (!poolData) return 0;
+    return getPoolFeeFractionDecimal(poolData.fees.receivers);
+  });
+  const apyPercent = $derived.by(() =>
+    calculatePoolFeesApyPercent(
+      volume24hUsd,
+      poolFeeFractionDecimal,
+      liquidityUsd,
+    ),
+  );
 
   const isPrivate = $derived(poolData?.ownerId !== null);
   const isOwner = $derived(
@@ -94,7 +119,11 @@
     </div>
     <div class="stat-row">
       <span class="stat-label">APY</span>
-      <span class="stat-value">Unknown</span>
+      <span class="stat-value">{formatApy(apyPercent)}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">7d Volume</span>
+      <span class="stat-value">{formatLiquidity(volume7dUsd)}</span>
     </div>
     <div class="stat-row">
       <span class="stat-label">Pool ID</span>

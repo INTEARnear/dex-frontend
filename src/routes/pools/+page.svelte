@@ -6,10 +6,15 @@
   import {
     DEX_BACKEND_API,
     formatAmount,
+    formatApy,
     formatFeePercent,
     formatLiquidity,
   } from "../../lib/utils";
   import type { TokenInfo, AssetWithBalance, XykPool } from "../../lib/types";
+  import {
+    calculatePoolFeesApyPercent,
+    getPoolFeeFractionDecimal,
+  } from "../../lib/pool/shared";
   import CreatePoolModal from "../../lib/CreatePoolModal.svelte";
   import Spinner from "../../lib/Spinner.svelte";
   import TokenIcon from "../../lib/TokenIcon.svelte";
@@ -21,6 +26,9 @@
     totalFeePercent: number;
     tokens: [TokenInfo | null, TokenInfo | null];
     ownedLiquidityUsd?: number;
+    volume24hUsd: number;
+    volume7dUsd: number;
+    poolFeeFractionDecimal: number;
   }
 
   interface PoolWithOwnedLiquidity extends XykPool {
@@ -139,6 +147,7 @@
               return true;
             })
             .reduce((acc, [, fee]) => acc + fee, 0) / 10000;
+        const poolFeeFractionDecimal = getPoolFeeFractionDecimal(fees.receivers);
 
         const ownedUsd =
           pool.owned_liquidity_usd !== undefined
@@ -156,6 +165,9 @@
           totalFeePercent,
           tokens: [null, null],
           ownedLiquidityUsd: Number.isFinite(ownedUsd) ? ownedUsd : undefined,
+          volume24hUsd: pool.volume_24h_usd,
+          volume7dUsd: pool.volume_7d_usd,
+          poolFeeFractionDecimal,
         });
       }
 
@@ -296,6 +308,12 @@
   {:else}
     <div class="pools-grid">
       {#each pools as pool (pool.id)}
+        {@const liquidityUsd = calculateLiquidityUsd(pool.assets, pool.tokens)}
+        {@const apyPercent = calculatePoolFeesApyPercent(
+          pool.volume24hUsd,
+          pool.poolFeeFractionDecimal,
+          liquidityUsd,
+        )}
         <a
           href="/pool?id=PLACH-{pool.id}"
           class="pool-card"
@@ -340,9 +358,7 @@
           <div class="pool-stats">
             <div class="stat">
               <span class="stat-label">Liquidity</span>
-              <span class="stat-value"
-                >{formatLiquidity(calculateLiquidityUsd(pool.assets, pool.tokens))}</span
-              >
+              <span class="stat-value">{formatLiquidity(liquidityUsd)}</span>
             </div>
             <div class="stat">
               <span class="stat-label">Fee</span>
@@ -350,7 +366,11 @@
             </div>
             <div class="stat">
               <span class="stat-label">APY</span>
-              <span class="stat-value">Unknown</span>
+              <span class="stat-value">{formatApy(apyPercent)}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">7d Volume</span>
+              <span class="stat-value">{formatLiquidity(pool.volume7dUsd)}</span>
             </div>
           </div>
 

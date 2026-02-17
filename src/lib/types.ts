@@ -63,7 +63,7 @@ export interface XykPublicPoolData {
   fees: {
     receivers: Array<[XykFeeReceiver, number]>;
   };
-  total_shares: number;
+  total_shares: string;
 }
 
 export interface XykPool {
@@ -72,4 +72,6 @@ export interface XykPool {
     Private?: XykPrivatePoolData;
     Public?: XykPublicPoolData;
   };
+  volume_24h_usd: number;
+  volume_7d_usd: number;
 }

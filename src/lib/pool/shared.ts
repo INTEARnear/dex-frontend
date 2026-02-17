@@ -26,6 +26,35 @@ export interface NormalizedPool {
   totalSharesRaw: string | null;
 }
 
+const FEE_FRACTION_SCALE = 1_000_000;
+const DAYS_PER_YEAR = 365;
+
+export function getPoolFeeFractionDecimal(
+  receivers: Array<[XykFeeReceiver, number]>,
+): number {
+  const poolFeeFraction = receivers.reduce((total, [receiver, fee]) => {
+    if (receiver !== "Pool") return total;
+    return total + fee;
+  }, 0);
+  return poolFeeFraction / FEE_FRACTION_SCALE;
+}
+
+export function calculatePoolFeesApyPercent(
+  volume24hUsd: number,
+  poolFeeFractionDecimal: number,
+  liquidityUsd: number,
+): number {
+  if (!Number.isFinite(volume24hUsd) || volume24hUsd <= 0) return 0;
+  if (!Number.isFinite(poolFeeFractionDecimal) || poolFeeFractionDecimal <= 0) {
+    return 0;
+  }
+  if (!Number.isFinite(liquidityUsd) || liquidityUsd <= 0) return 0;
+
+  const annualizedFeesUsd =
+    volume24hUsd * poolFeeFractionDecimal * DAYS_PER_YEAR;
+  return (annualizedFeesUsd / liquidityUsd) * 100;
+}
+
 export function assetIdToTokenId(assetId: string): string | null {
   if (assetId === "near") return "near";
   if (assetId.startsWith("nep141:")) return assetId.slice("nep141:".length);

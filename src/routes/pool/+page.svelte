@@ -38,13 +38,16 @@
   interface TrackedPublicPool {
     assets: [AssetWithBalance, AssetWithBalance];
     fees: TrackedFeeConfig;
-    total_shares?: string | null;
+    total_shares: string;
   }
 
-  interface TrackedPool {
-    Private?: TrackedPrivatePool;
-    Public?: TrackedPublicPool;
-  }
+  type TrackedPool =
+    | {
+        Private: TrackedPrivatePool;
+      }
+    | {
+        Public: TrackedPublicPool;
+      };
 
   interface UntrackedPosition {
     pool_id: number;
@@ -65,6 +68,8 @@
 
   interface TrackPositionsResponse {
     pool: TrackedPool;
+    volume_24h_usd: number;
+    volume_7d_usd: number;
     open?: OpenPosition[];
     closed?: ClosedPosition[];
     untracked?: UntrackedPosition;
@@ -75,6 +80,8 @@
   type LiquidityTab = "add" | "remove";
 
   let poolData = $state<NormalizedPool | null>(null);
+  let volume24hUsd = $state(0);
+  let volume7dUsd = $state(0);
   let userSharesRaw = $state<string | null>(null);
   let openPositions = $state<OpenPosition[]>([]);
   let closedPositions = $state<ClosedPosition[]>([]);
@@ -105,7 +112,7 @@
   } | null>(null);
 
   function normalizePool(pool: TrackedPool): NormalizedPool | null {
-    if (pool.Private) {
+    if ("Private" in pool) {
       return {
         ownerId: pool.Private.owner_id,
         assets: pool.Private.assets,
@@ -113,12 +120,12 @@
         totalSharesRaw: null,
       };
     }
-    if (pool.Public) {
+    if ("Public" in pool) {
       return {
         ownerId: null,
         assets: pool.Public.assets,
         fees: pool.Public.fees,
-        totalSharesRaw: pool.Public.total_shares ?? null,
+        totalSharesRaw: pool.Public.total_shares,
       };
     }
     return null;
@@ -160,6 +167,8 @@
       isWaitingForPool = false;
       error = null;
       poolData = normalized;
+      volume24hUsd = data.volume_24h_usd;
+      volume7dUsd = data.volume_7d_usd;
       const openSum = (data.open ?? []).reduce(
         (acc, p) => acc + BigInt(p.shares),
         0n,
@@ -177,6 +186,8 @@
       console.error("Pool fetch failed:", fetchError);
       if (!background) {
         poolData = null;
+        volume24hUsd = 0;
+        volume7dUsd = 0;
         userSharesRaw = null;
         openPositions = [];
         closedPositions = [];
@@ -251,7 +262,8 @@
         poolData?.assets[0].balance &&
         poolData?.assets[1].balance &&
         BigInt(poolData.assets[0].balance) > 0n &&
-        BigInt(poolData.assets[1].balance) > 0n
+        BigInt(poolData.assets[1].balance) > 0n &&
+        poolData.ownerId === $walletStore.accountId
       );
     } else {
       return (
@@ -271,6 +283,8 @@
       isWaitingForPool = false;
       error = "Invalid pool ID";
       poolData = null;
+      volume24hUsd = 0;
+      volume7dUsd = 0;
       userSharesRaw = null;
       openPositions = [];
       closedPositions = [];
@@ -316,6 +330,8 @@
       <div class="sidebar-column">
         <PoolInfo
           {poolData}
+          {volume24hUsd}
+          {volume7dUsd}
           {token0}
           {token1}
           poolId={parsedPoolId}
