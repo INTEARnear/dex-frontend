@@ -10,6 +10,7 @@
   import RemoveLiquidityTab from "../../lib/pool/RemoveLiquidityTab.svelte";
   import AddedLiquidityModal from "../../lib/pool/AddedLiquidityModal.svelte";
   import RemovedLiquidityModal from "../../lib/pool/RemovedLiquidityModal.svelte";
+  import EditFeesModal from "../../lib/pool/EditFeesModal.svelte";
   import type {
     LiquidityAddedEventData,
     LiquidityRemovedEventData,
@@ -110,6 +111,7 @@
     asset0_open_price_usd: number;
     asset1_open_price_usd: number;
   } | null>(null);
+  let showEditFeesModal = $state(false);
 
   function normalizePool(pool: TrackedPool): NormalizedPool | null {
     if ("Private" in pool) {
@@ -336,6 +338,9 @@
           {token1}
           poolId={parsedPoolId}
           accountId={$walletStore.accountId}
+          onEditFees={() => {
+            showEditFeesModal = true;
+          }}
         />
         <LiquidityInfo {poolData} {token0} {token1} {userSharesRaw} />
         <PositionsSection
@@ -497,6 +502,23 @@
     {token1}
     positionData={{ data: closedPositionForModal, prices: closeSuccessPrices }}
   />
+
+  {#if poolData && parsedPoolId !== null}
+    <EditFeesModal
+      isOpen={showEditFeesModal}
+      poolId={parsedPoolId}
+      receivers={poolData.fees.receivers.filter(
+        ([receiver]) =>
+          receiver == "Pool" || receiver.Account !== "plach.intear.near",
+      )}
+      onClose={() => {
+        showEditFeesModal = false;
+      }}
+      onSuccess={() => {
+        fetchPoolData(parsedPoolId, $walletStore.accountId, isCreateRedirect);
+      }}
+    />
+  {/if}
 </div>
 
 <style>

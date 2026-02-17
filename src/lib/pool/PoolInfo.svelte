@@ -16,6 +16,7 @@
     token1: Token | null;
     poolId: number | null;
     accountId: string | null;
+    onEditFees: () => void;
   }
 
   let {
@@ -26,6 +27,7 @@
     token1,
     poolId,
     accountId,
+    onEditFees,
   }: Props = $props();
 
   const liquidityUsd = $derived.by(() => {
@@ -41,22 +43,37 @@
     return amount0 * price0 + amount1 * price1;
   });
 
+  function shouldDisplayFeeReceiver(receiver: unknown): boolean {
+    if (typeof receiver === "object" && receiver !== null && "Account" in receiver) {
+      return receiver.Account !== "plach.intear.near";
+    }
+    return true;
+  }
+
   const totalFeePercent = $derived.by(() => {
     if (!poolData) return 0;
     return (
       poolData.fees.receivers
-        .filter(([receiver]) => {
-          if (
-            typeof receiver === "object" &&
-            receiver !== null &&
-            "Account" in receiver
-          ) {
-            return receiver.Account !== "plach.intear.near";
-          }
-          return true;
-        })
+        .filter(([receiver]) => shouldDisplayFeeReceiver(receiver))
         .reduce((acc, [, fee]) => acc + fee, 0) / 10000
     );
+  });
+
+  const feeBreakdown = $derived.by(() => {
+    if (!poolData) return [];
+    const feeByReceiver = new Map<string, number>();
+    for (const [receiver, fee] of poolData.fees.receivers) {
+      if (!shouldDisplayFeeReceiver(receiver)) continue;
+      const receiverLabel =
+        receiver === "Pool"
+          ? "Pool"
+          : receiver.Account;
+      feeByReceiver.set(receiverLabel, (feeByReceiver.get(receiverLabel) ?? 0) + fee);
+    }
+    return Array.from(feeByReceiver, ([receiver, feeFraction]) => ({
+      receiver,
+      feePercent: feeFraction / 10000,
+    }));
   });
   const poolFeeFractionDecimal = $derived.by(() => {
     if (!poolData) return 0;
@@ -117,6 +134,19 @@
       <span class="stat-label">Fee</span>
       <span class="stat-value">{formatFeePercent(totalFeePercent)}%</span>
     </div>
+    {#if feeBreakdown.length > 0}
+      {#each feeBreakdown as item (item.receiver)}
+        <div class="stat-row fee-breakdown-row">
+          <span class="stat-label fee-breakdown-label">{item.receiver}</span>
+          <span class="stat-value fee-breakdown-value">
+            {formatFeePercent(item.feePercent)}%
+          </span>
+        </div>
+      {/each}
+    {/if}
+    {#if isPrivate && isOwner}
+      <button class="edit-fees-btn" onclick={onEditFees}>Edit Fees</button>
+    {/if}
     <div class="stat-row">
       <span class="stat-label">APY</span>
       <span class="stat-value">{formatApy(apyPercent)}</span>
@@ -243,6 +273,45 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .fee-breakdown-row {
+    padding-left: 0.75rem;
+  }
+
+  .fee-breakdown-label {
+    font-size: 0.75rem;
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fee-breakdown-value {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+  }
+
+  .edit-fees-btn {
+    margin-top: 0.25rem;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.52rem 1rem;
+    background: var(--accent-button-small);
+    border: none;
+    border-radius: 0.5rem;
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .edit-fees-btn:hover {
+    background: var(--accent-hover);
   }
 
   @media (--mobile) {
