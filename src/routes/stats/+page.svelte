@@ -59,12 +59,16 @@
     return tab === "Volume" ? "Volume" : "TVL";
   }
 
+  function chartSummaryMode(tab: StatsTab): "sum" | "latest" {
+    return tab === "Volume" ? "sum" : "latest";
+  }
+
   function poolListTitle(tab: StatsTab): string {
-    return tab === "Volume" ? "Pools Volume" : "Pools TVL";
+    return tab === "Volume" ? "Pools by Volume" : "Pools by TVL";
   }
 
   function assetListTitle(tab: StatsTab): string {
-    return tab === "Volume" ? "Tokens Volume" : "Tokens TVL";
+    return tab === "Volume" ? "Tokens by Volume" : "Tokens by TVL";
   }
 
   function setRouteState(nextState: StatsRouteState) {
@@ -305,6 +309,7 @@
         selectedKey={String(routeState.selection.poolId)}
         timeframe={routeState.timeframe}
         metricLabel={metricLabel(routeState.tab)}
+        chartSummaryMode={chartSummaryMode(routeState.tab)}
         detailSeries={[]}
         detailLoading={true}
         detailError={null}
@@ -320,6 +325,7 @@
         selectedKey={routeState.selection.assetId}
         timeframe={routeState.timeframe}
         metricLabel={metricLabel(routeState.tab)}
+        chartSummaryMode={chartSummaryMode(routeState.tab)}
         detailSeries={[]}
         detailLoading={true}
         detailError={null}
@@ -342,6 +348,7 @@
         selectedKey={String(pageState.route.selection.poolId)}
         timeframe={pageState.route.timeframe}
         metricLabel={metricLabel(pageState.route.tab)}
+        chartSummaryMode={chartSummaryMode(pageState.route.tab)}
         detailSeries={[]}
         detailLoading={false}
         detailError={pageState.message}
@@ -357,6 +364,7 @@
         selectedKey={pageState.route.selection.assetId}
         timeframe={pageState.route.timeframe}
         metricLabel={metricLabel(pageState.route.tab)}
+        chartSummaryMode={chartSummaryMode(pageState.route.tab)}
         detailSeries={[]}
         detailLoading={false}
         detailError={pageState.message}
@@ -389,6 +397,7 @@
       <HistogramChart
         points={pageState.data.series}
         metricLabel={metricLabel(pageState.route.tab)}
+        summaryMode={chartSummaryMode(pageState.route.tab)}
       />
     </section>
   {:else if pageState.data.kind === "pool"}
@@ -398,6 +407,7 @@
       selectedKey={String(pageState.data.selectedPoolId)}
       timeframe={routeState.timeframe}
       metricLabel={metricLabel(pageState.route.tab)}
+      chartSummaryMode={chartSummaryMode(pageState.route.tab)}
       detailSeries={pageState.data.series}
       detailLoading={false}
       detailError={null}
@@ -411,6 +421,7 @@
       selectedKey={pageState.data.selectedAssetId}
       timeframe={routeState.timeframe}
       metricLabel={metricLabel(pageState.route.tab)}
+      chartSummaryMode={chartSummaryMode(pageState.route.tab)}
       detailSeries={pageState.data.series}
       detailLoading={false}
       detailError={null}

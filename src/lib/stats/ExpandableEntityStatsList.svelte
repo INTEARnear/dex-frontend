@@ -21,6 +21,7 @@
     selectedKey: string | null;
     timeframe: StatsTimeframe;
     metricLabel: string;
+    chartSummaryMode: "sum" | "latest";
     detailSeries: StatsSeriesPoint[];
     detailLoading: boolean;
     detailError: string | null;
@@ -36,6 +37,7 @@
     selectedKey,
     timeframe,
     metricLabel,
+    chartSummaryMode,
     detailSeries,
     detailLoading,
     detailError,
@@ -125,7 +127,11 @@
               {:else if detailError}
                 <div class="detail-error">{detailError}</div>
               {:else}
-                <HistogramChart points={detailSeries} metricLabel={metricLabel} />
+                <HistogramChart
+                  points={detailSeries}
+                  metricLabel={metricLabel}
+                  summaryMode={chartSummaryMode}
+                />
               {/if}
             </div>
           {/if}
@@ -311,7 +317,7 @@
 
   .detail-loading,
   .detail-error {
-    min-height: 277.1333px;
+    min-height: 396.35px;
   }
 
   .detail-error {

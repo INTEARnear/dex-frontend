@@ -17,6 +17,7 @@
     points: StatsSeriesPoint[];
     metricLabel?: string;
     emptyMessage?: string;
+    summaryMode?: "sum" | "latest";
   }
 
   interface TooltipTarget {
@@ -29,18 +30,25 @@
     valueUsd: number;
   }
 
+  interface YAxisTick {
+    y: number;
+    value: number;
+    label: string;
+  }
+
   const CHART_WIDTH = 1000;
   const CHART_HEIGHT = 300;
   const PADDING_TOP = 16;
   const PADDING_RIGHT = 14;
   const PADDING_BOTTOM = 42;
-  const PADDING_LEFT = 14;
+  const PADDING_LEFT = 52;
   const BAR_GAP = 3;
 
   let {
     points,
     metricLabel = "USD",
     emptyMessage = "No chart data available",
+    summaryMode = "latest",
   }: Props = $props();
 
   let activeIndex = $state<number | null>(null);
@@ -74,6 +82,17 @@
       minimumFractionDigits: 2,
       maximumFractionDigits: 12,
     });
+  }
+
+  function formatYAxisLabel(valueUsd: number): string {
+    if (valueUsd === 0) return "$0";
+    if (valueUsd >= 1000) {
+      return `$${valueUsd.toLocaleString(undefined, {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      })}`;
+    }
+    return `$${formatAmount(valueUsd)}`;
   }
 
   const innerWidth = CHART_WIDTH - PADDING_LEFT - PADDING_RIGHT;
@@ -120,6 +139,20 @@
     return Array.from(new Set([first, middle, last]));
   });
 
+  const yAxisTicks = $derived.by<YAxisTick[]>(() => {
+    const tickSteps = 4;
+    return Array.from({ length: tickSteps + 1 }, (_, index) => {
+      const ratio = index / tickSteps;
+      const y = PADDING_TOP + innerHeight * ratio;
+      const value = maxValue * (1 - ratio);
+      return {
+        y,
+        value,
+        label: formatYAxisLabel(value),
+      };
+    });
+  });
+
   const tooltipTargets = $derived.by<TooltipTarget[]>(() => {
     if (bars.length === 0) return [];
 
@@ -138,12 +171,32 @@
   });
 
   const activeBar = $derived.by(() => {
+    if (bars.length === 0 || activeIndex === null) return null;
+    if (activeIndex < 0 || activeIndex >= bars.length) return null;
+    return bars[activeIndex] ?? null;
+  });
+
+  const latestBar = $derived.by(() => {
     if (bars.length === 0) return null;
-    const resolvedIndex =
-      activeIndex !== null && activeIndex >= 0 && activeIndex < bars.length
-        ? activeIndex
-        : bars.length - 1;
-    return bars[resolvedIndex] ?? null;
+    return bars[bars.length - 1] ?? null;
+  });
+
+  const defaultSummaryValue = $derived.by(() => {
+    if (bars.length === 0) return 0;
+    if (summaryMode === "sum") {
+      return bars.reduce((sum, bar) => sum + bar.valueUsd, 0);
+    }
+    return latestBar?.valueUsd ?? 0;
+  });
+
+  const summaryValueUsd = $derived.by(() => {
+    return activeBar?.valueUsd ?? defaultSummaryValue;
+  });
+
+  const summaryTimeLabel = $derived.by(() => {
+    if (activeBar) return formatPointTimestamp(activeBar.timestamp);
+    if (summaryMode === "sum") return "Total in selected range";
+    return latestBar ? formatPointTimestamp(latestBar.timestamp) : "";
   });
 
   $effect(() => {
@@ -152,7 +205,7 @@
       return;
     }
 
-    if (activeIndex === null || activeIndex >= bars.length) {
+    if (activeIndex !== null && activeIndex >= bars.length) {
       activeIndex = bars.length - 1;
     }
   });
@@ -161,13 +214,17 @@
     if (index < 0 || index >= bars.length) return;
     activeIndex = index;
   }
+
+  function clearActiveIndex() {
+    activeIndex = null;
+  }
 </script>
 
 <div class="histogram-card">
-  {#if activeBar}
+  {#if bars.length > 0}
     <div class="histogram-summary">
-      <span class="summary-time">{formatPointTimestamp(activeBar.timestamp)}</span>
-      <span class="summary-value">{metricLabel}: ${formatAmount(activeBar.valueUsd)}</span>
+      <span class="summary-time">{summaryTimeLabel}</span>
+      <span class="summary-value">{metricLabel}: ${formatAmount(summaryValueUsd)}</span>
     </div>
   {/if}
 
@@ -177,10 +234,23 @@
     <div class="chart-wrap">
       <svg
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-        preserveAspectRatio="none"
+        preserveAspectRatio="xMinYMin meet"
         class="chart"
         aria-label="Histogram chart"
       >
+        {#each yAxisTicks as tick, index (index)}
+          <line
+            class="y-grid-line"
+            x1={PADDING_LEFT}
+            y1={tick.y}
+            x2={CHART_WIDTH - PADDING_RIGHT}
+            y2={tick.y}
+          />
+          <text class="y-axis-label" x={PADDING_LEFT - 8} y={tick.y + 4} text-anchor="end">
+            {tick.label}
+          </text>
+        {/each}
+
         <line
           class="axis-line"
           x1={PADDING_LEFT}
@@ -229,6 +299,7 @@
                   class="tooltip-hit-target"
                   aria-label={`${formatExactTimestamp(target.timestamp)}: $${formatExactUsd(target.valueUsd)}`}
                   onmouseenter={() => setActiveIndex(target.index)}
+                  onmouseleave={clearActiveIndex}
                   ontouchstart={() => setActiveIndex(target.index)}
                 ></button>
               {/snippet}
@@ -283,17 +354,26 @@
   .chart-wrap {
     position: relative;
     width: 100%;
-    height: 220px;
+    aspect-ratio: 1000 / 300;
+    min-height: 190px;
   }
 
   .chart {
     width: 100%;
     height: 100%;
     display: block;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   .axis-line {
     stroke: var(--border-color);
+    stroke-width: 1;
+  }
+
+  .y-grid-line {
+    stroke: color-mix(in srgb, var(--border-color) 70%, transparent);
     stroke-width: 1;
   }
 
@@ -357,7 +437,15 @@
 
   .axis-label {
     fill: var(--text-muted);
-    font-size: 11px;
+    font-size: 10px;
+    font-weight: 500;
+    user-select: none;
+  }
+
+  .y-axis-label {
+    fill: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 500;
     user-select: none;
   }
 
@@ -377,11 +465,15 @@
     }
 
     .chart-wrap {
-      height: 190px;
+      min-height: 170px;
     }
 
     .axis-label {
-      font-size: 10px;
+      font-size: 9px;
+    }
+
+    .y-axis-label {
+      font-size: 9px;
     }
   }
 </style>
