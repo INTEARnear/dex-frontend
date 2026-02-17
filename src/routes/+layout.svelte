@@ -14,8 +14,10 @@
 
   let { children } = $props();
 
-  const isPoolsPage = $derived(
-    page.url.pathname === "/pools" || page.url.pathname === "/pool",
+  const isWidePage = $derived(
+    page.url.pathname === "/pools" ||
+      page.url.pathname === "/pool" ||
+      page.url.pathname === "/stats",
   );
 </script>
 
@@ -32,11 +34,17 @@
       aria-current={page.url.pathname === "/pools" ? "page" : undefined}
       >Pools</a
     >
+    <a
+      href="/stats"
+      class:active={page.url.pathname === "/stats"}
+      aria-current={page.url.pathname === "/stats" ? "page" : undefined}
+      >Stats</a
+    >
   </nav>
   <WalletButton />
 </div>
 
-<main class:wide={isPoolsPage}>
+<main class:wide={isWidePage}>
   <header>
     <h1>Intear <span class="accent">DEX</span></h1>
   </header>
@@ -52,6 +60,12 @@
       class:active={page.url.pathname === "/pools"}
       aria-current={page.url.pathname === "/pools" ? "page" : undefined}
       >Pools</a
+    >
+    <a
+      href="/stats"
+      class:active={page.url.pathname === "/stats"}
+      aria-current={page.url.pathname === "/stats" ? "page" : undefined}
+      >Stats</a
     >
   </nav>
 

@@ -3,6 +3,7 @@ import type { Token } from "./types";
 // API base URLs
 export const PRICES_API = "https://prices.intear.tech";
 export const ROUTER_API = "https://router.intear.tech";
+export const DEX_BACKEND_API = "https://dex-backend.intear.tech";
 
 export function formatApy(apy: number): string {
   if (apy === 0) return "0%";

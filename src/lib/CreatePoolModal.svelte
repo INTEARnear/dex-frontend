@@ -25,10 +25,10 @@
   } from "./xykSchemas";
   import { NEP297_EVENT_JSON_PREFIX, parseNep297FromLog } from "./nep297";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
+  import { DEX_BACKEND_API } from "./utils";
 
   const DEX_CONTRACT_ID = "dex.intear.near";
   const DEX_ID = "slimedragon.near/xyk";
-  const DEX_BACKEND_API = "https://dex-backend.intear.tech";
 
   function tokenToAssetId(token: Token): Record<string, unknown> {
     if (token.account_id === "near") {

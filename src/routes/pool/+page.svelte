@@ -17,9 +17,9 @@
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
   import type { AssetWithBalance, XykFeeReceiver } from "../../lib/types";
+  import { DEX_BACKEND_API } from "../../lib/utils";
   import {
     assetIdToTokenId,
-    DEX_BACKEND_API,
     type NormalizedPool,
     parsePoolId,
   } from "../../lib/pool/shared";

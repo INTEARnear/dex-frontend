@@ -8,7 +8,6 @@
   import {
     AUTO_LIQUIDITY_SLIPPAGE_PERCENT,
     assertOutcomesSucceeded,
-    DEX_BACKEND_API,
     DEX_CONTRACT_ID,
     DEX_ID,
   } from "./shared";
@@ -21,6 +20,7 @@
   import Spinner from "../Spinner.svelte";
   import ResponsiveTooltip from "../ResponsiveTooltip.svelte";
   import {
+    DEX_BACKEND_API,
     formatAmount,
     formatApy,
     formatRelativeDate,

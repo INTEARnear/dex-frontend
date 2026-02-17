@@ -3,13 +3,16 @@
   import { goto } from "$app/navigation";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
-  import { formatAmount, formatFeePercent, formatLiquidity } from "../../lib/utils";
+  import {
+    DEX_BACKEND_API,
+    formatAmount,
+    formatFeePercent,
+    formatLiquidity,
+  } from "../../lib/utils";
   import type { TokenInfo, AssetWithBalance, XykPool } from "../../lib/types";
   import CreatePoolModal from "../../lib/CreatePoolModal.svelte";
   import Spinner from "../../lib/Spinner.svelte";
   import TokenIcon from "../../lib/TokenIcon.svelte";
-
-  const DEX_BACKEND_API = "https://dex-backend.intear.tech";
 
   interface PoolDisplay {
     id: number;
