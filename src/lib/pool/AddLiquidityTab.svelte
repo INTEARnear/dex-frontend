@@ -596,7 +596,13 @@
         },
       });
 
-      const executeDeposit = (nearFromLiquidity + 1n).toString();
+      const executeDeposit = (
+        nearFromLiquidity +
+        (!areRegisteredForUser || !areRegisteredForXyk
+          ? STORAGE_DEPOSIT_NEAR
+          : 0n) +
+        1n
+      ).toString();
       transactions.push({
         receiverId: DEX_CONTRACT_ID,
         actions: [
