@@ -464,7 +464,7 @@
   }
 
   .account-input-wrapper input:focus-visible {
-    outline: none !important;
+    outline: none;
   }
 
   .account-input-wrapper input::placeholder {
@@ -522,7 +522,7 @@
   }
 
   .receiver-percentage input:focus-visible {
-    outline: none !important;
+    outline: none;
   }
 
   .percent-sign {

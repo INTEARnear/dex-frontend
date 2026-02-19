@@ -765,7 +765,7 @@
   }
 
   .search-box input:focus-visible {
-    outline: none !important;
+    outline: none;
   }
 
   .search-box input::placeholder {

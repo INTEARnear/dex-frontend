@@ -598,9 +598,7 @@
 
       const executeDeposit = (
         nearFromLiquidity +
-        (!areRegisteredForUser || !areRegisteredForXyk
-          ? STORAGE_DEPOSIT_NEAR
-          : 0n) +
+        (needsRegisterLiquidity ? STORAGE_DEPOSIT_NEAR : 0n) +
         1n
       ).toString();
       transactions.push({
