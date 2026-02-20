@@ -1182,7 +1182,10 @@
             value={getFormattedInputAmount()}
             oninput={(e) => {
               swapMode = "exactIn";
-              inputAmountHumanReadable = e.currentTarget.value;
+              inputAmountHumanReadable = e.currentTarget.value.replaceAll(
+                ",",
+                "",
+              );
             }}
             min="0"
             step="any"
@@ -1271,7 +1274,10 @@
             value={getFormattedOutputAmount()}
             oninput={(e) => {
               swapMode = "exactOut";
-              outputAmountHumanReadable = e.currentTarget.value;
+              outputAmountHumanReadable = e.currentTarget.value.replaceAll(
+                ",",
+                "",
+              );
             }}
             disabled={!$walletStore.isConnected}
             class:estimated-amount={swapMode === "exactIn"}
