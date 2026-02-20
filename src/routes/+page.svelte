@@ -5,7 +5,7 @@
 
   onMount(() => {
     tokenHubStore.updatePricesEvery(10_000);
-    tokenHubStore.updateBalancesEvery(3_000);
+    tokenHubStore.updateBalancesEvery(1_000);
   });
 
   onDestroy(() => {

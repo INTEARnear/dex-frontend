@@ -283,12 +283,12 @@ function createTokenHubStore() {
     filter: object,
     accountId: string,
   ): WebSocket {
-    let reconnectDelay = 1_000;
+    let reconnectDelay = 5_000;
 
     const connect = (): WebSocket => {
       const ws = new WebSocket(`${WS_EVENTS_BASE}/${eventName}`);
       ws.onopen = () => {
-        reconnectDelay = 1_000;
+        reconnectDelay = 5_000;
         ws.send(JSON.stringify(filter));
       };
       ws.onmessage = () => {
@@ -306,7 +306,7 @@ function createTokenHubStore() {
           const newWs = connect();
           activeSockets.push(newWs);
         }, reconnectDelay);
-        reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+        reconnectDelay = Math.min(reconnectDelay * 2, 60_000);
       };
       return ws;
     };
@@ -529,28 +529,7 @@ function createTokenHubStore() {
         `Failed to fetch account tokens: HTTP ${response.status}`,
       );
     }
-    const data: UserTokenResponse[] = await response.json();
-
-    update((state) => {
-      let nextTokensById = { ...state.tokensById };
-      for (const row of data) {
-        const tokenId = row.token.account_id;
-        nextTokensById[tokenId] = mergeTokenInfo(
-          nextTokensById[tokenId],
-          row.token,
-        );
-      }
-      nextTokensById = syncNearFromWrap(nextTokensById);
-      const order = sortTokenIds(nextTokensById);
-      return {
-        ...state,
-        tokensById: nextTokensById,
-        order,
-        tokens: buildTokensArray(nextTokensById, order),
-      };
-    });
-
-    return data;
+    return await response.json();
   }
 
   async function refreshAll(): Promise<void> {

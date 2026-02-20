@@ -120,7 +120,7 @@
         <span class="private-badge">Private</span>
       {/if}
       {#if isOwner}
-        <span class="owner-badge">Your</span>
+        <span class="owner-badge">Yours</span>
       {/if}
     </div>
   </div>

@@ -223,7 +223,7 @@
 
   onMount(() => {
     tokenHubStore.updatePricesEvery(10_000);
-    tokenHubStore.updateBalancesEvery(5_000);
+    tokenHubStore.updateBalancesEvery(null);
   });
 
   onDestroy(() => {
@@ -346,7 +346,7 @@
                 {#if pool.ownerId !== undefined &&
                   pool.ownerId === accountId &&
                   accountId !== null}
-                  <span class="your-badge">Your</span>
+                  <span class="your-badge">Yours</span>
                 {/if}
               </div>
             </div>

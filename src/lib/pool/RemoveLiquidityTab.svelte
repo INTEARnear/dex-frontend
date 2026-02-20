@@ -173,8 +173,8 @@
     const poolBalance1 = BigInt(poolData.assets[1].balance);
     if (totalPoolShares <= 0n && !isPrivate) return null;
 
-    const sharesToRemove = (userShares * BigInt(removePercent)) / 100n;
-    if (sharesToRemove <= 0n && !isPrivate) return null;
+    const sharesToRemove = ((isPrivate ? (10n ** 18n) : userShares) * BigInt(removePercent)) / 100n;
+    if (sharesToRemove <= 0n) return null;
 
     const amount0Raw =
       totalPoolShares === 0n
@@ -232,7 +232,7 @@
       return false;
     if (removePercent <= 0 || removePercent > 100) return false;
     if (isSubmitting) return false;
-    if (!removePreview || (removePreview.sharesToRemove <= 0n && !isPrivate))
+    if (!removePreview || removePreview.sharesToRemove <= 0n)
       return false;
     return true;
   });
