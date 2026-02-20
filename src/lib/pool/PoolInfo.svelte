@@ -1,10 +1,9 @@
 <script lang="ts">
   import TokenIcon from "../TokenIcon.svelte";
-  import type { Token } from "../types";
+  import type { NormalizedPool, Token } from "../types";
   import {
     calculatePoolFeesApyPercent,
     getPoolFeeFractionDecimal,
-    type NormalizedPool,
   } from "./shared";
   import { formatApy, formatFeePercent, formatLiquidity } from "../utils";
 
@@ -54,30 +53,30 @@
     if (!poolData) return 0;
     return (
       poolData.fees.receivers
-        .filter(([receiver]) => shouldDisplayFeeReceiver(receiver))
-        .reduce((acc, [, fee]) => acc + fee, 0) / 10000
+        .filter(([receiver,]) => shouldDisplayFeeReceiver(receiver))
+        .reduce((acc, [, amount]) => acc + amount, 0) / 10000
     );
   });
 
   const feeBreakdown = $derived.by(() => {
     if (!poolData) return [];
     const feeByReceiver = new Map<string, number>();
-    for (const [receiver, fee] of poolData.fees.receivers) {
+    for (const [receiver, amount] of poolData.fees.receivers) {
       if (!shouldDisplayFeeReceiver(receiver)) continue;
       const receiverLabel =
         receiver === "Pool"
           ? "Pool"
           : receiver.Account;
-      feeByReceiver.set(receiverLabel, (feeByReceiver.get(receiverLabel) ?? 0) + fee);
+      feeByReceiver.set(receiverLabel, (feeByReceiver.get(receiverLabel) ?? 0) + amount);
     }
-    return Array.from(feeByReceiver, ([receiver, feeFraction]) => ({
+    return Array.from(feeByReceiver, ([receiver, amount]) => ({
       receiver,
-      feePercent: feeFraction / 10000,
+      feePercent: amount / 10000,
     }));
   });
   const poolFeeFractionDecimal = $derived.by(() => {
     if (!poolData) return 0;
-    return getPoolFeeFractionDecimal(poolData.fees.receivers);
+    return getPoolFeeFractionDecimal(poolData.fees);
   });
   const apyPercent = $derived.by(() =>
     calculatePoolFeesApyPercent(

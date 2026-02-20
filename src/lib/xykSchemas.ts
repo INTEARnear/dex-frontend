@@ -1,4 +1,5 @@
 import { type Schema, serialize } from "borsh";
+import type { XykFeeAmount } from "./types";
 
 const AccountIdSchema: Schema = "string";
 
@@ -11,7 +12,7 @@ export const AssetIdSchema: Schema = {
   ],
 };
 
-export type AssetId =
+export type SchemaAssetId =
   | { Near: {} }
   | { Nep141: string }
   | { Nep245: [string, string] }
@@ -21,7 +22,7 @@ export function assetId(
   type: "Near" | "Nep141" | "Nep245" | "Nep171",
   contractId?: string,
   tokenId?: string,
-): AssetId {
+): SchemaAssetId {
   switch (type) {
     case "Near":
       return { Near: {} };
@@ -39,7 +40,7 @@ export function assetId(
   }
 }
 
-export type XykFeeReceiver = { Account: string } | { Pool: {} };
+export type SchemaXykFeeReceiver = { Account: string } | { Pool: {} };
 
 export const XykFeeReceiverSchema: Schema = {
   enum: [
@@ -51,17 +52,6 @@ export const XykFeeReceiverSchema: Schema = {
 const XykScheduledFeeCurveSchema: Schema = {
   enum: [{ struct: { Linear: { struct: {} } } }],
 };
-
-export type XykFeeAmount =
-  | { Fixed: number }
-  | {
-      Scheduled: {
-        start: [number, number];
-        end: [number, number];
-        curve: { Linear: {} };
-      };
-    }
-  | { Dynamic: { min: number; max: number } };
 
 const XykFeeFractionSchema: Schema = "u32";
 
@@ -111,7 +101,7 @@ const XykCurrentFeesSchema: Schema = {
   },
 };
 
-const XykV1FeeConfigurationSchema: Schema = {
+const XykV2FeeConfigurationSchema: Schema = {
   struct: {
     receivers: {
       array: {
@@ -126,32 +116,14 @@ const XykV1FeeConfigurationSchema: Schema = {
   },
 };
 
-export type XykFeeConfiguration =
-  | {
-      V1: {
-        receivers: {
-          receiver: XykFeeReceiver;
-          amount: XykFeeAmount;
-        }[];
-      };
-    }
-  | {
-      V2: {
-        receivers: {
-          receiver: XykFeeReceiver;
-          amount: XykFeeAmount;
-        }[];
-      };
-    };
-
 export const XykFeeConfigurationSchema: Schema = {
   enum: [
     { struct: { V1: XykCurrentFeesSchema } },
-    { struct: { V2: XykV1FeeConfigurationSchema } },
+    { struct: { V2: XykV2FeeConfigurationSchema } },
   ],
 };
 
-export type XykPoolType =
+export type SchemaXykPoolType =
   | { PrivateLatest: {} }
   | { PublicLatest: {} }
   | { LaunchLatest: { phantom_liquidity_near: bigint } }
@@ -186,11 +158,33 @@ export const XykCreatePoolArgsSchema: Schema = {
   },
 };
 
-export interface XykCreatePoolArgs {
-  assets: [AssetId, AssetId];
-  fees: XykFeeConfiguration;
-  pool_type: XykPoolType;
+export interface ArgsXykCreatePool {
+  assets: [SchemaAssetId, SchemaAssetId];
+  fees: SchemaXykFeeConfiguration;
+  pool_type: SchemaXykPoolType;
 }
+
+export type SchemaXykFeeConfiguration =
+  | {
+      V1: SchemaXykCurrentFees;
+    }
+  | {
+      V2: SchemaXykFeeConfigurationV2;
+    };
+
+export type SchemaXykCurrentFees = {
+  receivers: {
+    receiver: SchemaXykFeeReceiver;
+    amount: number;
+  }[];
+};
+
+export type SchemaXykFeeConfigurationV2 = {
+  receivers: {
+    receiver: SchemaXykFeeReceiver;
+    amount: XykFeeAmount;
+  }[];
+};
 
 export const XykGetPendingFeesArgsSchema: Schema = {
   struct: {
@@ -199,9 +193,9 @@ export const XykGetPendingFeesArgsSchema: Schema = {
   },
 };
 
-export interface XykGetPendingFeesArgs {
+export interface ArgsXykGetPendingFees {
   account_id: string;
-  asset_ids: AssetId[];
+  asset_ids: SchemaAssetId[];
 }
 
 export const XykWithdrawFeesArgsSchema: Schema = {
@@ -210,8 +204,8 @@ export const XykWithdrawFeesArgsSchema: Schema = {
   },
 };
 
-export interface XykWithdrawFeesArgs {
-  assets: AssetId[];
+export interface ArgsXykWithdrawFees {
+  assets: SchemaAssetId[];
 }
 
 const XykPoolIdSchema: Schema = "u32";
@@ -222,7 +216,7 @@ export const XykUpgradePoolArgsSchema: Schema = {
   },
 };
 
-export interface XykUpgradePoolArgs {
+export interface ArgsXykUpgradePool {
   pool_id: number;
 }
 
@@ -232,7 +226,7 @@ export const XykSwapArgsSchema: Schema = {
   },
 };
 
-export interface XykSwapArgs {
+export interface ArgsXykSwap {
   pool_id: number;
 }
 
@@ -242,7 +236,7 @@ export const XykPoolNeedsUpgradeArgsSchema: Schema = {
   },
 };
 
-export interface XykPoolNeedsUpgradeArgs {
+export interface ArgsXykPoolNeedsUpgrade {
   pool_id: number;
 }
 
@@ -255,7 +249,7 @@ export const XykAddLiquidityArgsSchema: Schema = {
   },
 };
 
-export interface XykAddLiquidityArgs {
+export interface ArgsXykAddLiquidity {
   pool_id: number;
   min_shares_received: bigint | null;
 }
@@ -273,7 +267,7 @@ export const XykRemoveLiquidityArgsSchema: Schema = {
   },
 };
 
-export interface XykRemoveLiquidityArgs {
+export interface ArgsXykRemoveLiquidity {
   pool_id: number;
   shares_to_remove: bigint | null;
   min_assets_received: [bigint, bigint] | null;
@@ -286,9 +280,9 @@ export const XykEditFeesArgsSchema: Schema = {
   },
 };
 
-export interface XykEditFeesArgs {
+export interface ArgsXykEditFees {
   pool_id: number;
-  fees: XykFeeConfiguration;
+  fees: SchemaXykFeeConfiguration;
 }
 
 export const XykRegisterLiquidityArgsSchema: Schema = {
@@ -297,7 +291,7 @@ export const XykRegisterLiquidityArgsSchema: Schema = {
   },
 };
 
-export interface XykRegisterLiquidityArgs {
+export interface ArgsXykRegisterLiquidity {
   pool_id: number;
 }
 

@@ -6,7 +6,7 @@
   } from "../DexPresetButtons.svelte";
   import Spinner from "../Spinner.svelte";
   import TradeSettingsRow from "../TradeSettingsRow.svelte";
-  import type { Token } from "../types";
+  import type { NormalizedPool, Token } from "../types";
   import {
     formatAmount,
     formatBalance,
@@ -24,7 +24,6 @@
     DEX_CONTRACT_ID,
     DEX_ID,
   } from "./shared";
-  import type { NormalizedPool } from "./shared";
   import ErrorModal from "../ErrorModal.svelte";
   import {
     parseLiquidityRemovedFromOutcomes,

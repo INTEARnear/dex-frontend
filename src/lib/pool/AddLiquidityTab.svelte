@@ -6,7 +6,7 @@
   } from "../DexPresetButtons.svelte";
   import Spinner from "../Spinner.svelte";
   import TradeSettingsRow from "../TradeSettingsRow.svelte";
-  import type { Token } from "../types";
+  import type { NormalizedPool, Token } from "../types";
   import {
     formatAmount,
     formatBalance,
@@ -31,7 +31,6 @@
     GAS_RESERVE_NEAR,
     isSupportedAsset,
   } from "./shared";
-  import type { NormalizedPool } from "./shared";
   import { STORAGE_DEPOSIT_NEAR } from "./shared";
   import ErrorModal from "../ErrorModal.svelte";
   import {

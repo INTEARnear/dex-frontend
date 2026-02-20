@@ -1,6 +1,5 @@
 <script lang="ts">
-  import type { Token } from "../types";
-  import type { NormalizedPool } from "./shared";
+  import type { NormalizedPool, Token } from "../types";
   import { formatAmount, rawAmountToHumanReadable } from "../utils";
 
   interface Props {

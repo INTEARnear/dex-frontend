@@ -1,6 +1,6 @@
 <script lang="ts">
   import { CLOSE_POSITION_AUTH_STORAGE_KEY, walletStore } from "../walletStore";
-  import type { Token } from "../types";
+  import type { NormalizedPool, Token } from "../types";
   import {
     XykRemoveLiquidityArgsSchema,
     serializeToBase64,
@@ -11,7 +11,6 @@
     DEX_CONTRACT_ID,
     DEX_ID,
   } from "./shared";
-  import type { NormalizedPool } from "./shared";
   import ErrorModal from "../ErrorModal.svelte";
   import {
     parseLiquidityRemovedFromOutcomes,

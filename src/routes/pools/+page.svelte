@@ -10,7 +10,12 @@
     formatFeePercent,
     formatLiquidity,
   } from "../../lib/utils";
-  import type { TokenInfo, AssetWithBalance, XykPool } from "../../lib/types";
+  import {
+    type TokenInfo,
+    type AssetWithBalance,
+    type XykPool,
+    normalizePool,
+  } from "../../lib/types";
   import {
     calculatePoolFeesApyPercent,
     getPoolFeeFractionDecimal,
@@ -21,7 +26,7 @@
 
   interface PoolDisplay {
     id: number;
-    ownerId?: string;
+    ownerId: string | null;
     assets: [AssetWithBalance, AssetWithBalance];
     totalFeePercent: number;
     tokens: [TokenInfo | null, TokenInfo | null];
@@ -133,10 +138,8 @@
       const processedPools: PoolDisplay[] = [];
 
       for (const pool of data) {
-        const fees =
-          "Private" in pool.pool
-            ? pool.pool.Private!.fees
-            : pool.pool.Public!.fees;
+        const normalizedPool = normalizePool(pool.pool);
+        const fees = normalizedPool.fees;
         const totalFeePercent =
           fees.receivers
             .filter(([receiver]) => {
@@ -146,8 +149,8 @@
               }
               return true;
             })
-            .reduce((acc, [, fee]) => acc + fee, 0) / 10000;
-        const poolFeeFractionDecimal = getPoolFeeFractionDecimal(fees.receivers);
+            .reduce((acc, [, amount]) => acc + amount, 0) / 10000;
+        const poolFeeFractionDecimal = getPoolFeeFractionDecimal(fees);
 
         const ownedUsd =
           pool.owned_liquidity_usd !== undefined
@@ -156,12 +159,8 @@
 
         processedPools.push({
           id: pool.id,
-          ownerId:
-            "Private" in pool.pool ? pool.pool.Private!.owner_id : undefined,
-          assets:
-            "Private" in pool.pool
-              ? pool.pool.Private!.assets
-              : pool.pool.Public!.assets,
+          ownerId: normalizedPool.ownerId,
+          assets: normalizedPool.assets,
           totalFeePercent,
           tokens: [null, null],
           ownedLiquidityUsd: Number.isFinite(ownedUsd) ? ownedUsd : undefined,
@@ -209,7 +208,9 @@
     await tokenHubStore.refreshTokens();
     if (requestId !== fetchId) return;
     await Promise.allSettled(
-      uniqueAssetIds.map((assetId) => tokenHubStore.ensureTokenByAssetId(assetId)),
+      uniqueAssetIds.map((assetId) =>
+        tokenHubStore.ensureTokenByAssetId(assetId),
+      ),
     );
     if (requestId !== fetchId) return;
 
@@ -317,10 +318,9 @@
         <a
           href="/pool?id=PLACH-{pool.id}"
           class="pool-card"
-          class:private={pool.ownerId !== undefined}
-          class:owned={pool.ownerId !== undefined &&
-            pool.ownerId === accountId}
-          class:no-deposit={pool.ownerId !== undefined &&
+          class:private={pool.ownerId !== null}
+          class:owned={pool.ownerId !== null && pool.ownerId === accountId}
+          class:no-deposit={pool.ownerId !== null &&
             pool.ownerId !== accountId &&
             accountId !== null}
         >
@@ -329,7 +329,7 @@
               <div class="token-icons">
                 {#each pool.tokens as token, i}
                   <TokenIcon
-                    token={token}
+                    {token}
                     size={48}
                     showBadge
                     preferMetadataIcon
@@ -340,12 +340,10 @@
                 {/each}
               </div>
               <div class="pool-badges">
-                {#if pool.ownerId !== undefined}
+                {#if pool.ownerId !== null}
                   <span class="private-badge">Private</span>
                 {/if}
-                {#if pool.ownerId !== undefined &&
-                  pool.ownerId === accountId &&
-                  accountId !== null}
+                {#if pool.ownerId !== null && pool.ownerId === accountId && accountId !== null}
                   <span class="your-badge">Yours</span>
                 {/if}
               </div>
@@ -362,7 +360,9 @@
             </div>
             <div class="stat">
               <span class="stat-label">Fee</span>
-              <span class="stat-value">{formatFeePercent(pool.totalFeePercent)}%</span>
+              <span class="stat-value"
+                >{formatFeePercent(pool.totalFeePercent)}%</span
+              >
             </div>
             <div class="stat">
               <span class="stat-label">APY</span>
@@ -370,7 +370,8 @@
             </div>
             <div class="stat">
               <span class="stat-label">7d Volume</span>
-              <span class="stat-value">{formatLiquidity(pool.volume7dUsd)}</span>
+              <span class="stat-value">{formatLiquidity(pool.volume7dUsd)}</span
+              >
             </div>
           </div>
 
@@ -730,5 +731,4 @@
   .error button:hover {
     background: var(--accent-hover);
   }
-
 </style>

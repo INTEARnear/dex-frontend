@@ -5,12 +5,8 @@
   import { focusFirstElement, trapFocusKeydown } from "../a11y";
   import { walletStore } from "../walletStore";
   import { createChatwootModalVisibilityController } from "../chatwootBubbleVisibility";
-  import type { XykFeeReceiver } from "../types";
-  import {
-    DEX_CONTRACT_ID,
-    DEX_ID,
-    assertOutcomesSucceeded,
-  } from "./shared";
+  import type { XykFeeConfiguration, XykFeeReceiver } from "../types";
+  import { DEX_CONTRACT_ID, DEX_ID, assertOutcomesSucceeded } from "./shared";
   import FeeReceiversEditor, {
     type FeeReceiverDraft,
     type FeeReceiversEditorState,
@@ -20,20 +16,31 @@
   interface Props {
     isOpen: boolean;
     poolId: number;
-    receivers: Array<[XykFeeReceiver, number]>;
+    configuration: XykFeeConfiguration;
     onClose: () => void;
     onSuccess: () => void;
   }
 
-  let { isOpen, poolId, receivers, onClose, onSuccess }: Props = $props();
+  let { isOpen, poolId, configuration, onClose, onSuccess }: Props = $props();
 
   const accountId = $derived($walletStore.accountId);
-  const initialReceivers = $derived.by<FeeReceiverDraft[]>(() =>
-    receivers.map(([receiver, feeFraction]) => ({
-      receiver,
-      percentage: (feeFraction / 10000).toString(),
-    })),
-  );
+  const initialReceivers = $derived.by<FeeReceiverDraft[]>(() => {
+    return configuration.receivers.map(([receiver, amount]) => {
+      if (typeof amount === "number") {
+        return {
+          receiver: receiver,
+          percentage: (amount / 10000).toString(),
+        };
+      }
+      if ("Fixed" in amount) {
+        return {
+          receiver: receiver,
+          percentage: (amount.Fixed / 10000).toString(),
+        };
+      }
+      throw new Error("Unsupported fee amount type");
+    });
+  });
 
   let feeReceivers = $state<FeeReceiverDraft[]>([]);
   let totalFeePercentage = $state(0);
@@ -63,7 +70,9 @@
   $effect(() => {
     if (!isOpen) return;
     previouslyFocusedElement =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     queueMicrotask(() => {
       if (modalRef) focusFirstElement(modalRef);
     });
@@ -152,7 +161,7 @@
                         method: "edit_fees",
                         args,
                         attached_assets: {
-                          "near": "1" + "0".repeat(24 - 1), // 0.1 NEAR
+                          near: "1" + "0".repeat(24 - 1), // 0.1 NEAR
                         } as Record<string, string>,
                       },
                     },
@@ -249,7 +258,11 @@
         <button class="cancel-btn" onclick={onClose} disabled={isSubmitting}>
           Cancel
         </button>
-        <button class="submit-btn" onclick={handleSubmit} disabled={!isFormValid || isSubmitting}>
+        <button
+          class="submit-btn"
+          onclick={handleSubmit}
+          disabled={!isFormValid || isSubmitting}
+        >
           {#if isSubmitting}
             <LoaderCircle size={16} class="spinning" />
             Saving...

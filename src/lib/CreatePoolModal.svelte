@@ -6,7 +6,7 @@
   import { tokenHubStore } from "./tokenHubStore";
   import TokenSelector from "./TokenSelector.svelte";
   import TokenIcon from "./TokenIcon.svelte";
-  import type { Token } from "./types";
+  import type { Token, XykFeeAmount } from "./types";
   import { CircleAlert, LoaderCircle } from "lucide-svelte";
   import FeeReceiversEditor, {
     type FeeReceiverDraft,
@@ -16,10 +16,9 @@
     XykCreatePoolArgsSchema,
     assetId,
     serializeToBase64,
-    type AssetId,
-    type XykCreatePoolArgs,
-    type XykFeeAmount,
-    type XykFeeReceiver,
+    type SchemaAssetId,
+    type ArgsXykCreatePool,
+    type SchemaXykFeeReceiver,
   } from "./xykSchemas";
   import { NEP297_EVENT_JSON_PREFIX, parseNep297FromLog } from "./nep297";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
@@ -28,7 +27,7 @@
   const DEX_CONTRACT_ID = "dex.intear.near";
   const DEX_ID = "slimedragon.near/xyk";
 
-  function tokenToAssetId(token: Token): AssetId {
+  function tokenToAssetId(token: Token): SchemaAssetId {
     if (token.account_id === "near") {
       return assetId("Near");
     }
@@ -45,14 +44,17 @@
       .filter((r) => parseFloat(r.percentage) > 0)
       .map((r) => {
         const feeAmount: XykFeeAmount = { Fixed: Math.round(parseFloat(r.percentage) * 10000) };
-        const receiver: XykFeeReceiver =
+        const receiver: SchemaXykFeeReceiver =
           r.receiver === "Pool" ? { Pool: {} } : { Account: r.receiver.Account };
         return { receiver, amount: feeAmount };
       });
 
-    const args: XykCreatePoolArgs = {
+    const args: ArgsXykCreatePool = {
       assets: [tokenToAssetId(token1), tokenToAssetId(token2)],
-      fees: { V2: { receivers } },
+      fees: { V2: { receivers: receivers.map(receiver => ({
+        receiver: receiver.receiver,
+        amount: receiver.amount,
+      })) } },
       pool_type: isPublic ? { PublicV2: {} } : { PrivateV2: {} },
     };
 

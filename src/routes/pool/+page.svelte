@@ -17,38 +17,13 @@
   } from "../../lib/pool/liquidityEvents";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
-  import type { AssetWithBalance, XykFeeReceiver } from "../../lib/types";
+  import { normalizePool, type NormalizedPool, type XykPoolData } from "../../lib/types";
   import { DEX_BACKEND_API } from "../../lib/utils";
   import {
     assetIdToTokenId,
-    type NormalizedPool,
     parsePoolId,
   } from "../../lib/pool/shared";
   import Spinner from "../../lib/Spinner.svelte";
-
-  interface TrackedFeeConfig {
-    receivers: Array<[XykFeeReceiver, number]>;
-  }
-
-  interface TrackedPrivatePool {
-    assets: [AssetWithBalance, AssetWithBalance];
-    fees: TrackedFeeConfig;
-    owner_id: string;
-  }
-
-  interface TrackedPublicPool {
-    assets: [AssetWithBalance, AssetWithBalance];
-    fees: TrackedFeeConfig;
-    total_shares: string;
-  }
-
-  type TrackedPool =
-    | {
-        Private: TrackedPrivatePool;
-      }
-    | {
-        Public: TrackedPublicPool;
-      };
 
   interface UntrackedPosition {
     pool_id: number;
@@ -68,7 +43,7 @@
   }
 
   interface TrackPositionsResponse {
-    pool: TrackedPool;
+    pool: XykPoolData;
     volume_24h_usd: number;
     volume_7d_usd: number;
     open?: OpenPosition[];
@@ -113,26 +88,6 @@
     asset1_open_price_usd: number;
   } | null>(null);
   let showEditFeesModal = $state(false);
-
-  function normalizePool(pool: TrackedPool): NormalizedPool | null {
-    if ("Private" in pool) {
-      return {
-        ownerId: pool.Private.owner_id,
-        assets: pool.Private.assets,
-        fees: pool.Private.fees,
-        totalSharesRaw: null,
-      };
-    }
-    if ("Public" in pool) {
-      return {
-        ownerId: null,
-        assets: pool.Public.assets,
-        fees: pool.Public.fees,
-        totalSharesRaw: pool.Public.total_shares,
-      };
-    }
-    return null;
-  }
 
   async function fetchPoolData(
     poolId: number,
@@ -508,10 +463,7 @@
     <EditFeesModal
       isOpen={showEditFeesModal}
       poolId={parsedPoolId}
-      receivers={poolData.fees.receivers.filter(
-        ([receiver]) =>
-          receiver == "Pool" || receiver.Account !== "plach.intear.near",
-      )}
+      configuration={poolData.fee_configuration}
       onClose={() => {
         showEditFeesModal = false;
       }}

@@ -1,5 +1,10 @@
 import { tokenHubStore } from "../tokenHubStore";
-import type { AssetWithBalance, TokenInfo, XykPool } from "../types";
+import {
+  normalizePool,
+  type AssetWithBalance,
+  type TokenInfo,
+  type XykPool,
+} from "../types";
 import { DEX_BACKEND_API } from "../utils";
 import type {
   StatsAssetListItem,
@@ -59,9 +64,8 @@ async function fetchPoolDescriptors(): Promise<PoolDescriptor[]> {
   const uniqueAssetIds = new Set<string>();
 
   for (const pool of pools) {
-    const assets = pool.pool.Private
-      ? pool.pool.Private.assets
-      : pool.pool.Public?.assets;
+    const normalizedPool = normalizePool(pool.pool);
+    const assets = normalizedPool.assets;
     if (!assets) continue;
 
     uniqueAssetIds.add(assets[0].asset_id);

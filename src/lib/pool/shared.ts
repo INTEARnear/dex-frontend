@@ -1,4 +1,9 @@
-import type { AssetWithBalance, Token, XykFeeReceiver } from "../types";
+import type {
+  AssetWithBalance,
+  Token,
+  XykCurrentFees,
+  XykFeeReceiver,
+} from "../types";
 import { DEX_BACKEND_API } from "../utils";
 
 export const DEX_CONTRACT_ID = "dex.intear.near";
@@ -15,26 +20,13 @@ export const AUTO_LIQUIDITY_SLIPPAGE_PERCENT = Math.pow(
     2,
 );
 
-export interface TrackedFeeConfig {
-  receivers: Array<[XykFeeReceiver, number]>;
-}
-
-export interface NormalizedPool {
-  ownerId: string | null;
-  assets: [AssetWithBalance, AssetWithBalance];
-  fees: TrackedFeeConfig;
-  totalSharesRaw: string | null;
-}
-
 const FEE_FRACTION_SCALE = 1_000_000;
 const DAYS_PER_YEAR = 365;
 
-export function getPoolFeeFractionDecimal(
-  receivers: Array<[XykFeeReceiver, number]>,
-): number {
-  const poolFeeFraction = receivers.reduce((total, [receiver, fee]) => {
-    if (receiver !== "Pool") return total;
-    return total + fee;
+export function getPoolFeeFractionDecimal(fees: XykCurrentFees): number {
+  const poolFeeFraction = fees.receivers.reduce((total, [receiver, amount]) => {
+    if (receiver === "Pool") return total;
+    return total + amount;
   }, 0);
   return poolFeeFraction / FEE_FRACTION_SCALE;
 }
