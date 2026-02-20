@@ -131,6 +131,49 @@
   const isOwner = $derived(
     !!poolData?.ownerId && poolData.ownerId === $walletStore.accountId,
   );
+  const revenueSharingBreakdown = $derived.by(() => {
+    if (!poolData) return [] as [string, number][];
+    const amountsByAccount = new Map<string, number>();
+    const connectedAccountId = $walletStore.accountId?.toLowerCase();
+    for (const [receiver, amount] of poolData.fees.receivers) {
+      if (receiver === "Pool") {
+        continue;
+      }
+      const receiverAccountId = receiver.Account.toLowerCase();
+      if (
+        receiverAccountId === "plach.intear.near" ||
+        (connectedAccountId !== undefined &&
+          receiverAccountId === connectedAccountId)
+      ) {
+        continue;
+      }
+      amountsByAccount.set(
+        receiver.Account,
+        (amountsByAccount.get(receiver.Account) ?? 0) + amount,
+      );
+    }
+    return Array.from(amountsByAccount.entries());
+  });
+  const revenueSharingAccounts = $derived(
+    revenueSharingBreakdown.map(([accountId]) => accountId),
+  );
+  const revenueSharingPercent = $derived.by(() => {
+    const accountFees = revenueSharingBreakdown.reduce(
+      (acc, [, amount]) => acc + amount,
+      0,
+    );
+    const poolFee = (poolData?.fees.receivers ?? []).reduce(
+      (acc, [receiver, amount]) => (receiver === "Pool" ? acc + amount : acc),
+      0,
+    );
+    const totalRevenueFee = accountFees + poolFee;
+    if (totalRevenueFee <= 0) return 0;
+    return (accountFees / totalRevenueFee) * 100;
+  });
+  const revenueSharingPercentText = $derived.by(() => {
+    const formatted = formatByDecimals(revenueSharingPercent, 4);
+    return formatted || "0";
+  });
 
   function getUserBalanceRaw(tokenId: string | null): string {
     if (!tokenId) return "0";
@@ -868,6 +911,26 @@
     {/if}
   </div>
 
+  {#if poolData?.locked}
+    <div class="warning-box pool-warning">
+      This pool is locked. This means you will not be able to withdraw the
+      liquidity you add. If you want to add withdrawable liquidity, create a
+      new pool that is not locked.
+    </div>
+  {/if}
+
+  {#if revenueSharingAccounts.length > 0}
+    <div class="warning-box pool-warning">
+      {revenueSharingAccounts.join(", ")}
+      {" "}
+      {revenueSharingAccounts.length === 1 ? "receives" : "receive"}
+      {" "}
+      {revenueSharingPercentText}% of the revenue from this pool. If you don't
+      intend to share fees with them, choose a different pool or create a new
+      one.
+    </div>
+  {/if}
+
   {#if !$walletStore.isConnected}
     <button
       class="primary-btn"
@@ -899,6 +962,12 @@
     border-radius: 0.75rem;
     padding: 0.75rem 1rem;
     font-size: 0.8125rem;
+  }
+  .pool-warning {
+    background: rgba(234, 179, 8, 0.12);
+    border: 1px solid rgba(234, 179, 8, 0.35);
+    color: #facc15;
+    line-height: 1.4;
   }
   .ratio-box {
     display: flex;

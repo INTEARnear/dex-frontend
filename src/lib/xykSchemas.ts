@@ -285,6 +285,16 @@ export interface ArgsXykEditFees {
   fees: SchemaXykFeeConfiguration;
 }
 
+export const XykLockPoolArgsSchema: Schema = {
+  struct: {
+    pool_id: XykPoolIdSchema,
+  },
+};
+
+export interface ArgsXykLockPool {
+  pool_id: number;
+}
+
 export const XykRegisterLiquidityArgsSchema: Schema = {
   struct: {
     pool_id: XykPoolIdSchema,

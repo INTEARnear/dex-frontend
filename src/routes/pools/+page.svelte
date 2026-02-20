@@ -27,6 +27,7 @@
   interface PoolDisplay {
     id: number;
     ownerId: string | null;
+    locked: boolean;
     assets: [AssetWithBalance, AssetWithBalance];
     totalFeePercent: number;
     tokens: [TokenInfo | null, TokenInfo | null];
@@ -160,6 +161,7 @@
         processedPools.push({
           id: pool.id,
           ownerId: normalizedPool.ownerId,
+          locked: normalizedPool.locked,
           assets: normalizedPool.assets,
           totalFeePercent,
           tokens: [null, null],
@@ -345,6 +347,9 @@
                 {/if}
                 {#if pool.ownerId !== null && pool.ownerId === accountId && accountId !== null}
                   <span class="your-badge">Yours</span>
+                {/if}
+                {#if pool.locked}
+                  <span class="burnt-badge">Burnt</span>
                 {/if}
               </div>
             </div>
@@ -644,6 +649,18 @@
     padding: 0.25rem 0.5rem;
     background: rgba(34, 197, 94, 0.15);
     color: #22c55e;
+    border-radius: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+  }
+
+  .burnt-badge {
+    font-size: 0.625rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
     border-radius: 0.25rem;
     text-transform: uppercase;
     letter-spacing: 0.02em;

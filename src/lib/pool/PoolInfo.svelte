@@ -1,11 +1,23 @@
 <script lang="ts">
   import TokenIcon from "../TokenIcon.svelte";
+  import { LoaderCircle } from "lucide-svelte";
   import type { NormalizedPool, Token } from "../types";
+  import { walletStore } from "../walletStore";
   import {
+    DEX_CONTRACT_ID,
+    DEX_ID,
+    assertOutcomesSucceeded,
     calculatePoolFeesApyPercent,
     getPoolFeeFractionDecimal,
   } from "./shared";
   import { formatApy, formatFeePercent, formatLiquidity } from "../utils";
+  import {
+    XykLockPoolArgsSchema,
+    XykUpgradePoolArgsSchema,
+    serializeToBase64,
+    type ArgsXykLockPool,
+    type ArgsXykUpgradePool,
+  } from "../xykSchemas";
 
   interface Props {
     poolData: NormalizedPool | null;
@@ -15,7 +27,9 @@
     token1: Token | null;
     poolId: number | null;
     accountId: string | null;
+    needsUpgrade: boolean;
     onEditFees: () => void;
+    onLocked: () => void;
   }
 
   let {
@@ -26,7 +40,9 @@
     token1,
     poolId,
     accountId,
+    needsUpgrade,
     onEditFees,
+    onLocked,
   }: Props = $props();
 
   const liquidityUsd = $derived.by(() => {
@@ -43,7 +59,11 @@
   });
 
   function shouldDisplayFeeReceiver(receiver: unknown): boolean {
-    if (typeof receiver === "object" && receiver !== null && "Account" in receiver) {
+    if (
+      typeof receiver === "object" &&
+      receiver !== null &&
+      "Account" in receiver
+    ) {
       return receiver.Account !== "plach.intear.near";
     }
     return true;
@@ -53,7 +73,7 @@
     if (!poolData) return 0;
     return (
       poolData.fees.receivers
-        .filter(([receiver,]) => shouldDisplayFeeReceiver(receiver))
+        .filter(([receiver]) => shouldDisplayFeeReceiver(receiver))
         .reduce((acc, [, amount]) => acc + amount, 0) / 10000
     );
   });
@@ -63,11 +83,11 @@
     const feeByReceiver = new Map<string, number>();
     for (const [receiver, amount] of poolData.fees.receivers) {
       if (!shouldDisplayFeeReceiver(receiver)) continue;
-      const receiverLabel =
-        receiver === "Pool"
-          ? "Pool"
-          : receiver.Account;
-      feeByReceiver.set(receiverLabel, (feeByReceiver.get(receiverLabel) ?? 0) + amount);
+      const receiverLabel = receiver === "Pool" ? "Pool" : receiver.Account;
+      feeByReceiver.set(
+        receiverLabel,
+        (feeByReceiver.get(receiverLabel) ?? 0) + amount,
+      );
     }
     return Array.from(feeByReceiver, ([receiver, amount]) => ({
       receiver,
@@ -90,6 +110,107 @@
   const isOwner = $derived(
     !!poolData?.ownerId && poolData.ownerId === accountId,
   );
+  const isLocked = $derived(poolData?.locked ?? false);
+
+  let showLockModal = $state(false);
+  let isLocking = $state(false);
+  let lockError = $state<string | null>(null);
+
+  function openLockModal() {
+    lockError = null;
+    showLockModal = true;
+  }
+
+  function closeLockModal() {
+    if (isLocking) return;
+    showLockModal = false;
+  }
+
+  function handleLockBackdropKeyDown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      closeLockModal();
+    }
+  }
+
+  async function confirmLockPool() {
+    const wallet = $walletStore.wallet;
+    if (!wallet) {
+      lockError = "Please connect your wallet";
+      return;
+    }
+    if (poolId === null) {
+      lockError = "Pool ID is missing";
+      return;
+    }
+
+    isLocking = true;
+    lockError = null;
+    try {
+      const lockArgsObject: ArgsXykLockPool = { pool_id: poolId };
+      const lockArgs = serializeToBase64(XykLockPoolArgsSchema, lockArgsObject);
+
+      let deposit = BigInt(0);
+      const operations = [
+        {
+          DexCall: {
+            dex_id: DEX_ID,
+            method: "lock_pool",
+            args: lockArgs,
+            attached_assets: {},
+          },
+        },
+      ];
+
+      if (needsUpgrade) {
+        const upgradeArgsObject: ArgsXykUpgradePool = {
+          pool_id: poolId,
+        };
+        const upgradeArgs = serializeToBase64(
+          XykUpgradePoolArgsSchema,
+          upgradeArgsObject,
+        );
+        const upgradeDeposit = BigInt("3" + "0".repeat(24 - 3)); // 0.003 NEAR
+        operations.unshift({
+          DexCall: {
+            dex_id: DEX_ID,
+            method: "upgrade_pool",
+            args: upgradeArgs,
+            attached_assets: {
+              near: upgradeDeposit.toString(),
+            } as Record<string, string>,
+          },
+        });
+        deposit += upgradeDeposit;
+      }
+
+      const transactions = [
+        {
+          receiverId: DEX_CONTRACT_ID,
+          actions: [
+            {
+              type: "FunctionCall" as const,
+              params: {
+                methodName: "execute_operations",
+                args: { operations },
+                gas: "120" + "0".repeat(12),
+                deposit: deposit == BigInt(0) ? "1" : deposit.toString(),
+              },
+            },
+          ],
+        },
+      ];
+
+      const outcomes = await wallet.signAndSendTransactions({ transactions });
+      assertOutcomesSucceeded(outcomes);
+      showLockModal = false;
+      onLocked();
+    } catch (error) {
+      lockError =
+        error instanceof Error ? error.message : "Failed to lock pool";
+    } finally {
+      isLocking = false;
+    }
+  }
 </script>
 
 <aside class="pool-info">
@@ -121,6 +242,9 @@
       {#if isOwner}
         <span class="owner-badge">Yours</span>
       {/if}
+      {#if isLocked}
+        <span class="burnt-badge">Burnt</span>
+      {/if}
     </div>
   </div>
 
@@ -145,6 +269,11 @@
     {/if}
     {#if isPrivate && isOwner}
       <button class="edit-fees-btn" onclick={onEditFees}>Edit Fees</button>
+      {#if !isLocked}
+        <button class="lock-pool-btn" onclick={openLockModal}
+          >Burn Liquidity</button
+        >
+      {/if}
     {/if}
     <div class="stat-row">
       <span class="stat-label">APY</span>
@@ -166,6 +295,69 @@
     {/if}
   </div>
 </aside>
+
+{#if showLockModal}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    tabindex="-1"
+    onclick={closeLockModal}
+    onkeydown={handleLockBackdropKeyDown}
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lock-pool-title"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="modal-header">
+        <h2 id="lock-pool-title">Burn LP</h2>
+      </div>
+      <div class="modal-body">
+        <div class="lock-warning">
+          <p>
+            Burning LP is permanent. This pool will be locked forever with no
+            ability to unlock, and you will not be able to withdraw liquidity.
+          </p>
+        </div>
+        <p class="lock-warning-secondary">
+          Confirm only if you are sure you want to burn the liquidity forever.
+          Generally this is only done if you're the one launching this token,
+          you don't need to do this if you are just a holder.
+        </p>
+        {#if lockError}
+          <p class="lock-error" role="alert" aria-live="assertive">
+            {lockError}
+          </p>
+        {/if}
+      </div>
+      <div class="modal-footer">
+        <button
+          class="cancel-btn"
+          onclick={closeLockModal}
+          disabled={isLocking}
+        >
+          Cancel
+        </button>
+        <button
+          class="confirm-lock-btn"
+          onclick={confirmLockPool}
+          disabled={isLocking}
+        >
+          {#if isLocking}
+            <LoaderCircle size={16} class="spinning" />
+            Burning...
+          {:else}
+            Burn LP Forever
+          {/if}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .pool-info {
@@ -215,7 +407,8 @@
   }
 
   .private-badge,
-  .owner-badge {
+  .owner-badge,
+  .burnt-badge {
     font-size: 0.625rem;
     font-weight: 600;
     padding: 0.25rem 0.5rem;
@@ -232,6 +425,11 @@
   .owner-badge {
     color: #22c55e;
     background: rgba(34, 197, 94, 0.15);
+  }
+
+  .burnt-badge {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.15);
   }
 
   .pair-symbols {
@@ -313,9 +511,170 @@
     background: var(--accent-hover);
   }
 
+  .lock-pool-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.52rem 1rem;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 0.5rem;
+    color: #fca5a5;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .lock-pool-btn:hover {
+    background: rgba(239, 68, 68, 0.26);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 460px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+  }
+
+  .modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .modal-header h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    padding: 1.25rem 1.5rem;
+  }
+
+  .lock-warning {
+    display: flex;
+    gap: 0.625rem;
+    padding: 0.875rem;
+    border-radius: 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .lock-warning p,
+  .lock-warning-secondary {
+    margin: 0;
+  }
+
+  .lock-warning-secondary {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+
+  .lock-error {
+    margin: 0;
+    color: #f87171;
+    font-size: 0.8125rem;
+  }
+
+  .modal-footer {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem 1.25rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .cancel-btn,
+  .confirm-lock-btn {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border-radius: 0.625rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .cancel-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  .cancel-btn:hover:not(:disabled) {
+    background: var(--bg-input);
+  }
+
+  .confirm-lock-btn {
+    border: none;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+  }
+
+  .confirm-lock-btn:hover:not(:disabled) {
+    filter: brightness(1.05);
+  }
+
+  .cancel-btn:disabled,
+  .confirm-lock-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .confirm-lock-btn :global(.spinning) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   @media (--mobile) {
     .owner-id {
       max-width: 10rem;
+    }
+
+    .modal-backdrop {
+      align-items: flex-end;
+      padding: 0;
+    }
+
+    .modal {
+      max-width: 100%;
+      border-radius: 1.25rem 1.25rem 0 0;
+      border-bottom: none;
     }
   }
 
@@ -345,7 +704,8 @@
     }
 
     .private-badge,
-    .owner-badge {
+    .owner-badge,
+    .burnt-badge {
       font-size: 0.5625rem;
       padding: 0.1875rem 0.375rem;
     }

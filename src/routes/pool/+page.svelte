@@ -224,7 +224,8 @@
         poolData?.assets[1].balance &&
         BigInt(poolData.assets[0].balance) > 0n &&
         BigInt(poolData.assets[1].balance) > 0n &&
-        poolData.ownerId === $walletStore.accountId
+        poolData.ownerId === $walletStore.accountId &&
+        !poolData.locked
       );
     } else {
       return (
@@ -297,8 +298,12 @@
           {token1}
           poolId={parsedPoolId}
           accountId={$walletStore.accountId}
+          {needsUpgrade}
           onEditFees={() => {
             showEditFeesModal = true;
+          }}
+          onLocked={() => {
+            fetchPoolData(parsedPoolId, $walletStore.accountId, isCreateRedirect);
           }}
         />
         <LiquidityInfo {poolData} {token0} {token1} {userSharesRaw} />
