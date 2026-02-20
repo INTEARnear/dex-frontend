@@ -162,11 +162,14 @@
       (acc, [, amount]) => acc + amount,
       0,
     );
-    const poolFee = (poolData?.fees.receivers ?? []).reduce(
-      (acc, [receiver, amount]) => (receiver === "Pool" ? acc + amount : acc),
+    const userReceivesFee = (poolData?.fees.receivers ?? []).reduce(
+      (acc, [receiver, amount]) =>
+        receiver === "Pool" || receiver.Account === $walletStore.accountId
+          ? acc + amount
+          : acc,
       0,
     );
-    const totalRevenueFee = accountFees + poolFee;
+    const totalRevenueFee = accountFees + userReceivesFee;
     if (totalRevenueFee <= 0) return 0;
     return (accountFees / totalRevenueFee) * 100;
   });
@@ -914,12 +917,12 @@
   {#if poolData?.locked}
     <div class="warning-box pool-warning">
       This pool is locked. This means you will not be able to withdraw the
-      liquidity you add. If you want to add withdrawable liquidity, create a
-      new pool that is not locked.
+      liquidity you add. If you want to add withdrawable liquidity, create a new
+      pool that is not locked.
     </div>
   {/if}
 
-  {#if revenueSharingAccounts.length > 0}
+  {#if revenueSharingAccounts.length > 0 && revenueSharingPercent > 0}
     <div class="warning-box pool-warning">
       {revenueSharingAccounts.join(", ")}
       {" "}

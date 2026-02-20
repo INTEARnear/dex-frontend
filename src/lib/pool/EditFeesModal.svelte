@@ -5,7 +5,7 @@
   import { focusFirstElement, trapFocusKeydown } from "../a11y";
   import { walletStore } from "../walletStore";
   import { createChatwootModalVisibilityController } from "../chatwootBubbleVisibility";
-  import type { XykFeeConfiguration, XykFeeReceiver } from "../types";
+  import type { XykFeeConfiguration } from "../types";
   import { DEX_CONTRACT_ID, DEX_ID, assertOutcomesSucceeded } from "./shared";
   import FeeReceiversEditor, {
     type FeeReceiverDraft,
@@ -18,6 +18,13 @@
     type ArgsXykEditFees,
     type ArgsXykUpgradePool,
   } from "../xykSchemas";
+  import {
+    draftAmountToSchemaXykFeeAmount,
+    feeFractionToPercentage,
+    scheduledDurationFromPoints,
+    timestampNanosToDateTimeLocal,
+    toSchemaFeeReceiver,
+  } from "./feeUtils";
 
   interface Props {
     isOpen: boolean;
@@ -39,17 +46,48 @@
 
   const accountId = $derived($walletStore.accountId);
   const initialReceivers = $derived.by<FeeReceiverDraft[]>(() => {
+    const nowTimestampNanos = Date.now() * 1_000_000;
     return configuration.receivers.map(([receiver, amount]) => {
       if (typeof amount === "number") {
         return {
           receiver: receiver,
-          percentage: (amount / 10000).toString(),
+          amount: {
+            kind: "fixed",
+            percentage: feeFractionToPercentage(amount),
+          },
         };
       }
       if ("Fixed" in amount) {
         return {
           receiver: receiver,
-          percentage: (amount.Fixed / 10000).toString(),
+          amount: {
+            kind: "fixed",
+            percentage: feeFractionToPercentage(amount.Fixed),
+          },
+        };
+      }
+      if ("Scheduled" in amount) {
+        const start = amount.Scheduled.start;
+        const end = amount.Scheduled.end;
+        if (nowTimestampNanos >= end[0]) {
+          return {
+            receiver: receiver,
+            amount: {
+              kind: "fixed",
+              percentage: feeFractionToPercentage(end[1]),
+            },
+          };
+        }
+        return {
+          receiver: receiver,
+          amount: {
+            kind: "scheduled",
+            startDateTime: timestampNanosToDateTimeLocal(start[0]),
+            ...scheduledDurationFromPoints(start[0], end[0]),
+            startPercentage: feeFractionToPercentage(start[1]),
+            endPercentage: feeFractionToPercentage(end[1]),
+            startPreset: "custom",
+          },
         };
       }
       throw new Error("Unsupported fee amount type");
@@ -61,6 +99,8 @@
   let isFeeValid = $state(true);
   let hasDuplicateReceivers = $state(false);
   let areAllReceiversValid = $state(true);
+  let hasScheduledDurationError = $state(false);
+  let hasScheduledFeeDirectionError = $state(false);
 
   const isFormValid = $derived(
     isFeeValid && !hasDuplicateReceivers && areAllReceiversValid,
@@ -102,6 +142,8 @@
     isFeeValid = state.isFeeValid;
     hasDuplicateReceivers = state.hasDuplicateReceivers;
     areAllReceiversValid = state.areAllReceiversValid;
+    hasScheduledDurationError = state.hasScheduledDurationError;
+    hasScheduledFeeDirectionError = state.hasScheduledFeeDirectionError;
   }
 
   function handleBackdropClick(e: MouseEvent) {
@@ -144,21 +186,23 @@
     isSubmitting = true;
     submitError = null;
     try {
+      const receivers = feeReceivers
+        .map((item) => {
+          const amount = draftAmountToSchemaXykFeeAmount(item.amount);
+          if (!amount) return null;
+
+          return {
+            receiver: toSchemaFeeReceiver(item.receiver),
+            amount,
+          };
+        })
+        .filter((r) => r !== null);
+
       const argsObject: ArgsXykEditFees = {
         pool_id: poolId,
         fees: {
           V2: {
-            receivers: feeReceivers
-              .filter((item) => parseFloat(item.percentage) > 0)
-              .map((item) => ({
-                receiver:
-                  item.receiver === "Pool"
-                    ? { Pool: {} }
-                    : { Account: item.receiver.Account },
-                amount: {
-                  Fixed: Math.round(parseFloat(item.percentage) * 10000),
-                },
-              })),
+            receivers,
           },
         },
       };
@@ -235,6 +279,8 @@
     if (!isOpen) {
       submitError = null;
       isSubmitting = false;
+      hasScheduledDurationError = false;
+      hasScheduledFeeDirectionError = false;
     }
   });
 </script>
@@ -272,7 +318,7 @@
         />
       </div>
 
-      {#if !isFeeValid || hasDuplicateReceivers}
+      {#if !isFeeValid || hasDuplicateReceivers || hasScheduledDurationError || hasScheduledFeeDirectionError}
         <div class="form-errors" role="alert" aria-live="assertive">
           {#if !isFeeValid}
             <div class="form-error">
@@ -284,6 +330,18 @@
             <div class="form-error">
               <CircleAlert size={14} />
               <span>Duplicate fee receivers are not allowed</span>
+            </div>
+          {/if}
+          {#if hasScheduledDurationError}
+            <div class="form-error">
+              <CircleAlert size={14} />
+              <span>Duration must be set</span>
+            </div>
+          {/if}
+          {#if hasScheduledFeeDirectionError}
+            <div class="form-error">
+              <CircleAlert size={14} />
+              <span>End fee must be lower than start fee</span>
             </div>
           {/if}
         </div>
@@ -397,7 +455,7 @@
     background: rgba(239, 68, 68, 0.08);
     border: 1px solid rgba(239, 68, 68, 0.2);
     border-radius: 0.625rem;
-    margin: 0 1.5rem 1rem;
+    margin: 0.625rem 1.5rem 1rem;
   }
 
   .form-error {

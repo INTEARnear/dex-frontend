@@ -171,7 +171,7 @@
         }
       }
     } finally {
-      if (requestId === activePoolRequestId && !background) {
+      if (requestId === activePoolRequestId) {
         isLoading = false;
       }
     }

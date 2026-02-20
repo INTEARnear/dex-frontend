@@ -151,7 +151,9 @@
               return true;
             })
             .reduce((acc, [, amount]) => acc + amount, 0) / 10000;
-        const poolFeeFractionDecimal = getPoolFeeFractionDecimal(fees);
+        const poolFeeFractionDecimal = getPoolFeeFractionDecimal(
+          normalizedPool.fee_configuration,
+        );
 
         const ownedUsd =
           pool.owned_liquidity_usd !== undefined

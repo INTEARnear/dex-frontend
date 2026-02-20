@@ -1,10 +1,6 @@
-import type {
-  AssetWithBalance,
-  Token,
-  XykCurrentFees,
-  XykFeeReceiver,
-} from "../types";
+import type { XykFeeConfiguration } from "../types";
 import { DEX_BACKEND_API } from "../utils";
+import { evaluateFeeConfigurationAtTimestamp } from "./feeUtils";
 
 export const DEX_CONTRACT_ID = "dex.intear.near";
 export const DEX_ID = "slimedragon.near/xyk";
@@ -23,10 +19,16 @@ export const AUTO_LIQUIDITY_SLIPPAGE_PERCENT = Math.pow(
 const FEE_FRACTION_SCALE = 1_000_000;
 const DAYS_PER_YEAR = 365;
 
-export function getPoolFeeFractionDecimal(fees: XykCurrentFees): number {
-  const poolFeeFraction = fees.receivers.reduce((total, [receiver, amount]) => {
-    if (receiver === "Pool") return total;
-    return total + amount;
+export function getPoolFeeFractionDecimal(
+  feeConfiguration: XykFeeConfiguration,
+  timestampNanos = Date.now() * 1_000_000,
+): number {
+  const poolFeeFraction = evaluateFeeConfigurationAtTimestamp(
+    feeConfiguration,
+    timestampNanos,
+  ).reduce((total, entry) => {
+    if (entry.receiver !== "Pool") return total;
+    return total + entry.feeFraction;
   }, 0);
   return poolFeeFraction / FEE_FRACTION_SCALE;
 }

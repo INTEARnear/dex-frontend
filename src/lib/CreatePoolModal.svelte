@@ -6,7 +6,7 @@
   import { tokenHubStore } from "./tokenHubStore";
   import TokenSelector from "./TokenSelector.svelte";
   import TokenIcon from "./TokenIcon.svelte";
-  import type { Token, XykFeeAmount } from "./types";
+  import type { Token } from "./types";
   import { CircleAlert, LoaderCircle } from "lucide-svelte";
   import FeeReceiversEditor, {
     type FeeReceiverDraft,
@@ -18,8 +18,11 @@
     serializeToBase64,
     type SchemaAssetId,
     type ArgsXykCreatePool,
-    type SchemaXykFeeReceiver,
   } from "./xykSchemas";
+  import {
+    draftAmountToSchemaXykFeeAmount,
+    toSchemaFeeReceiver,
+  } from "./pool/feeUtils";
   import { NEP297_EVENT_JSON_PREFIX, parseNep297FromLog } from "./nep297";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
   import { DEX_BACKEND_API } from "./utils";
@@ -41,20 +44,25 @@
     isPublic: boolean,
   ): string {
     const receivers = feeReceivers
-      .filter((r) => parseFloat(r.percentage) > 0)
       .map((r) => {
-        const feeAmount: XykFeeAmount = { Fixed: Math.round(parseFloat(r.percentage) * 10000) };
-        const receiver: SchemaXykFeeReceiver =
-          r.receiver === "Pool" ? { Pool: {} } : { Account: r.receiver.Account };
+        const feeAmount = draftAmountToSchemaXykFeeAmount(r.amount);
+        if (!feeAmount) return null;
+
+        const receiver = toSchemaFeeReceiver(r.receiver);
         return { receiver, amount: feeAmount };
-      });
+      })
+      .filter((r) => r !== null);
 
     const args: ArgsXykCreatePool = {
       assets: [tokenToAssetId(token1), tokenToAssetId(token2)],
-      fees: { V2: { receivers: receivers.map(receiver => ({
-        receiver: receiver.receiver,
-        amount: receiver.amount,
-      })) } },
+      fees: {
+        V2: {
+          receivers: receivers.map((receiver) => ({
+            receiver: receiver.receiver,
+            amount: receiver.amount,
+          })),
+        },
+      },
       pool_type: isPublic ? { PublicV2: {} } : { PrivateV2: {} },
     };
 
@@ -125,12 +133,17 @@
   let previouslyFocusedElement: HTMLElement | null = null;
 
   let feeReceivers = $state<FeeReceiverDraft[]>([
-    { receiver: "Pool", percentage: "0.1" },
+    {
+      receiver: "Pool",
+      amount: { kind: "fixed", percentage: "0.1" },
+    },
   ]);
   let totalFeePercentage = $state(0.1);
   let isFeeValid = $state(true);
   let hasDuplicateReceivers = $state(false);
   let areAllReceiversValid = $state(true);
+  let hasScheduledDurationError = $state(false);
+  let hasScheduledFeeDirectionError = $state(false);
 
   let showToken1Selector = $state(false);
   let showToken2Selector = $state(false);
@@ -152,7 +165,9 @@
     if (!isOpen) return;
 
     previouslyFocusedElement =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
 
     queueMicrotask(() => {
       if (modalRef) focusFirstElement(modalRef);
@@ -170,6 +185,8 @@
     isFeeValid = state.isFeeValid;
     hasDuplicateReceivers = state.hasDuplicateReceivers;
     areAllReceiversValid = state.areAllReceiversValid;
+    hasScheduledDurationError = state.hasScheduledDurationError;
+    hasScheduledFeeDirectionError = state.hasScheduledFeeDirectionError;
   }
 
   const isFormValid = $derived(
@@ -350,11 +367,18 @@
       token1 = null;
       token2 = null;
       isPrivate = false;
-      feeReceivers = [{ receiver: "Pool", percentage: "0.1" }];
+      feeReceivers = [
+        {
+          receiver: "Pool",
+          amount: { kind: "fixed", percentage: "0.1" },
+        },
+      ];
       totalFeePercentage = 0.1;
       isFeeValid = true;
       hasDuplicateReceivers = false;
       areAllReceiversValid = true;
+      hasScheduledDurationError = false;
+      hasScheduledFeeDirectionError = false;
       createError = null;
     }
   });
@@ -490,7 +514,7 @@
         </div>
       </div>
 
-      {#if !isFeeValid || hasDuplicateReceivers || (token1 && token2 && token1.account_id === token2.account_id)}
+      {#if !isFeeValid || hasDuplicateReceivers || hasScheduledDurationError || hasScheduledFeeDirectionError || (token1 && token2 && token1.account_id === token2.account_id)}
         <div
           id="create-pool-validation-errors"
           class="form-errors"
@@ -507,6 +531,18 @@
             <div class="form-error">
               <CircleAlert size={14} />
               <span>Duplicate fee receivers are not allowed</span>
+            </div>
+          {/if}
+          {#if hasScheduledDurationError}
+            <div class="form-error">
+              <CircleAlert size={14} />
+              <span>Duration must be set</span>
+            </div>
+          {/if}
+          {#if hasScheduledFeeDirectionError}
+            <div class="form-error">
+              <CircleAlert size={14} />
+              <span>End fee must be lower than start fee</span>
             </div>
           {/if}
           {#if token1 && token2 && token1.account_id === token2.account_id}
@@ -541,6 +577,8 @@
           onclick={handleCreate}
           aria-describedby={!isFeeValid ||
           hasDuplicateReceivers ||
+          hasScheduledDurationError ||
+          hasScheduledFeeDirectionError ||
           (token1 && token2 && token1.account_id === token2.account_id)
             ? "create-pool-validation-errors"
             : createError
@@ -664,7 +702,7 @@
     background: rgba(239, 68, 68, 0.08);
     border: 1px solid rgba(239, 68, 68, 0.2);
     border-radius: 0.625rem;
-    margin: 0 1.5rem;
+    margin: 0.625rem 1.5rem 0;
     margin-bottom: 1.5rem;
   }
 

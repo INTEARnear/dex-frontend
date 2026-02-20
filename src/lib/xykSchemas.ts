@@ -55,13 +55,6 @@ const XykScheduledFeeCurveSchema: Schema = {
 
 const XykFeeFractionSchema: Schema = "u32";
 
-const XykFeePointSchema: Schema = {
-  struct: {
-    timestampNanos: "u64",
-    feeFraction: XykFeeFractionSchema,
-  },
-};
-
 const XykFeeAmountSchema: Schema = {
   enum: [
     { struct: { Fixed: XykFeeFractionSchema } },
@@ -69,8 +62,18 @@ const XykFeeAmountSchema: Schema = {
       struct: {
         Scheduled: {
           struct: {
-            start: XykFeePointSchema,
-            end: XykFeePointSchema,
+            start: {
+              struct: {
+                timestampNanos: "u64",
+                feeFraction: XykFeeFractionSchema,
+              },
+            },
+            end: {
+              struct: {
+                timestampNanos: "u64",
+                feeFraction: XykFeeFractionSchema,
+              },
+            },
             curve: XykScheduledFeeCurveSchema,
           },
         },
@@ -179,10 +182,21 @@ export type SchemaXykCurrentFees = {
   }[];
 };
 
+export type SchemaXykFeeAmount =
+  | { Fixed: number }
+  | {
+      Scheduled: {
+        start: { timestampNanos: number; feeFraction: number };
+        end: { timestampNanos: number; feeFraction: number };
+        curve: { Linear: {} };
+      };
+    }
+  | { Dynamic: { min: number; max: number } };
+
 export type SchemaXykFeeConfigurationV2 = {
   receivers: {
     receiver: SchemaXykFeeReceiver;
-    amount: XykFeeAmount;
+    amount: SchemaXykFeeAmount;
   }[];
 };
 
