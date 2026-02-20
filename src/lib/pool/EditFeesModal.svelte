@@ -11,17 +11,31 @@
     type FeeReceiverDraft,
     type FeeReceiversEditorState,
   } from "./FeeReceiversEditor.svelte";
-  import { XykEditFeesArgsSchema, serializeToBase64 } from "../xykSchemas";
+  import {
+    XykEditFeesArgsSchema,
+    XykUpgradePoolArgsSchema,
+    serializeToBase64,
+    type ArgsXykEditFees,
+    type ArgsXykUpgradePool,
+  } from "../xykSchemas";
 
   interface Props {
     isOpen: boolean;
     poolId: number;
     configuration: XykFeeConfiguration;
+    needsUpgrade: boolean;
     onClose: () => void;
     onSuccess: () => void;
   }
 
-  let { isOpen, poolId, configuration, onClose, onSuccess }: Props = $props();
+  let {
+    isOpen,
+    poolId,
+    configuration,
+    needsUpgrade,
+    onClose,
+    onSuccess,
+  }: Props = $props();
 
   const accountId = $derived($walletStore.accountId);
   const initialReceivers = $derived.by<FeeReceiverDraft[]>(() => {
@@ -130,20 +144,61 @@
     isSubmitting = true;
     submitError = null;
     try {
-      const args = serializeToBase64(XykEditFeesArgsSchema, {
+      const argsObject: ArgsXykEditFees = {
         pool_id: poolId,
         fees: {
-          receivers: feeReceivers
-            .filter((item) => parseFloat(item.percentage) > 0)
-            .map((item) => ({
-              receiver:
-                item.receiver === "Pool"
-                  ? { Pool: {} }
-                  : { User: item.receiver.Account },
-              fee_fraction: Math.round(parseFloat(item.percentage) * 10000),
-            })),
+          V2: {
+            receivers: feeReceivers
+              .filter((item) => parseFloat(item.percentage) > 0)
+              .map((item) => ({
+                receiver:
+                  item.receiver === "Pool"
+                    ? { Pool: {} }
+                    : { Account: item.receiver.Account },
+                amount: {
+                  Fixed: Math.round(parseFloat(item.percentage) * 10000),
+                },
+              })),
+          },
         },
-      });
+      };
+      const args = serializeToBase64(XykEditFeesArgsSchema, argsObject);
+
+      let deposit = BigInt("1" + "0".repeat(24 - 1)); // 0.1 NEAR
+      const operations = [
+        {
+          DexCall: {
+            dex_id: DEX_ID,
+            method: "edit_fees",
+            args,
+            attached_assets: {
+              near: deposit.toString(),
+            } as Record<string, string>,
+          },
+        },
+      ];
+
+      if (needsUpgrade) {
+        const upgradeArgsObject: ArgsXykUpgradePool = {
+          pool_id: poolId,
+        };
+        const upgradeArgs = serializeToBase64(
+          XykUpgradePoolArgsSchema,
+          upgradeArgsObject,
+        );
+        const upgradeDeposit = BigInt("3" + "0".repeat(24 - 3)); // 0.003 NEAR
+        operations.unshift({
+          DexCall: {
+            dex_id: DEX_ID,
+            method: "upgrade_pool",
+            args: upgradeArgs,
+            attached_assets: {
+              near: upgradeDeposit.toString(),
+            } as Record<string, string>,
+          },
+        });
+        deposit += upgradeDeposit;
+      }
 
       const transactions = [
         {
@@ -154,21 +209,10 @@
               params: {
                 methodName: "execute_operations",
                 args: {
-                  operations: [
-                    {
-                      DexCall: {
-                        dex_id: DEX_ID,
-                        method: "edit_fees",
-                        args,
-                        attached_assets: {
-                          near: "1" + "0".repeat(24 - 1), // 0.1 NEAR
-                        } as Record<string, string>,
-                      },
-                    },
-                  ],
+                  operations: operations,
                 },
                 gas: "120" + "0".repeat(12),
-                deposit: "1" + "0".repeat(24 - 1), // 0.1 NEAR
+                deposit: deposit.toString(),
               },
             },
           ],

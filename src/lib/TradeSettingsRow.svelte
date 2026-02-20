@@ -8,7 +8,7 @@
     dialogLabel: string;
     closeBackdropLabel: string;
     bottomMargin?: string;
-    presets?: Snippet;
+    presets: Snippet;
     children?: Snippet;
   }
 
@@ -62,7 +62,7 @@
 </script>
 
 <div class="settings-row" style={`--settings-row-margin-bottom: ${bottomMargin};`}>
-  {@render presets?.()}
+  {@render presets()}
   <div class="settings-anchor">
     <button
       class="settings-btn"

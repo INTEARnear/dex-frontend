@@ -266,10 +266,9 @@
       const balanceRaw = getToken0EffectiveBalanceRaw();
       if (balanceRaw === null) return null;
       const scaled = (balanceRaw * BigInt(preset.value)) / 100n;
-      const halfScaled = scaled / 2n;
-      if (halfScaled <= 0n) return null;
+      if (scaled <= 0n) return null;
       return rawAmountToHumanReadable(
-        halfScaled.toString(),
+        scaled.toString(),
         token0.metadata.decimals,
       );
     }

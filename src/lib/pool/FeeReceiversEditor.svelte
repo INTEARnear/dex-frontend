@@ -26,7 +26,7 @@
   interface Props {
     accountId: string | null;
     initialReceivers?: FeeReceiverDraft[];
-    onChange?: (state: FeeReceiversEditorState) => void;
+    onChange: (state: FeeReceiversEditorState) => void;
   }
 
   let {
@@ -68,6 +68,12 @@
     if (hasInitialized) return;
     feeReceivers = initialReceivers.map(toFormItem);
     hasInitialized = true;
+
+    feeReceivers.forEach((item, index) => {
+      if (isAccountReceiver(item.receiver) && item.receiver.Account.trim()) {
+        validateAccount(index);
+      }
+    });
   });
 
   function addFeeReceiver() {
@@ -114,7 +120,11 @@
 
   async function validateAccount(index: number) {
     const item = feeReceivers[index];
-    if (!item || !isAccountReceiver(item.receiver) || !item.receiver.Account.trim()) {
+    if (
+      !item ||
+      !isAccountReceiver(item.receiver) ||
+      !item.receiver.Account.trim()
+    ) {
       if (item) {
         feeReceivers[index] = {
           ...item,
@@ -128,6 +138,18 @@
     }
 
     const accountValue = item.receiver.Account.trim();
+    
+    if (accountId && accountValue === accountId) {
+      feeReceivers[index] = {
+        ...item,
+        isValid: true,
+        isChecking: false,
+        warning: null,
+      };
+      feeReceivers = [...feeReceivers];
+      return;
+    }
+    
     feeReceivers[index] = { ...item, isChecking: true, warning: null };
     feeReceivers = [...feeReceivers];
 
@@ -229,7 +251,7 @@
   );
 
   $effect(() => {
-    onChange?.({
+    onChange({
       receivers: feeReceivers.map((item) => ({
         receiver: item.receiver,
         percentage: item.percentage,
@@ -257,7 +279,10 @@
               class="type-selector"
               class:is-pool={item.receiver === "Pool"}
               onclick={() =>
-                setReceiverType(index, item.receiver === "Pool" ? "account" : "pool")}
+                setReceiverType(
+                  index,
+                  item.receiver === "Pool" ? "account" : "pool",
+                )}
             >
               {#if item.receiver === "Pool"}
                 <CirclePlus size={16} />
@@ -276,9 +301,12 @@
                   type="text"
                   placeholder="you.near"
                   aria-label={`Fee receiver ${index + 1} account`}
-                  aria-describedby={item.warning ? `receiver-warning-${index}` : undefined}
+                  aria-describedby={item.warning
+                    ? `receiver-warning-${index}`
+                    : undefined}
                   value={item.receiver.Account}
-                  oninput={(e) => updateReceiverValue(index, e.currentTarget.value)}
+                  oninput={(e) =>
+                    updateReceiverValue(index, e.currentTarget.value)}
                   class:valid={item.isValid === true && !item.warning}
                   class:invalid={item.isValid === false}
                   class:warning={item.isValid === true && item.warning}
@@ -304,7 +332,8 @@
               placeholder="0"
               aria-label={`Fee receiver ${index + 1} percentage`}
               value={item.percentage}
-              oninput={(e) => updateReceiverPercentage(index, e.currentTarget.value)}
+              oninput={(e) =>
+                updateReceiverPercentage(index, e.currentTarget.value)}
               min="0"
               max="100"
               step="0.0001"
@@ -322,7 +351,9 @@
         </div>
 
         {#if isAccountReceiver(item.receiver) && item.warning}
-          <p id={`receiver-warning-${index}`} class="warning-text">{item.warning}</p>
+          <p id={`receiver-warning-${index}`} class="warning-text">
+            {item.warning}
+          </p>
         {/if}
       </div>
     {/each}

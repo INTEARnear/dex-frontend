@@ -57,6 +57,7 @@
   type LiquidityTab = "add" | "remove";
 
   let poolData = $state<NormalizedPool | null>(null);
+  let needsUpgrade = $state(false);
   let volume24hUsd = $state(0);
   let volume7dUsd = $state(0);
   let userSharesRaw = $state<string | null>(null);
@@ -125,6 +126,7 @@
       isWaitingForPool = false;
       error = null;
       poolData = normalized;
+      needsUpgrade = data.pool_needs_upgrade;
       volume24hUsd = data.volume_24h_usd;
       volume7dUsd = data.volume_7d_usd;
       const openSum = (data.open ?? []).reduce(
@@ -144,6 +146,7 @@
       console.error("Pool fetch failed:", fetchError);
       if (!background) {
         poolData = null;
+        needsUpgrade = false;
         volume24hUsd = 0;
         volume7dUsd = 0;
         userSharesRaw = null;
@@ -464,6 +467,7 @@
       isOpen={showEditFeesModal}
       poolId={parsedPoolId}
       configuration={poolData.fee_configuration}
+      {needsUpgrade}
       onClose={() => {
         showEditFeesModal = false;
       }}
