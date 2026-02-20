@@ -12,18 +12,10 @@ export const AssetIdSchema: Schema = {
 };
 
 export type AssetId =
-  | {
-      Near: {};
-    }
-  | {
-      Nep141: string;
-    }
-  | {
-      Nep245: [string, string];
-    }
-  | {
-      Nep171: [string, string];
-    };
+  | { Near: {} }
+  | { Nep141: string }
+  | { Nep245: [string, string] }
+  | { Nep171: [string, string] };
 
 export function assetId(
   type: "Near" | "Nep141" | "Nep245" | "Nep171",
@@ -34,41 +26,154 @@ export function assetId(
     case "Near":
       return { Near: {} };
     case "Nep141":
-      if (!contractId) {
-        throw new Error("Contract ID is required for Nep141");
-      }
+      if (!contractId) throw new Error("Contract ID is required for Nep141");
       return { Nep141: contractId };
     case "Nep245":
-      if (!contractId || !tokenId) {
+      if (!contractId || !tokenId)
         throw new Error("Contract ID and token ID are required for Nep245");
-      }
       return { Nep245: [contractId, tokenId] };
     case "Nep171":
-      if (!contractId || !tokenId) {
+      if (!contractId || !tokenId)
         throw new Error("Contract ID and token ID are required for Nep171");
-      }
       return { Nep171: [contractId, tokenId] };
   }
 }
 
+export type XykFeeReceiver = { Account: string } | { Pool: {} };
+
 export const XykFeeReceiverSchema: Schema = {
   enum: [
-    { struct: { User: AccountIdSchema } },
+    { struct: { Account: AccountIdSchema } },
     { struct: { Pool: { struct: {} } } },
   ],
 };
 
-const FeeReceiverEntrySchema: Schema = {
+const XykScheduledFeeCurveSchema: Schema = {
+  enum: [{ struct: { Linear: { struct: {} } } }],
+};
+
+export type XykFeeAmount =
+  | { Fixed: number }
+  | {
+      Scheduled: {
+        start: [number, number];
+        end: [number, number];
+        curve: { Linear: {} };
+      };
+    }
+  | { Dynamic: { min: number; max: number } };
+
+const XykFeeFractionSchema: Schema = "u32";
+
+const XykFeePointSchema: Schema = {
   struct: {
-    receiver: XykFeeReceiverSchema,
-    fee_fraction: "u32",
+    timestampNanos: "u64",
+    feeFraction: XykFeeFractionSchema,
   },
 };
 
-export const XykFeeConfigurationSchema: Schema = {
+const XykFeeAmountSchema: Schema = {
+  enum: [
+    { struct: { Fixed: XykFeeFractionSchema } },
+    {
+      struct: {
+        Scheduled: {
+          struct: {
+            start: XykFeePointSchema,
+            end: XykFeePointSchema,
+            curve: XykScheduledFeeCurveSchema,
+          },
+        },
+      },
+    },
+    {
+      struct: {
+        Dynamic: {
+          struct: { min: XykFeeFractionSchema, max: XykFeeFractionSchema },
+        },
+      },
+    },
+  ],
+};
+
+const XykCurrentFeesSchema: Schema = {
   struct: {
-    receivers: { array: { type: FeeReceiverEntrySchema } },
+    receivers: {
+      array: {
+        type: {
+          struct: {
+            receiver: XykFeeReceiverSchema,
+            amount: XykFeeFractionSchema,
+          },
+        },
+      },
+    },
   },
+};
+
+const XykV1FeeConfigurationSchema: Schema = {
+  struct: {
+    receivers: {
+      array: {
+        type: {
+          struct: {
+            receiver: XykFeeReceiverSchema,
+            amount: XykFeeAmountSchema,
+          },
+        },
+      },
+    },
+  },
+};
+
+export type XykFeeConfiguration =
+  | {
+      V1: {
+        receivers: {
+          receiver: XykFeeReceiver;
+          amount: XykFeeAmount;
+        }[];
+      };
+    }
+  | {
+      V2: {
+        receivers: {
+          receiver: XykFeeReceiver;
+          amount: XykFeeAmount;
+        }[];
+      };
+    };
+
+export const XykFeeConfigurationSchema: Schema = {
+  enum: [
+    { struct: { V1: XykCurrentFeesSchema } },
+    { struct: { V2: XykV1FeeConfigurationSchema } },
+  ],
+};
+
+export type XykPoolType =
+  | { PrivateLatest: {} }
+  | { PublicLatest: {} }
+  | { LaunchLatest: { phantom_liquidity_near: bigint } }
+  | { LaunchV1: { phantom_liquidity_near: bigint } }
+  | { PrivateV1: {} }
+  | { PublicV1: {} }
+  | { PrivateV2: {} }
+  | { PublicV2: {} };
+
+const XykPoolTypeSchema: Schema = {
+  enum: [
+    { struct: { PrivateLatest: { struct: {} } } },
+    { struct: { PublicLatest: { struct: {} } } },
+    {
+      struct: { LaunchLatest: { struct: { phantom_liquidity_near: "u128" } } },
+    },
+    { struct: { LaunchV1: { struct: { phantom_liquidity_near: "u128" } } } },
+    { struct: { PrivateV1: { struct: {} } } },
+    { struct: { PublicV1: { struct: {} } } },
+    { struct: { PrivateV2: { struct: {} } } },
+    { struct: { PublicV2: { struct: {} } } },
+  ],
 };
 
 const AssetPairSchema: Schema = { array: { type: AssetIdSchema, len: 2 } };
@@ -77,36 +182,14 @@ export const XykCreatePoolArgsSchema: Schema = {
   struct: {
     assets: AssetPairSchema,
     fees: XykFeeConfigurationSchema,
-    is_public: "bool",
+    pool_type: XykPoolTypeSchema,
   },
 };
 
 export interface XykCreatePoolArgs {
-  assets: [Record<string, unknown>, Record<string, unknown>];
-  fees: {
-    receivers: Array<{
-      receiver: { User: string } | { Pool: {} };
-      fee_fraction: number;
-    }>;
-  };
-  is_public: boolean;
-}
-
-export const XykEditFeesArgsSchema: Schema = {
-  struct: {
-    pool_id: "u32",
-    fees: XykFeeConfigurationSchema,
-  },
-};
-
-export interface XykEditFeesArgs {
-  pool_id: number;
-  fees: {
-    receivers: Array<{
-      receiver: { User: string } | { Pool: {} };
-      fee_fraction: number;
-    }>;
-  };
+  assets: [AssetId, AssetId];
+  fees: XykFeeConfiguration;
+  pool_type: XykPoolType;
 }
 
 export const XykGetPendingFeesArgsSchema: Schema = {
@@ -118,7 +201,7 @@ export const XykGetPendingFeesArgsSchema: Schema = {
 
 export interface XykGetPendingFeesArgs {
   account_id: string;
-  asset_ids: Array<Record<string, unknown>>;
+  asset_ids: AssetId[];
 }
 
 export const XykWithdrawFeesArgsSchema: Schema = {
@@ -128,12 +211,24 @@ export const XykWithdrawFeesArgsSchema: Schema = {
 };
 
 export interface XykWithdrawFeesArgs {
-  assets: Array<Record<string, unknown>>;
+  assets: AssetId[];
+}
+
+const XykPoolIdSchema: Schema = "u32";
+
+export const XykUpgradePoolArgsSchema: Schema = {
+  struct: {
+    pool_id: XykPoolIdSchema,
+  },
+};
+
+export interface XykUpgradePoolArgs {
+  pool_id: number;
 }
 
 export const XykSwapArgsSchema: Schema = {
   struct: {
-    pool_id: "u32",
+    pool_id: XykPoolIdSchema,
   },
 };
 
@@ -141,23 +236,21 @@ export interface XykSwapArgs {
   pool_id: number;
 }
 
-export const XykRegisterLiquidityArgsSchema: Schema = {
+export const XykPoolNeedsUpgradeArgsSchema: Schema = {
   struct: {
-    pool_id: "u32",
+    pool_id: XykPoolIdSchema,
   },
 };
 
-export interface XykRegisterLiquidityArgs {
+export interface XykPoolNeedsUpgradeArgs {
   pool_id: number;
 }
 
-const OptionU128Schema: Schema = {
-  option: "u128",
-};
+const OptionU128Schema: Schema = { option: "u128" };
 
 export const XykAddLiquidityArgsSchema: Schema = {
   struct: {
-    pool_id: "u32",
+    pool_id: XykPoolIdSchema,
     min_shares_received: OptionU128Schema,
   },
 };
@@ -167,15 +260,14 @@ export interface XykAddLiquidityArgs {
   min_shares_received: bigint | null;
 }
 
-const U128PairSchema: Schema = { array: { type: "u128", len: 2 } };
-
-const OptionU128PairSchema: Schema = {
-  option: U128PairSchema,
+const U128PairSchema: Schema = {
+  array: { type: "u128", len: 2 },
 };
+const OptionU128PairSchema: Schema = { option: U128PairSchema };
 
 export const XykRemoveLiquidityArgsSchema: Schema = {
   struct: {
-    pool_id: "u32",
+    pool_id: XykPoolIdSchema,
     shares_to_remove: OptionU128Schema,
     min_assets_received: OptionU128PairSchema,
   },
@@ -185,6 +277,28 @@ export interface XykRemoveLiquidityArgs {
   pool_id: number;
   shares_to_remove: bigint | null;
   min_assets_received: [bigint, bigint] | null;
+}
+
+export const XykEditFeesArgsSchema: Schema = {
+  struct: {
+    pool_id: XykPoolIdSchema,
+    fees: XykFeeConfigurationSchema,
+  },
+};
+
+export interface XykEditFeesArgs {
+  pool_id: number;
+  fees: XykFeeConfiguration;
+}
+
+export const XykRegisterLiquidityArgsSchema: Schema = {
+  struct: {
+    pool_id: XykPoolIdSchema,
+  },
+};
+
+export interface XykRegisterLiquidityArgs {
+  pool_id: number;
 }
 
 export function serializeToBase64(schema: Schema, data: unknown): string {

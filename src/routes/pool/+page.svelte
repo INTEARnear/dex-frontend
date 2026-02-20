@@ -74,6 +74,7 @@
     open?: OpenPosition[];
     closed?: ClosedPosition[];
     untracked?: UntrackedPosition;
+    pool_needs_upgrade: boolean;
   }
 
   let activePoolRequestId = 0;

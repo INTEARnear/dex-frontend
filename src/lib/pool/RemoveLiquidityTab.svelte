@@ -173,7 +173,8 @@
     const poolBalance1 = BigInt(poolData.assets[1].balance);
     if (totalPoolShares <= 0n && !isPrivate) return null;
 
-    const sharesToRemove = ((isPrivate ? (10n ** 18n) : userShares) * BigInt(removePercent)) / 100n;
+    const sharesToRemove =
+      ((isPrivate ? 10n ** 18n : userShares) * BigInt(removePercent)) / 100n;
     if (sharesToRemove <= 0n) return null;
 
     const amount0Raw =
@@ -232,8 +233,7 @@
       return false;
     if (removePercent <= 0 || removePercent > 100) return false;
     if (isSubmitting) return false;
-    if (!removePreview || removePreview.sharesToRemove <= 0n)
-      return false;
+    if (!removePreview || removePreview.sharesToRemove <= 0n) return false;
     return true;
   });
 
@@ -451,12 +451,14 @@
     </div>
 
     <div class="estimation-box">
-      <div class="estimation-row">
-        <span class="estimation-label">Shares to remove</span>
-        <span class="estimation-value"
-          >{formatShares(removePreview.sharesToRemove)}</span
-        >
-      </div>
+      {#if !poolData?.ownerId}
+        <div class="estimation-row">
+          <span class="estimation-label">Shares to remove</span>
+          <span class="estimation-value"
+            >{formatShares(removePreview.sharesToRemove)}</span
+          >
+        </div>
+      {/if}
       <div class="estimation-row">
         <span class="estimation-label"
           >Min {token0?.metadata.symbol} received</span

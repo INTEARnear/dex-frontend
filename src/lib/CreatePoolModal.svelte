@@ -16,7 +16,10 @@
     XykCreatePoolArgsSchema,
     assetId,
     serializeToBase64,
+    type AssetId,
     type XykCreatePoolArgs,
+    type XykFeeAmount,
+    type XykFeeReceiver,
   } from "./xykSchemas";
   import { NEP297_EVENT_JSON_PREFIX, parseNep297FromLog } from "./nep297";
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
@@ -25,7 +28,7 @@
   const DEX_CONTRACT_ID = "dex.intear.near";
   const DEX_ID = "slimedragon.near/xyk";
 
-  function tokenToAssetId(token: Token): Record<string, unknown> {
+  function tokenToAssetId(token: Token): AssetId {
     if (token.account_id === "near") {
       return assetId("Near");
     }
@@ -41,16 +44,16 @@
     const receivers = feeReceivers
       .filter((r) => parseFloat(r.percentage) > 0)
       .map((r) => {
-        const feeFraction = Math.round(parseFloat(r.percentage) * 10000);
-        const receiver =
-          r.receiver === "Pool" ? { Pool: {} } : { User: r.receiver.Account };
-        return { receiver, fee_fraction: feeFraction };
+        const feeAmount: XykFeeAmount = { Fixed: Math.round(parseFloat(r.percentage) * 10000) };
+        const receiver: XykFeeReceiver =
+          r.receiver === "Pool" ? { Pool: {} } : { Account: r.receiver.Account };
+        return { receiver, amount: feeAmount };
       });
 
     const args: XykCreatePoolArgs = {
       assets: [tokenToAssetId(token1), tokenToAssetId(token2)],
-      fees: { receivers },
-      is_public: isPublic,
+      fees: { V2: { receivers } },
+      pool_type: isPublic ? { PublicV2: {} } : { PrivateV2: {} },
     };
 
     return serializeToBase64(XykCreatePoolArgsSchema, args);
