@@ -202,13 +202,11 @@ export type SchemaXykFeeConfigurationV2 = {
 
 export const XykGetPendingFeesArgsSchema: Schema = {
   struct: {
-    account_id: AccountIdSchema,
     asset_ids: { array: { type: AssetIdSchema } },
   },
 };
 
 export interface ArgsXykGetPendingFees {
-  account_id: string;
   asset_ids: SchemaAssetId[];
 }
 

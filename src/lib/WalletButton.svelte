@@ -4,7 +4,12 @@
   import { createChatwootModalVisibilityController } from "./chatwootBubbleVisibility";
   import { walletStore } from "./walletStore";
   import { tokenHubStore } from "./tokenHubStore";
-  import { assetIdToTokenId } from "./pool/shared";
+  import {
+    assetIdToTokenId,
+    assertOutcomesSucceeded,
+    DEX_CONTRACT_ID,
+    DEX_ID,
+  } from "./pool/shared";
   import {
     DEX_BACKEND_API,
     formatAmount,
@@ -12,6 +17,14 @@
   } from "./utils";
   import type { TokenInfo } from "./types";
   import Spinner from "./Spinner.svelte";
+  import ErrorModal from "./ErrorModal.svelte";
+  import {
+    assetId,
+    serializeToBase64,
+    type ArgsXykGetPendingFees,
+    XykGetPendingFeesArgsSchema,
+  } from "./xykSchemas";
+  import { extractIncomingTransfersFromOutcomes } from "./transferEvents";
 
   let isConnecting = $state(false);
   let balancesFetchedForAccount = $state<string | null>(null);
@@ -23,6 +36,9 @@
     balances: Record<string, string>;
     pending_fees: Record<string, string>;
   } | null>(null);
+  let withdrawalError = $state<string | null>(null);
+  let showWithdrawalErrorModal = $state(false);
+  let activeWithdrawalKeys = $state<Set<string>>(new Set());
 
   const chatwootModalVisibility = createChatwootModalVisibilityController();
 
@@ -33,6 +49,202 @@
     token: TokenInfo | null;
     usdValue: number;
   };
+
+  type WalletDataSource = "balances" | "pending_fees";
+
+  function getWithdrawalKey(source: WalletDataSource, assetId: string): string {
+    return `${source}:${assetId}`;
+  }
+
+  function isWithdrawalPending(source: WalletDataSource, assetId: string): boolean {
+    return activeWithdrawalKeys.has(getWithdrawalKey(source, assetId));
+  }
+
+  function setWithdrawalPending(
+    source: WalletDataSource,
+    assetId: string,
+    pending: boolean,
+  ): void {
+    const key = getWithdrawalKey(source, assetId);
+    const next = new Set(activeWithdrawalKeys);
+    if (pending) {
+      next.add(key);
+    } else {
+      next.delete(key);
+    }
+    activeWithdrawalKeys = next;
+  }
+
+  function toSchemaAssetId(rawAssetId: string) {
+    if (rawAssetId === "near") {
+      return assetId("Near");
+    }
+    if (rawAssetId.startsWith("nep141:")) {
+      return assetId("Nep141", rawAssetId.slice("nep141:".length));
+    }
+    throw new Error(`Unsupported asset ID: ${rawAssetId}`);
+  }
+
+  function removeRowFromWalletData(
+    source: WalletDataSource,
+    assetId: string,
+  ): void {
+    if (!walletData) return;
+
+    if (source === "balances") {
+      const rest = { ...walletData.balances };
+      delete rest[assetId];
+      walletData = {
+        ...walletData,
+        balances: rest,
+      };
+      return;
+    }
+
+    if (source === "pending_fees") {
+      const rest = { ...walletData.pending_fees };
+      delete rest[assetId];
+      walletData = {
+        ...walletData,
+        pending_fees: rest,
+      };
+      return;
+    }
+
+    throw new Error(`Unsupported source: ${source}`);
+  }
+
+  function hasIncomingTransferForAsset(
+    outcomes: unknown,
+    accountId: string,
+    assetId: string,
+  ): boolean {
+    const expectedTokenId = assetIdToTokenId(assetId);
+    if (!expectedTokenId) return false;
+
+    const incomingTransfers = extractIncomingTransfersFromOutcomes(
+      outcomes,
+      accountId,
+    );
+    const acceptableTokenIds =
+      expectedTokenId === "near"
+        ? new Set(["near", "wrap.near"])
+        : new Set([expectedTokenId]);
+
+    return incomingTransfers.some((transfer) =>
+      acceptableTokenIds.has(transfer.tokenId),
+    );
+  }
+
+  async function handleWithdrawFromSource(
+    source: WalletDataSource,
+    row: BalanceRow,
+  ): Promise<void> {
+    const wallet = $walletStore.wallet;
+    const accountId = $walletStore.accountId;
+    if (!wallet || !accountId) {
+      return;
+    }
+    if (isWithdrawalPending(source, row.assetId)) {
+      return;
+    }
+
+    setWithdrawalPending(source, row.assetId, true);
+    try {
+      let outcomes: unknown;
+
+      if (source === "balances") {
+        const transactions = [
+          {
+            receiverId: DEX_CONTRACT_ID,
+            actions: [
+              {
+                type: "FunctionCall" as const,
+                params: {
+                  methodName: "withdraw",
+                  args: {
+                    asset_id: row.assetId,
+                    amount: {
+                      Full: {
+                        at_least: null,
+                      },
+                    },
+                  },
+                  gas: "120" + "0".repeat(12),
+                  deposit: "1",
+                },
+              },
+            ],
+          },
+        ];
+        outcomes = await wallet.signAndSendTransactions({ transactions });
+      } else {
+        const withdrawFeesArgs: ArgsXykGetPendingFees = {
+          asset_ids: [toSchemaAssetId(row.assetId)],
+        };
+        const operations = [
+          {
+            DexCall: {
+              dex_id: DEX_ID,
+              method: "withdraw_fees",
+              args: serializeToBase64(
+                XykGetPendingFeesArgsSchema,
+                withdrawFeesArgs,
+              ),
+              attached_assets: {} as Record<string, string>,
+            },
+          },
+        ];
+
+        const transactions = [
+          {
+            receiverId: DEX_CONTRACT_ID,
+            actions: [
+              {
+                type: "FunctionCall" as const,
+                params: {
+                  methodName: "execute_operations",
+                  args: { operations },
+                  gas: "120" + "0".repeat(12),
+                  deposit: "1",
+                },
+              },
+            ],
+          },
+        ];
+        outcomes = await wallet.signAndSendTransactions({ transactions });
+      }
+
+      assertOutcomesSucceeded(outcomes);
+      if (!hasIncomingTransferForAsset(outcomes, accountId, row.assetId)) {
+        throw new Error(
+          `Transaction went through but no ${row.symbol} received, something went wrong. Please try again or contact support.`,
+        );
+      }
+
+      removeRowFromWalletData(source, row.assetId);
+      tokenHubStore.refreshBalances();
+    } catch (error) {
+      console.error("Withdrawal failed:", error);
+      withdrawalError =
+        error instanceof Error
+          ? error.message
+          : source === "balances"
+            ? "Failed to withdraw internal balance"
+            : "Failed to withdraw collected fees";
+      showWithdrawalErrorModal = true;
+    } finally {
+      setWithdrawalPending(source, row.assetId, false);
+    }
+  }
+
+  async function handleWithdrawInternalBalance(row: BalanceRow): Promise<void> {
+    await handleWithdrawFromSource("balances", row);
+  }
+
+  async function handleWithdrawCollectedFee(row: BalanceRow): Promise<void> {
+    await handleWithdrawFromSource("pending_fees", row);
+  }
 
   function buildRows(source: Record<string, string>): BalanceRow[] {
     const rows = Object.entries(source)
@@ -134,6 +346,12 @@
     if (balancesFetchedForAccount === accountId) return;
     balancesFetchedForAccount = accountId;
     fetchWalletInternalBalances();
+  });
+
+  $effect(() => {
+    if (!showWithdrawalErrorModal) return;
+    balancePopoverOpen = false;
+    isPopoverPinned = false;
   });
 
   $effect(() => {
@@ -312,6 +530,7 @@
                 {:else}
                   <ul>
                     {#each collectedFeeRows as row (row.assetId)}
+                      {@const isPending = isWithdrawalPending("pending_fees", row.assetId)}
                       <li>
                         <div class="token-row-main">
                           {#if row.token}
@@ -326,8 +545,19 @@
                           </div>
                         </div>
                         <div class="token-row-actions">
-                          <button type="button" class="withdraw-btn"
-                            >Withdraw</button
+                          <button
+                            type="button"
+                            class="withdraw-btn"
+                            disabled={isPending}
+                            onclick={() => handleWithdrawCollectedFee(row)}
+                          >
+                            {#if isPending}
+                              <Spinner size={12} tone="light" />
+                              Withdrawing...
+                            {:else}
+                              Withdraw
+                            {/if}
+                          </button
                           >
                         </div>
                       </li>
@@ -342,6 +572,7 @@
                 {:else}
                   <ul>
                     {#each internalBalanceRows as row (row.assetId)}
+                      {@const isPending = isWithdrawalPending("balances", row.assetId)}
                       <li>
                         <div class="token-row-main">
                           {#if row.token}
@@ -356,8 +587,19 @@
                           </div>
                         </div>
                         <div class="token-row-actions">
-                          <button type="button" class="withdraw-btn"
-                            >Withdraw</button
+                          <button
+                            type="button"
+                            class="withdraw-btn"
+                            disabled={isPending}
+                            onclick={() => handleWithdrawInternalBalance(row)}
+                          >
+                            {#if isPending}
+                              <Spinner size={12} tone="light" />
+                              Withdrawing...
+                            {:else}
+                              Withdraw
+                            {/if}
+                          </button
                           >
                         </div>
                       </li>
@@ -376,6 +618,7 @@
               {:else}
                 <ul>
                   {#each collectedFeeRows as row (row.assetId)}
+                    {@const isPending = isWithdrawalPending("pending_fees", row.assetId)}
                     <li>
                       <div class="token-row-main">
                         {#if row.token}
@@ -390,8 +633,19 @@
                         </div>
                       </div>
                       <div class="token-row-actions">
-                        <button type="button" class="withdraw-btn"
-                          >Withdraw</button
+                        <button
+                          type="button"
+                          class="withdraw-btn"
+                          disabled={isPending}
+                          onclick={() => handleWithdrawCollectedFee(row)}
+                        >
+                          {#if isPending}
+                            <Spinner size={12} tone="light" />
+                            Withdrawing...
+                          {:else}
+                            Withdraw
+                          {/if}
+                        </button
                         >
                       </div>
                     </li>
@@ -406,6 +660,7 @@
               {:else}
                 <ul>
                   {#each internalBalanceRows as row (row.assetId)}
+                    {@const isPending = isWithdrawalPending("balances", row.assetId)}
                     <li>
                       <div class="token-row-main">
                         {#if row.token}
@@ -420,8 +675,19 @@
                         </div>
                       </div>
                       <div class="token-row-actions">
-                        <button type="button" class="withdraw-btn"
-                          >Withdraw</button
+                        <button
+                          type="button"
+                          class="withdraw-btn"
+                          disabled={isPending}
+                          onclick={() => handleWithdrawInternalBalance(row)}
+                        >
+                          {#if isPending}
+                            <Spinner size={12} tone="light" />
+                            Withdrawing...
+                          {:else}
+                            Withdraw
+                          {/if}
+                        </button
                         >
                       </div>
                     </li>
@@ -459,6 +725,16 @@
     {/if}
   </button>
 {/if}
+
+<ErrorModal
+  isOpen={showWithdrawalErrorModal}
+  onClose={() => {
+    showWithdrawalErrorModal = false;
+    withdrawalError = null;
+  }}
+  message={withdrawalError ?? ""}
+  isTransaction
+/>
 
 <style>
   .wallet-connected {
@@ -617,6 +893,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 0.35rem;
     border: none;
     background: var(--accent-button-small);
     color: white;
@@ -630,6 +907,15 @@
 
   .withdraw-btn:hover {
     background: var(--accent-hover);
+  }
+
+  .withdraw-btn:disabled {
+    opacity: 0.75;
+    cursor: not-allowed;
+  }
+
+  .withdraw-btn:disabled:hover {
+    background: var(--accent-button-small);
   }
 
   .empty-text {
