@@ -11,7 +11,6 @@
     overlap?: boolean;
     ring?: boolean;
     ringWidth?: number;
-    preferMetadataIcon?: boolean;
     className?: string;
   }
 
@@ -23,14 +22,12 @@
     overlap = false,
     ring = false,
     ringWidth = 2,
-    preferMetadataIcon = false,
     className = "",
   }: Props = $props();
 
   const symbol = $derived(token?.metadata.symbol ?? "?");
   const iconSrc = $derived.by(() => {
     if (!token) return null;
-    if (preferMetadataIcon && token.metadata.icon) return token.metadata.icon;
     return getTokenIcon(token);
   });
   const placeholderLetter = $derived(symbol.charAt(0) || "?");

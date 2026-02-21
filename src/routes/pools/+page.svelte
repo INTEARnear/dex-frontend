@@ -27,12 +27,14 @@
     assets: [AssetWithBalance, AssetWithBalance];
     totalFeePercent: number;
     tokens: [TokenInfo | null, TokenInfo | null];
+    liquidityUsd: number;
     ownedLiquidityUsd?: number;
     volume7dUsd: number;
     apyPercent: number;
   }
 
   interface PoolWithOwnedLiquidity extends XykPool {
+    liquidity_usd: string;
     owned_liquidity_usd?: string;
     apy: number;
   }
@@ -109,24 +111,6 @@
     }, 1000);
   }
 
-  function calculateLiquidityUsd(
-    assets: [AssetWithBalance, AssetWithBalance],
-    tokens: [TokenInfo | null, TokenInfo | null],
-  ): number {
-    let total = 0;
-    for (let i = 0; i < assets.length; i++) {
-      const asset = assets[i];
-      const token = tokens[i];
-      if (token) {
-        const decimals = token.metadata.decimals;
-        const balance = parseFloat(asset.balance) / Math.pow(10, decimals);
-        const price = parseFloat(token.price_usd || "0");
-        total += balance * price;
-      }
-    }
-    return total;
-  }
-
   function toSortableNumber(value: number | undefined): number {
     return Number.isFinite(value) ? (value ?? 0) : 0;
   }
@@ -163,7 +147,7 @@
   const visiblePools = $derived.by(() => {
     const list = pools.map((pool) => ({
       pool,
-      liquidityUsd: calculateLiquidityUsd(pool.assets, pool.tokens),
+      liquidityUsd: pool.liquidityUsd,
     }));
 
     const filtered = hideSuspicious
@@ -246,6 +230,7 @@
             ? parseFloat(pool.owned_liquidity_usd)
             : undefined;
 
+        const liquidityUsd = parseFloat(pool.liquidity_usd);
         processedPools.push({
           id: pool.id,
           ownerId: normalizedPool.ownerId,
@@ -253,6 +238,7 @@
           assets: normalizedPool.assets,
           totalFeePercent,
           tokens: [null, null],
+          liquidityUsd: liquidityUsd,
           ownedLiquidityUsd: Number.isFinite(ownedUsd) ? ownedUsd : undefined,
           volume7dUsd: pool.volume_7d_usd,
           apyPercent: pool.apy * 100,
@@ -448,7 +434,6 @@
                     {token}
                     size={48}
                     showBadge
-                    preferMetadataIcon
                     overlap={i === 1}
                     ring={i !== 1}
                     ringWidth={3}

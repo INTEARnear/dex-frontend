@@ -25,6 +25,7 @@
 
   interface Props {
     poolData: NormalizedPool | null;
+    liquidityUsd: number;
     volume7dUsd: number;
     apyPercent: number;
     token0: Token | null;
@@ -38,6 +39,7 @@
 
   let {
     poolData,
+    liquidityUsd,
     volume7dUsd,
     apyPercent,
     token0,
@@ -48,19 +50,6 @@
     onEditFees,
     onLocked,
   }: Props = $props();
-
-  const liquidityUsd = $derived.by(() => {
-    if (!poolData || !token0 || !token1) return 0;
-    const amount0 =
-      parseFloat(poolData.assets[0].balance) /
-      Math.pow(10, token0.metadata.decimals);
-    const amount1 =
-      parseFloat(poolData.assets[1].balance) /
-      Math.pow(10, token1.metadata.decimals);
-    const price0 = parseFloat(token0.price_usd || "0");
-    const price1 = parseFloat(token1.price_usd || "0");
-    return amount0 * price0 + amount1 * price1;
-  });
 
   function shouldDisplayFeeReceiver(receiver: unknown): boolean {
     if (

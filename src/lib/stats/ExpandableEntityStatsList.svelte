@@ -84,14 +84,13 @@
                   <TokenIcon
                     {token}
                     size={30}
-                    preferMetadataIcon
                     overlap={tokenIndex === 1}
                     ring={tokenIndex !== 1}
                     ringWidth={2}
                   />
                 {/each}
               {:else}
-                <TokenIcon token={item.token} size={30} preferMetadataIcon ring ringWidth={2} />
+                <TokenIcon token={item.token} size={30} ring ringWidth={2} />
               {/if}
             </span>
             <span class="entity-labels">
