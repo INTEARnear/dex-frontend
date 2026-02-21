@@ -44,8 +44,8 @@
 
   interface TrackPositionsResponse {
     pool: XykPoolData;
-    volume_24h_usd: number;
     volume_7d_usd: number;
+    apy: number;
     open?: OpenPosition[];
     closed?: ClosedPosition[];
     untracked?: UntrackedPosition;
@@ -58,8 +58,8 @@
 
   let poolData = $state<NormalizedPool | null>(null);
   let needsUpgrade = $state(false);
-  let volume24hUsd = $state(0);
   let volume7dUsd = $state(0);
+  let apyPercent = $state(0);
   let userSharesRaw = $state<string | null>(null);
   let openPositions = $state<OpenPosition[]>([]);
   let closedPositions = $state<ClosedPosition[]>([]);
@@ -127,8 +127,8 @@
       error = null;
       poolData = normalized;
       needsUpgrade = data.pool_needs_upgrade;
-      volume24hUsd = data.volume_24h_usd;
       volume7dUsd = data.volume_7d_usd;
+      apyPercent = data.apy * 100;
       const openSum = (data.open ?? []).reduce(
         (acc, p) => acc + BigInt(p.shares),
         0n,
@@ -147,8 +147,8 @@
       if (!background) {
         poolData = null;
         needsUpgrade = false;
-        volume24hUsd = 0;
         volume7dUsd = 0;
+        apyPercent = 0;
         userSharesRaw = null;
         openPositions = [];
         closedPositions = [];
@@ -245,8 +245,8 @@
       isWaitingForPool = false;
       error = "Invalid pool ID";
       poolData = null;
-      volume24hUsd = 0;
       volume7dUsd = 0;
+      apyPercent = 0;
       userSharesRaw = null;
       openPositions = [];
       closedPositions = [];
@@ -292,8 +292,8 @@
       <div class="sidebar-column">
         <PoolInfo
           {poolData}
-          {volume24hUsd}
           {volume7dUsd}
+          {apyPercent}
           {token0}
           {token1}
           poolId={parsedPoolId}

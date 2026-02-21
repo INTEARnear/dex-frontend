@@ -16,10 +16,6 @@
     type XykPool,
     normalizePool,
   } from "../../lib/types";
-  import {
-    calculatePoolFeesApyPercent,
-    getPoolFeeFractionDecimal,
-  } from "../../lib/pool/shared";
   import CreatePoolModal from "../../lib/CreatePoolModal.svelte";
   import Spinner from "../../lib/Spinner.svelte";
   import TokenIcon from "../../lib/TokenIcon.svelte";
@@ -32,13 +28,13 @@
     totalFeePercent: number;
     tokens: [TokenInfo | null, TokenInfo | null];
     ownedLiquidityUsd?: number;
-    volume24hUsd: number;
     volume7dUsd: number;
-    poolFeeFractionDecimal: number;
+    apyPercent: number;
   }
 
   interface PoolWithOwnedLiquidity extends XykPool {
     owned_liquidity_usd?: string;
+    apy: number;
   }
 
   let pools = $state<PoolDisplay[]>([]);
@@ -151,10 +147,6 @@
               return true;
             })
             .reduce((acc, [, amount]) => acc + amount, 0) / 10000;
-        const poolFeeFractionDecimal = getPoolFeeFractionDecimal(
-          normalizedPool.fee_configuration,
-        );
-
         const ownedUsd =
           pool.owned_liquidity_usd !== undefined
             ? parseFloat(pool.owned_liquidity_usd)
@@ -168,9 +160,8 @@
           totalFeePercent,
           tokens: [null, null],
           ownedLiquidityUsd: Number.isFinite(ownedUsd) ? ownedUsd : undefined,
-          volume24hUsd: pool.volume_24h_usd,
           volume7dUsd: pool.volume_7d_usd,
-          poolFeeFractionDecimal,
+          apyPercent: pool.apy * 100,
         });
       }
 
@@ -314,11 +305,6 @@
     <div class="pools-grid">
       {#each pools as pool (pool.id)}
         {@const liquidityUsd = calculateLiquidityUsd(pool.assets, pool.tokens)}
-        {@const apyPercent = calculatePoolFeesApyPercent(
-          pool.volume24hUsd,
-          pool.poolFeeFractionDecimal,
-          liquidityUsd,
-        )}
         <a
           href="/pool?id=PLACH-{pool.id}"
           class="pool-card"
@@ -373,7 +359,7 @@
             </div>
             <div class="stat">
               <span class="stat-label">APY</span>
-              <span class="stat-value">{formatApy(apyPercent)}</span>
+              <span class="stat-value">{formatApy(pool.apyPercent)}</span>
             </div>
             <div class="stat">
               <span class="stat-label">7d Volume</span>

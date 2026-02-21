@@ -8,8 +8,6 @@
     DEX_CONTRACT_ID,
     DEX_ID,
     assertOutcomesSucceeded,
-    calculatePoolFeesApyPercent,
-    getPoolFeeFractionDecimal,
   } from "./shared";
   import {
     buildStackedScheduledFeeChartPoints,
@@ -27,8 +25,8 @@
 
   interface Props {
     poolData: NormalizedPool | null;
-    volume24hUsd: number;
     volume7dUsd: number;
+    apyPercent: number;
     token0: Token | null;
     token1: Token | null;
     poolId: number | null;
@@ -40,8 +38,8 @@
 
   let {
     poolData,
-    volume24hUsd,
     volume7dUsd,
+    apyPercent,
     token0,
     token1,
     poolId,
@@ -193,21 +191,6 @@
       shouldDisplayFeeReceiver,
     );
   });
-
-  const poolFeeFractionDecimal = $derived.by(() => {
-    if (!poolData) return 0;
-    return getPoolFeeFractionDecimal(
-      poolData.fee_configuration,
-      nowTimestampNanos,
-    );
-  });
-  const apyPercent = $derived.by(() =>
-    calculatePoolFeesApyPercent(
-      volume24hUsd,
-      poolFeeFractionDecimal,
-      liquidityUsd,
-    ),
-  );
 
   const isPrivate = $derived(poolData?.ownerId !== null);
   const isOwner = $derived(
