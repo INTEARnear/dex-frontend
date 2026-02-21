@@ -37,6 +37,19 @@
     apy: number;
   }
 
+  type SortByMetric = "liquidity" | "volume" | "apy";
+  const TRUSTED_REPUTATIONS = new Set(["NotFake", "Reputable"]);
+  const SORT_BY_LABELS: Record<SortByMetric, string> = {
+    liquidity: "Liquidity",
+    volume: "Volume",
+    apy: "APY",
+  };
+  const NEXT_SORT_BY: Record<SortByMetric, SortByMetric> = {
+    liquidity: "volume",
+    volume: "apy",
+    apy: "liquidity",
+  };
+
   let pools = $state<PoolDisplay[]>([]);
   let isFetchingPools = $state(false);
   let isLoadingTokens = $state(false);
@@ -47,6 +60,9 @@
   let error = $state<string | null>(null);
   let tokenDisplayFallbackTimer: number | null = null;
   let showCreatePoolModal = $state(false);
+  let sortBy = $state<SortByMetric>("liquidity");
+  let ownedFirst = $state(true);
+  let hideSuspicious = $state(true);
 
   const accountId = $derived($walletStore.accountId);
   let isConnecting = $state(false);
@@ -110,6 +126,84 @@
     }
     return total;
   }
+
+  function toSortableNumber(value: number | undefined): number {
+    return Number.isFinite(value) ? (value ?? 0) : 0;
+  }
+
+  function hasOwnedLiquidity(pool: PoolDisplay): boolean {
+    return toSortableNumber(pool.ownedLiquidityUsd) > 0;
+  }
+
+  function isTrustedToken(token: TokenInfo | null): boolean {
+    return token !== null && TRUSTED_REPUTATIONS.has(token.reputation);
+  }
+
+  function isSuspiciousPool(pool: PoolDisplay): boolean {
+    return pool.tokens.every((token) => !isTrustedToken(token));
+  }
+
+  function cycleSortBy() {
+    sortBy = NEXT_SORT_BY[sortBy];
+  }
+
+  function getSortMetric(pool: PoolDisplay, liquidityUsd: number): number {
+    if (sortBy === "volume") {
+      return toSortableNumber(pool.volume7dUsd);
+    }
+    if (sortBy === "apy") {
+      return toSortableNumber(pool.apyPercent);
+    }
+    if (sortBy === "liquidity") {
+      return toSortableNumber(liquidityUsd);
+    }
+    throw new Error(`Unsupported sort by: ${sortBy}`);
+  }
+
+  const visiblePools = $derived.by(() => {
+    const list = pools.map((pool) => ({
+      pool,
+      liquidityUsd: calculateLiquidityUsd(pool.assets, pool.tokens),
+    }));
+
+    const filtered = hideSuspicious
+      ? list.filter((entry) => !isSuspiciousPool(entry.pool))
+      : list;
+
+    filtered.sort((a, b) => {
+      if (ownedFirst) {
+        const aOwnedLiquidity = toSortableNumber(a.pool.ownedLiquidityUsd);
+        const bOwnedLiquidity = toSortableNumber(b.pool.ownedLiquidityUsd);
+        const aHasOwnedLiquidity = hasOwnedLiquidity(a.pool);
+        const bHasOwnedLiquidity = hasOwnedLiquidity(b.pool);
+
+        if (aHasOwnedLiquidity !== bHasOwnedLiquidity) {
+          return aHasOwnedLiquidity ? -1 : 1;
+        }
+
+        if (
+          aHasOwnedLiquidity &&
+          bHasOwnedLiquidity &&
+          aOwnedLiquidity !== bOwnedLiquidity
+        ) {
+          return bOwnedLiquidity - aOwnedLiquidity;
+        }
+      }
+
+      const metricDiff =
+        getSortMetric(b.pool, b.liquidityUsd) -
+        getSortMetric(a.pool, a.liquidityUsd);
+      if (metricDiff !== 0) return metricDiff;
+
+      if (a.liquidityUsd !== b.liquidityUsd) {
+        return b.liquidityUsd - a.liquidityUsd;
+      }
+
+      return a.pool.id - b.pool.id;
+    });
+
+    return filtered;
+  });
 
   async function fetchPools() {
     const id = ++fetchId;
@@ -232,6 +326,31 @@
   <div class="page-header">
     <h2>Plach Liquidity Pools</h2>
     <div class="header-actions">
+      <div class="sort-settings" role="group" aria-label="Pool sorting settings">
+        <div class="sort-by-control">
+          <span class="sort-by-label">Sort by</span>
+          <button
+            type="button"
+            class="sort-cycle-btn"
+            onclick={cycleSortBy}
+            aria-label={`Sort by ${SORT_BY_LABELS[sortBy]}. Activate to cycle sort mode.`}
+          >
+            {SORT_BY_LABELS[sortBy]}
+          </button>
+        </div>
+        <label class="filter-toggle" for="owned-first-toggle">
+          <input id="owned-first-toggle" type="checkbox" bind:checked={ownedFirst} />
+          <span>Owned First</span>
+        </label>
+        <label class="filter-toggle" for="hide-suspicious-toggle">
+          <input
+            id="hide-suspicious-toggle"
+            type="checkbox"
+            bind:checked={hideSuspicious}
+          />
+          <span>Hide Suspicious</span>
+        </label>
+      </div>
       {#if $walletStore.isConnected}
         <button
           class="create-pool-btn"
@@ -301,10 +420,15 @@
     <div class="empty">
       <p>No pools found</p>
     </div>
+  {:else if visiblePools.length === 0}
+    <div class="empty">
+      <p>No pools match current filters</p>
+    </div>
   {:else}
     <div class="pools-grid">
-      {#each pools as pool (pool.id)}
-        {@const liquidityUsd = calculateLiquidityUsd(pool.assets, pool.tokens)}
+      {#each visiblePools as displayPool (displayPool.pool.id)}
+        {@const pool = displayPool.pool}
+        {@const liquidityUsd = displayPool.liquidityUsd}
         <a
           href="/pool?id=PLACH-{pool.id}"
           class="pool-card"
@@ -413,7 +537,75 @@
   .header-actions {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 0.5rem;
+  }
+
+  .sort-settings {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    padding: 0.45rem 0.65rem;
+  }
+
+  .sort-by-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .sort-by-label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .sort-cycle-btn {
+    width: 7rem;
+    min-width: 7rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.4rem;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-left: 0.25rem;
+    cursor: pointer;
+    text-align: center;
+    transition:
+      background 0.2s ease,
+      border-color 0.2s ease,
+      filter 0.2s ease;
+  }
+
+  .sort-cycle-btn:hover {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    filter: brightness(1.08);
+  }
+
+  .sort-cycle-btn:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 1px;
+  }
+
+  .filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .filter-toggle input {
+    margin: 0;
+    accent-color: var(--accent-primary);
   }
 
   .create-pool-btn {
@@ -487,6 +679,15 @@
   }
 
   @media (max-width: 1024px) {
+    .page-header {
+      align-items: flex-start;
+    }
+
+    .header-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
     .pools-grid {
       grid-template-columns: repeat(3, 1fr);
     }
@@ -505,6 +706,34 @@
 
     .page-header h2 {
       font-size: 1.25rem;
+    }
+
+    .sort-settings {
+      width: 100%;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.5rem;
+    }
+
+    .sort-by-control {
+      justify-content: space-between;
+    }
+
+    .sort-cycle-btn {
+      min-width: 0;
+      width: 7rem;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .sort-by-control {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+
+    .sort-cycle-btn {
+      margin-left: 0;
     }
   }
 
