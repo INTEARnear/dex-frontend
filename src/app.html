@@ -575,13 +575,13 @@
         box-sizing: border-box;
       }
 
-      @media (--mobile) {
+      @media (max-width: 480px) {
         #app {
           padding: 1rem 0.75rem;
         }
       }
 
-      @media (--short-screen) {
+      @media ((max-height: 680px) and (min-width: 481px)) or ((max-height: 560px) and (max-width: 480px)) {
         #app {
           min-height: auto;
           padding: 1rem 0.75rem;
@@ -589,7 +589,7 @@
         }
       }
 
-      @media (--landscape-mobile) {
+      @media (max-height: 550px) and (orientation: landscape) {
         #app {
           gap: 0.75rem;
           padding: 0.75rem;
