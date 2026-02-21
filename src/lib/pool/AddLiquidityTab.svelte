@@ -82,6 +82,7 @@
     token1: Token | null;
     poolId: number;
     needsRegisterLiquidity: boolean;
+    isLaunchPool: boolean;
     onSuccess: () => Promise<void>;
     onAddSuccess: (payload: {
       eventData: LiquidityAddedEventData;
@@ -98,6 +99,7 @@
     token1,
     poolId,
     needsRegisterLiquidity,
+    isLaunchPool,
     onSuccess,
     onAddSuccess,
     isConnecting,
@@ -765,7 +767,7 @@
   />
 </TradeSettingsRow>
 
-{#if !poolData || !isSupportedAsset(poolData.assets[0].asset_id) || !isSupportedAsset(poolData.assets[1].asset_id)}
+{#if (!poolData || !isSupportedAsset(poolData.assets[0].asset_id) || !isSupportedAsset(poolData.assets[1].asset_id)) && !isLaunchPool}
   <div class="warning-box error-box">
     This pool contains unsupported assets for this form.
   </div>
@@ -798,7 +800,7 @@
         </svg>
       </button>
     </div>
-  {:else}
+  {:else if !isLaunchPool}
     <div class="warning-box ratio-box ratio-warning">
       Pool is empty, enter both amounts carefully to make sure the dollar amount
       of both tokens matches.
@@ -872,7 +874,7 @@
     </div>
   {/if}
 
-  {#if isPrivate && $walletStore.isConnected && !isOwner}
+  {#if !isLaunchPool && isPrivate && $walletStore.isConnected && !isOwner}
     <div
       id="add-liquidity-owner-warning"
       class="warning-box error-box"
@@ -881,7 +883,7 @@
     >
       Only pool owner can add liquidity to this private pool.
     </div>
-  {:else if insufficientReason}
+  {:else if !isLaunchPool && insufficientReason}
     <div
       id="add-liquidity-balance-error"
       class="warning-box error-box"
@@ -892,7 +894,7 @@
     </div>
   {/if}
 
-  {#if txError && !showErrorModal}
+  {#if !isLaunchPool && txError && !showErrorModal}
     <div class="warning-box error-box" role="alert" aria-live="assertive">
       {txError}
     </div>
@@ -952,7 +954,7 @@
     {/if}
   </div>
 
-  {#if poolData?.locked}
+  {#if !isLaunchPool && poolData?.locked}
     <div class="warning-box pool-warning">
       This pool is locked. This means you will not be able to withdraw the
       liquidity you add. If you want to add withdrawable liquidity, create a new
@@ -960,7 +962,7 @@
     </div>
   {/if}
 
-  {#if revenueSharingAccounts.length > 0 && revenueSharingPercent > 0}
+  {#if !isLaunchPool && revenueSharingAccounts.length > 0 && revenueSharingPercent > 0}
     <div class="warning-box pool-warning">
       {revenueSharingAccounts.join(", ")}
       {" "}
@@ -972,7 +974,11 @@
     </div>
   {/if}
 
-  {#if !$walletStore.isConnected}
+  {#if isLaunchPool}
+    <button class="primary-btn" disabled>
+      This is a Launch Pool
+    </button>
+  {:else if !$walletStore.isConnected}
     <button
       class="primary-btn"
       onclick={onConnectWallet}

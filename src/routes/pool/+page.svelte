@@ -57,6 +57,7 @@
   type LiquidityTab = "add" | "remove";
 
   let poolData = $state<NormalizedPool | null>(null);
+  let isLaunchPool = $state(false);
   let needsUpgrade = $state(false);
   let volume7dUsd = $state(0);
   let apyPercent = $state(0);
@@ -126,6 +127,7 @@
       isWaitingForPool = false;
       error = null;
       poolData = normalized;
+      isLaunchPool = "Launch" in data.pool;
       needsUpgrade = data.pool_needs_upgrade;
       volume7dUsd = data.volume_7d_usd;
       apyPercent = data.apy * 100;
@@ -146,6 +148,7 @@
       console.error("Pool fetch failed:", fetchError);
       if (!background) {
         poolData = null;
+        isLaunchPool = false;
         needsUpgrade = false;
         volume7dUsd = 0;
         apyPercent = 0;
@@ -379,6 +382,7 @@
                 {token1}
                 poolId={parsedPoolId}
                 {needsRegisterLiquidity}
+                {isLaunchPool}
                 onSuccess={async () => {}}
                 onAddSuccess={(payload) => {
                   addSuccessEventData = payload.eventData;
@@ -395,6 +399,7 @@
               {token1}
               poolId={parsedPoolId}
               {needsRegisterLiquidity}
+              {isLaunchPool}
               onSuccess={async () => {}}
               onAddSuccess={(payload) => {
                 addSuccessEventData = payload.eventData;
