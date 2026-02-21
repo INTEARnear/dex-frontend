@@ -338,10 +338,12 @@
             {SORT_BY_LABELS[sortBy]}
           </button>
         </div>
-        <label class="filter-toggle" for="owned-first-toggle">
-          <input id="owned-first-toggle" type="checkbox" bind:checked={ownedFirst} />
-          <span>Owned First</span>
-        </label>
+        {#if $walletStore.isConnected}
+          <label class="filter-toggle" for="owned-first-toggle">
+            <input id="owned-first-toggle" type="checkbox" bind:checked={ownedFirst} />
+            <span>Owned First</span>
+          </label>
+        {/if}
         <label class="filter-toggle" for="hide-suspicious-toggle">
           <input
             id="hide-suspicious-toggle"
