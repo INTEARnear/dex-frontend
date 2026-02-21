@@ -582,9 +582,8 @@
   }
 
   .sort-cycle-btn:hover {
-    background: var(--bg-secondary);
     border-color: var(--border-color);
-    filter: brightness(1.08);
+    filter: brightness(1.25);
   }
 
   .sort-cycle-btn:focus-visible {
