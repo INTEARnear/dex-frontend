@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
+  import { page } from "$app/state";
+  import { goto } from "$app/navigation";
   import { walletStore } from "./walletStore";
   import TokenSelector from "./TokenSelector.svelte";
   import TokenIcon from "./TokenIcon.svelte";
@@ -185,8 +187,23 @@
     }
   });
 
-  // Load saved tokens from localStorage on mount
+  // Load saved tokens from URL params (from/to) or localStorage on mount
+  let initialTokensLoaded = false;
   $effect(() => {
+    if (initialTokensLoaded) return;
+    const fromParam = page.url.searchParams.get("from");
+    const toParam = page.url.searchParams.get("to");
+    if (fromParam && toParam) {
+      initialTokensLoaded = true;
+      const pathname = page.url.pathname;
+      (async () => {
+        await loadDefaultToken(fromParam, true);
+        await loadDefaultToken(toParam, false);
+        goto(pathname, { replaceState: true });
+      })();
+      return;
+    }
+    initialTokensLoaded = true;
     try {
       const savedInput = parsePersistedTokenId(
         localStorage.getItem("intear-dex-input-token"),
