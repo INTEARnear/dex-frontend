@@ -163,7 +163,7 @@ export function formatCompactBalance(
 /**
  * Format a USD value for display, with compact notation for large values.
  */
-export function formatUsdValue(
+export function formatUsdTokenValue(
   tokenAmountHumanReadable: string,
   tokenPriceUsd: string,
 ): string | null {
@@ -172,6 +172,12 @@ export function formatUsdValue(
   const price = parseFloat(tokenPriceUsd);
   if (isNaN(num) || isNaN(price) || num === 0) return null;
   const value = num * price;
+  return formatUsdValue(value);
+}
+
+export function formatUsdValue(
+  value: number,
+): string | null {
   if (value < 0.01) return "<$0.01";
   if (value < 1000) return `$${value.toFixed(2)}`;
   if (value < 1000000) return `$${(value / 1000).toFixed(2)}K`;

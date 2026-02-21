@@ -19,7 +19,7 @@
     humanReadableToRawAmount,
     rawAmountToHumanReadable,
     formatBalance,
-    formatUsdValue,
+    formatUsdTokenValue,
     ROUTER_API,
   } from "./utils";
   import { parseNep297FromLog } from "./nep297";
@@ -576,13 +576,13 @@
 
   const inputUsdValue = $derived(
     inputToken && inputAmountHumanReadable
-      ? formatUsdValue(inputAmountHumanReadable, inputToken.price_usd)
+      ? formatUsdTokenValue(inputAmountHumanReadable, inputToken.price_usd)
       : null,
   );
 
   const outputUsdValue = $derived(
     outputToken && outputAmountHumanReadable
-      ? formatUsdValue(outputAmountHumanReadable, outputToken.price_usd)
+      ? formatUsdTokenValue(outputAmountHumanReadable, outputToken.price_usd)
       : null,
   );
 

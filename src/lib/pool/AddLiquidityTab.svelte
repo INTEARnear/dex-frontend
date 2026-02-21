@@ -10,7 +10,7 @@
   import {
     formatAmount,
     formatBalance,
-    formatUsdValue,
+    formatUsdTokenValue,
     humanReadableToRawAmount,
     rawAmountToHumanReadable,
   } from "../utils";
@@ -392,10 +392,10 @@
   });
 
   const amount0Usd = $derived(
-    token0 ? formatUsdValue(amount0HumanReadable, token0.price_usd) : null,
+    token0 ? formatUsdTokenValue(amount0HumanReadable, token0.price_usd) : null,
   );
   const amount1Usd = $derived(
-    token1 ? formatUsdValue(amount1HumanReadable, token1.price_usd) : null,
+    token1 ? formatUsdTokenValue(amount1HumanReadable, token1.price_usd) : null,
   );
 
   const token0BalanceDisplay = $derived.by(() => {
