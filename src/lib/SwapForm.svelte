@@ -1098,6 +1098,18 @@
     return null;
   });
 
+  const inputBalanceUsd = $derived.by(() => {
+    const balance = getEffectiveBalance();
+    if (balance === null || !inputToken) return 0;
+    const human = rawAmountToHumanReadable(
+      balance.toString(),
+      inputToken.metadata.decimals,
+    );
+    const price = parseFloat(inputToken.price_usd);
+    const usd = parseFloat(human) * price;
+    return Number.isFinite(usd) ? usd : 0;
+  });
+
   function truncateSymbol(symbol: string): string {
     if (symbol.length >= 8) return symbol.slice(0, 6) + "\u2026";
     return symbol;
@@ -1119,6 +1131,9 @@
         <DexPresetButtons
           items={amountPresets.reduce((buttons, preset, i) => {
             if (preset.type === "percent" || inputPrice > 0) {
+              const insufficientDollar =
+                preset.type === "dollar" &&
+                (inputBalanceUsd <= 0 || preset.value > inputBalanceUsd);
               buttons.push({
                 id: i,
                 label:
@@ -1126,6 +1141,8 @@
                     ? `$${preset.value}`
                     : `${preset.value}%`,
                 active: activePresetIndex === i,
+                disabled: insufficientDollar,
+                insufficientDollar,
                 onClick: () => applyPreset(preset),
               });
             }

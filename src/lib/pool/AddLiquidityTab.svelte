@@ -297,6 +297,16 @@
     return balanceRaw;
   }
 
+  function getToken1EffectiveBalanceRaw(): bigint | null {
+    if (!token1 || !token1Id) return null;
+    let balanceRaw = BigInt(getUserBalanceRaw(token1Id));
+    if (token1Id === "near") {
+      balanceRaw =
+        balanceRaw > GAS_RESERVE_NEAR ? balanceRaw - GAS_RESERVE_NEAR : 0n;
+    }
+    return balanceRaw;
+  }
+
   function getPriceRatioFallback(): number | null {
     if (!token0 || !token1) return null;
     const price0 = parseFloat(token0.price_usd);
@@ -342,6 +352,29 @@
       if (expected !== null && expected === amount0HumanReadable) return i;
     }
     return null;
+  });
+
+  const maxAddableUsd = $derived.by(() => {
+    const balance0 = getToken0EffectiveBalanceRaw();
+    const balance1 = getToken1EffectiveBalanceRaw();
+    if (balance0 === null || balance1 === null || !token0 || !token1) return 0;
+    const human0 = rawAmountToHumanReadable(
+      balance0.toString(),
+      token0.metadata.decimals,
+    );
+    const human1 = rawAmountToHumanReadable(
+      balance1.toString(),
+      token1.metadata.decimals,
+    );
+    const price0 = parseFloat(token0.price_usd);
+    const price1 = parseFloat(token1.price_usd);
+    const usd0 = parseFloat(human0) * price0;
+    const usd1 = parseFloat(human1) * price1;
+    const minUsd = Math.min(
+      Number.isFinite(usd0) ? usd0 : 0,
+      Number.isFinite(usd1) ? usd1 : 0,
+    );
+    return minUsd;
   });
 
   const requiredNearRaw = $derived.by(() => {
@@ -702,6 +735,9 @@
       <DexPresetButtons
         items={amountPresets.reduce((buttons, preset, i) => {
           if (preset.type === "percent" || token0Price > 0) {
+            const insufficientDollar =
+              preset.type === "dollar" &&
+              (maxAddableUsd <= 0 || preset.value > maxAddableUsd);
             buttons.push({
               id: i,
               label:
@@ -709,6 +745,8 @@
                   ? `$${preset.value}`
                   : `${preset.value}%`,
               active: activePresetIndex === i,
+              disabled: insufficientDollar,
+              insufficientDollar,
               onClick: () => applyPreset(preset),
             });
           }
