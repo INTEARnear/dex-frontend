@@ -312,7 +312,7 @@
                 },
               ],
             },
-            gas: "100" + "0".repeat(12), // 100 TGas
+            gas: "150" + "0".repeat(12), // 150 TGas
             deposit: "1" + "0".repeat(24 - 2), // 0.01 NEAR
           },
         },

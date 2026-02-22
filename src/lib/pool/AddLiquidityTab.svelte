@@ -688,7 +688,7 @@
             params: {
               methodName: "execute_operations",
               args: { operations },
-              gas: "120" + "0".repeat(12), // 120 TGas
+              gas: "150" + "0".repeat(12), // 150 TGas
               deposit: executeDeposit,
             },
           },
