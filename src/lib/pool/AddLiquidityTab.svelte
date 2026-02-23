@@ -318,12 +318,38 @@
     return price0 / price1;
   }
 
+  function getMaxAddableAmount0Raw(): bigint | null {
+    const balance0 = getToken0EffectiveBalanceRaw();
+    const balance1 = getToken1EffectiveBalanceRaw();
+    if (balance0 === null || balance1 === null || !token0 || !token1) return null;
+    if (balance0 <= 0n || balance1 <= 0n) return 0n;
+
+    const dec0 = token0.metadata.decimals;
+    const dec1 = token1.metadata.decimals;
+
+    if (poolRatio !== null && poolRatio > 0) {
+      const maxFrom1 = (balance1 * BigInt(10 ** dec0)) / BigInt(
+        Math.max(1, Math.round(poolRatio * 10 ** dec1)),
+      );
+      const max0 = balance0 < maxFrom1 ? balance0 : maxFrom1;
+      return max0;
+    }
+
+    const fallbackRatio = getPriceRatioFallback();
+    if (fallbackRatio === null || fallbackRatio <= 0) return balance0;
+    const maxFrom1 = (balance1 * BigInt(10 ** dec0)) / BigInt(
+      Math.max(1, Math.round(fallbackRatio * 10 ** dec1)),
+    );
+    const max0 = balance0 < maxFrom1 ? balance0 : maxFrom1;
+    return max0;
+  }
+
   function computePresetAmount(preset: AmountPreset): string | null {
     if (!token0) return null;
     if (preset.type === "percent") {
-      const balanceRaw = getToken0EffectiveBalanceRaw();
-      if (balanceRaw === null) return null;
-      const scaled = (balanceRaw * BigInt(preset.value)) / 100n;
+      const maxRaw = getMaxAddableAmount0Raw();
+      if (maxRaw === null || maxRaw <= 0n) return null;
+      const scaled = (maxRaw * BigInt(preset.value)) / 100n;
       if (scaled <= 0n) return null;
       return rawAmountToHumanReadable(
         scaled.toString(),
@@ -740,6 +766,8 @@
             const insufficientDollar =
               preset.type === "dollar" &&
               (maxAddableUsd <= 0 || preset.value > maxAddableUsd);
+            const percentDisabled =
+              preset.type === "percent" && computePresetAmount(preset) === null;
             buttons.push({
               id: i,
               label:
@@ -747,7 +775,7 @@
                   ? `$${preset.value}`
                   : `${preset.value}%`,
               active: activePresetIndex === i,
-              disabled: insufficientDollar,
+              disabled: insufficientDollar || percentDisabled,
               insufficientDollar,
               onClick: () => applyPreset(preset),
             });
