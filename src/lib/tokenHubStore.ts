@@ -634,9 +634,29 @@ function createTokenHubStore() {
         });
 
         const state = getState();
-        return data
+        let results = data
           .map((token) => state.tokensById[token.account_id])
           .filter((token): token is TokenInfo => !!token);
+
+        if ("near".includes(normalized.toLowerCase())) {
+          const nearToken = state.tokensById.near;
+          if (nearToken) {
+            const nearIndex = results.findIndex(
+              (token) => token.account_id === "near",
+            );
+            if (nearIndex === -1) {
+              results = [nearToken, ...results];
+            } else if (nearIndex > 0) {
+              results = [
+                nearToken,
+                ...results.slice(0, nearIndex),
+                ...results.slice(nearIndex + 1),
+              ];
+            }
+          }
+        }
+
+        return results;
       } catch (error) {
         console.error(`searchTokens(${normalized}) failed:`, error);
         setError(
