@@ -52,6 +52,50 @@
     apy: "liquidity",
   };
 
+  const POOLS_SORT_STORAGE_KEY = "dex-pools-sort-settings";
+
+  function loadSortSettings(): Partial<{
+    sortBy: SortByMetric;
+    ownedFirst: boolean;
+    hideSuspicious: boolean;
+  }> {
+    try {
+      const raw = localStorage.getItem(POOLS_SORT_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const out: Partial<{
+        sortBy: SortByMetric;
+        ownedFirst: boolean;
+        hideSuspicious: boolean;
+      }> = {};
+      if (
+        parsed.sortBy === "liquidity" ||
+        parsed.sortBy === "volume" ||
+        parsed.sortBy === "apy"
+      ) {
+        out.sortBy = parsed.sortBy as SortByMetric;
+      }
+      if (typeof parsed.ownedFirst === "boolean")
+        out.ownedFirst = parsed.ownedFirst;
+      if (typeof parsed.hideSuspicious === "boolean")
+        out.hideSuspicious = parsed.hideSuspicious;
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  function saveSortSettings(
+    sortBy: SortByMetric,
+    ownedFirst: boolean,
+    hideSuspicious: boolean,
+  ) {
+    localStorage.setItem(
+      POOLS_SORT_STORAGE_KEY,
+      JSON.stringify({ sortBy, ownedFirst, hideSuspicious }),
+    );
+  }
+
   let pools = $state<PoolDisplay[]>([]);
   let isFetchingPools = $state(false);
   let isLoadingTokens = $state(false);
@@ -297,9 +341,28 @@
     fetchPools();
   });
 
+  let hasRestoredSortSettings = $state(false);
+
   onMount(() => {
+    const loaded = loadSortSettings();
+    if (loaded.sortBy !== undefined) sortBy = loaded.sortBy;
+    if (loaded.ownedFirst !== undefined) ownedFirst = loaded.ownedFirst;
+    if (loaded.hideSuspicious !== undefined)
+      hideSuspicious = loaded.hideSuspicious;
+    hasRestoredSortSettings = true;
+
     tokenHubStore.updatePricesEvery(10_000);
     tokenHubStore.updateBalancesEvery(null);
+  });
+
+  $effect(() => {
+    sortBy;
+    ownedFirst;
+    hideSuspicious;
+    hasRestoredSortSettings;
+    if (hasRestoredSortSettings) {
+      saveSortSettings(sortBy, ownedFirst, hideSuspicious);
+    }
   });
 
   onDestroy(() => {
@@ -312,7 +375,11 @@
   <div class="page-header">
     <h2>Plach Liquidity Pools</h2>
     <div class="header-actions">
-      <div class="sort-settings" role="group" aria-label="Pool sorting settings">
+      <div
+        class="sort-settings"
+        role="group"
+        aria-label="Pool sorting settings"
+      >
         <div class="sort-by-control">
           <span class="sort-by-label">Sort by</span>
           <button
@@ -326,7 +393,11 @@
         </div>
         {#if $walletStore.isConnected}
           <label class="filter-toggle" for="owned-first-toggle">
-            <input id="owned-first-toggle" type="checkbox" bind:checked={ownedFirst} />
+            <input
+              id="owned-first-toggle"
+              type="checkbox"
+              bind:checked={ownedFirst}
+            />
             <span>Owned First</span>
           </label>
         {/if}
