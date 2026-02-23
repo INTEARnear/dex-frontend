@@ -38,8 +38,12 @@
   }
 
   .spinner.light {
-    --spinner-track-color: rgba(255, 255, 255, 0.3);
-    --spinner-head-color: white;
+    --spinner-track-color: color-mix(
+      in oklab,
+      var(--text-on-accent),
+      transparent 70%
+    );
+    --spinner-head-color: var(--text-on-accent);
   }
 
   @keyframes spin {

@@ -69,7 +69,7 @@
 
   .dex-preset-btn.insufficient-dollar,
   .dex-preset-btn.insufficient-dollar:hover {
-    color: #f87171;
+    color: var(--status-error-text);
     cursor: not-allowed;
   }
 

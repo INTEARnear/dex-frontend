@@ -1039,9 +1039,9 @@
     font-size: 0.8125rem;
   }
   .pool-warning {
-    background: rgba(234, 179, 8, 0.12);
-    border: 1px solid rgba(234, 179, 8, 0.35);
-    color: #facc15;
+    background: var(--status-warning-soft-bg);
+    border: 1px solid var(--status-warning-soft-border);
+    color: var(--status-warning-text);
     line-height: 1.4;
   }
   .ratio-box {
@@ -1084,14 +1084,14 @@
     height: 0.95rem;
   }
   .ratio-warning {
-    background: rgba(234, 179, 8, 0.12);
-    border-color: rgba(234, 179, 8, 0.35);
-    color: #facc15;
+    background: var(--status-warning-soft-bg);
+    border-color: var(--status-warning-soft-border);
+    color: var(--status-warning-text);
   }
   .error-box {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.25);
-    color: #f87171;
+    background: var(--status-error-soft-bg);
+    border: 1px solid var(--status-error-soft-border);
+    color: var(--status-error-text);
   }
   .input-wrapper {
     display: flex;
@@ -1236,7 +1236,7 @@
     border: none;
     border-radius: 0.75rem;
     background: var(--accent-button);
-    color: white;
+    color: var(--text-on-accent);
     cursor: pointer;
     transition: all 0.15s ease;
     display: flex;

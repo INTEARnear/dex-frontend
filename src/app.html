@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" style="background-color: #0a0e17">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/intear-logo.svg" />
@@ -41,11 +41,46 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>Intear DEX</title>
+    <script>
+      (() => {
+        const THEME_STORAGE_KEY = "intear-dex-theme";
+        const THEME_COLORS = {
+          dark: "#0a0e17",
+          light: "#f4f7fb",
+        };
+
+        const isThemePreference = (value) =>
+          value === "light" || value === "dark" || value === "system";
+
+        let storedPreference = null;
+        try {
+          storedPreference = localStorage.getItem(THEME_STORAGE_KEY);
+        } catch {}
+
+        const preference = isThemePreference(storedPreference)
+          ? storedPreference
+          : "system";
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+          .matches
+          ? "dark"
+          : "light";
+        const resolvedTheme =
+          preference === "system" ? systemTheme : preference;
+
+        const root = document.documentElement;
+        root.dataset.theme = resolvedTheme;
+        root.style.colorScheme = resolvedTheme;
+
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute("content", THEME_COLORS[resolvedTheme]);
+      })();
+    </script>
     <style>
       html,
       body {
-        background-color: #0a0e17;
-        color: #ffffff;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
         margin: 0;
         padding: 0;
       }
@@ -54,7 +89,8 @@
         position: fixed;
         bottom: 20px;
         right: 20px;
-        background: #1f93ff;
+        background: var(--support-chat-bg);
+        color: var(--text-on-accent);
         border: none;
         border-radius: 100px;
         border-width: 0;
@@ -69,7 +105,7 @@
       }
 
       #support-chat-button:hover {
-        background: #1f93ff;
+        background: var(--support-chat-hover);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
       }
 
@@ -511,8 +547,34 @@
       }
 
       :root {
+        font-family: "Outfit", sans-serif;
+        line-height: 1.5;
+        font-weight: 400;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+      }
+
+      html[data-theme] {
+        --success: var(--status-success-text);
+        --warning: var(--status-warning-text);
+        --error: var(--status-error-text);
+        --status-warning-contrast: #111827;
+        --status-error-solid: #dc2626;
+        --status-error-solid-hover: #b91c1c;
+        --text-on-accent: #ffffff;
+        --text-on-success: #ffffff;
+        --text-on-warning: #111827;
+        --text-on-danger: #ffffff;
+        --text-on-info: #ffffff;
+
+        color: var(--text-primary);
+        background-color: var(--bg-primary);
+      }
+
+      html[data-theme="dark"] {
         --bg-primary: #0a0e17;
         --bg-secondary: #111827;
+        --bg-tertiary: #1f2937;
         --bg-card: #1a2332;
         --bg-input: #0d1421;
         --border-color: #2a3a52;
@@ -522,19 +584,87 @@
         --accent-button-small: #3a75bc;
         --accent-hover: #1d4ed8;
         --accent-glow: rgba(59, 130, 246, 0.4);
+        --accent-gradient-start: #4598f7;
+        --accent-gradient-end: #2563eb;
+        --accent-gradient-hover-start: #2563eb;
+        --accent-gradient-hover-end: #1d4ed8;
+        --status-success-text: #4ade80;
+        --status-success-soft-bg: rgba(34, 197, 94, 0.15);
+        --status-success-soft-border: rgba(34, 197, 94, 0.45);
+        --status-success-solid: #16a34a;
+        --status-success-solid-hover: #15803d;
+        --status-warning-text: #facc15;
+        --status-warning-soft-bg: rgba(234, 179, 8, 0.14);
+        --status-warning-soft-border: rgba(234, 179, 8, 0.35);
+        --status-warning-solid: #facc15;
+        --status-warning-solid-hover: #eab308;
+        --status-error-text: #f87171;
+        --status-error-soft-text: #fca5a5;
+        --status-error-soft-bg: rgba(239, 68, 68, 0.1);
+        --status-error-soft-border: rgba(239, 68, 68, 0.3);
+        --status-info-text: #93c5fd;
+        --status-info-soft-bg: rgba(59, 130, 246, 0.14);
+        --status-info-soft-border: rgba(59, 130, 246, 0.35);
+        --status-info-solid: #3b82f6;
+        --status-info-solid-hover: #2563eb;
         --text-primary: #ffffff;
         --text-secondary: #9fb0c5;
         --text-muted: #8391a8;
+        --bg-glow-top: rgba(59, 130, 246, 0.15);
+        --bg-glow-bottom: rgba(59, 130, 246, 0.08);
+        --support-chat-bg: #1f93ff;
+        --support-chat-hover: #0f7fdf;
+        --overlay-backdrop: rgba(0, 0, 0, 0.4);
 
-        font-family: "Outfit", sans-serif;
-        line-height: 1.5;
-        font-weight: 400;
         color-scheme: dark;
-        color: var(--text-primary);
-        background-color: var(--bg-primary);
+      }
 
-        font-synthesis: none;
-        text-rendering: optimizeLegibility;
+      html[data-theme="light"] {
+        --bg-primary: #f4f7fb;
+        --bg-secondary: #e9eff7;
+        --bg-tertiary: #dbe5f2;
+        --bg-card: #ffffff;
+        --bg-input: #f0f4fa;
+        --border-color: #c3d0e2;
+        --border-focus: #2563eb;
+        --accent-primary: #4598f7;
+        --accent-button: #3b82f6;
+        --accent-button-small: #3a75dc;
+        --accent-hover: #1d4ed8;
+        --accent-glow: rgba(59, 130, 246, 0.4);
+        --accent-gradient-start: #4598f7;
+        --accent-gradient-end: #2563eb;
+        --accent-gradient-hover-start: #2563eb;
+        --accent-gradient-hover-end: #1d4ed8;
+        --status-success-text: #166534;
+        --status-success-soft-bg: rgba(22, 163, 74, 0.12);
+        --status-success-soft-border: rgba(22, 163, 74, 0.35);
+        --status-success-solid: #15803d;
+        --status-success-solid-hover: #166534;
+        --status-warning-text: #92400e;
+        --status-warning-soft-bg: rgba(217, 119, 6, 0.16);
+        --status-warning-soft-border: rgba(217, 119, 6, 0.34);
+        --status-warning-solid: #f59e0b;
+        --status-warning-solid-hover: #d97706;
+        --status-error-text: #b91c1c;
+        --status-error-soft-text: #991b1b;
+        --status-error-soft-bg: rgba(220, 38, 38, 0.12);
+        --status-error-soft-border: rgba(220, 38, 38, 0.34);
+        --status-info-text: #1d4ed8;
+        --status-info-soft-bg: rgba(37, 99, 235, 0.14);
+        --status-info-soft-border: rgba(37, 99, 235, 0.3);
+        --status-info-solid: #2563eb;
+        --status-info-solid-hover: #1d4ed8;
+        --text-primary: #0f172a;
+        --text-secondary: #334155;
+        --text-muted: #64748b;
+        --bg-glow-top: rgba(37, 99, 235, 0.1);
+        --bg-glow-bottom: rgba(37, 99, 235, 0.05);
+        --support-chat-bg: #2563eb;
+        --support-chat-hover: #1d4ed8;
+        --overlay-backdrop: rgba(15, 23, 42, 0.35);
+
+        color-scheme: light;
       }
 
       * {
@@ -548,12 +678,12 @@
         background:
           radial-gradient(
             ellipse 80% 50% at 50% -20%,
-            rgba(59, 130, 246, 0.15),
+            var(--bg-glow-top),
             transparent
           ),
           radial-gradient(
             ellipse 60% 40% at 80% 100%,
-            rgba(59, 130, 246, 0.08),
+            var(--bg-glow-bottom),
             transparent
           ),
           var(--bg-primary);
@@ -646,14 +776,16 @@
       as="script"
     />
     <script>
-      (function () {
-        var BASE_URL = "https://app.chatwoot.com";
-        var WEBSITE_TOKEN = "rWhhtHuth6NLdgiiePdWqerD";
-        var SDK_SCRIPT_ID = "chatwoot-sdk-script";
-        var SUPPORT_BUTTON_ID = "support-chat-button";
-        var sdkLoadPromise = null;
-        var sdkReadyPromise = null;
-        var sdkInitialized = false;
+      (() => {
+        const BASE_URL = "https://app.chatwoot.com";
+        const WEBSITE_TOKEN = "rWhhtHuth6NLdgiiePdWqerD";
+        const SDK_SCRIPT_ID = "chatwoot-sdk-script";
+        const SUPPORT_BUTTON_ID = "support-chat-button";
+        const SUPPORT_BUTTON_LOADING_CLASS = "support-chat-button--loading";
+
+        let sdkLoadPromise = null;
+        let sdkReadyPromise = null;
+        let sdkInitialized = false;
 
         window.chatwootSettings = {
           position: "right",
@@ -662,7 +794,7 @@
           hideMessageBubble: true,
         };
 
-        function loadChatwootSdk() {
+        const loadChatwootSdk = () => {
           if (window.chatwootSDK) {
             return Promise.resolve();
           }
@@ -671,13 +803,13 @@
             return sdkLoadPromise;
           }
 
-          sdkLoadPromise = new Promise(function (resolve, reject) {
-            var existingScript = document.getElementById(SDK_SCRIPT_ID);
+          sdkLoadPromise = new Promise((resolve, reject) => {
+            const existingScript = document.getElementById(SDK_SCRIPT_ID);
             if (existingScript) {
               existingScript.addEventListener("load", resolve, { once: true });
               existingScript.addEventListener(
                 "error",
-                function () {
+                () => {
                   reject(new Error("Failed to load Chatwoot SDK"));
                 },
                 { once: true },
@@ -685,21 +817,25 @@
               return;
             }
 
-            var script = document.createElement("script");
+            const script = document.createElement("script");
             script.id = SDK_SCRIPT_ID;
-            script.src = BASE_URL + "/packs/js/sdk.js";
+            script.src = `${BASE_URL}/packs/js/sdk.js`;
             script.async = true;
-            script.onload = resolve;
-            script.onerror = function () {
-              reject(new Error("Failed to load Chatwoot SDK"));
-            };
+            script.addEventListener("load", resolve, { once: true });
+            script.addEventListener(
+              "error",
+              () => {
+                reject(new Error("Failed to load Chatwoot SDK"));
+              },
+              { once: true },
+            );
             document.head.appendChild(script);
           });
 
           return sdkLoadPromise;
-        }
+        };
 
-        function waitForChatwootReady() {
+        const waitForChatwootReady = () => {
           if (window.$chatwoot?.hasLoaded) {
             return Promise.resolve();
           }
@@ -708,14 +844,14 @@
             return sdkReadyPromise;
           }
 
-          sdkReadyPromise = new Promise(function (resolve) {
+          sdkReadyPromise = new Promise((resolve) => {
             window.addEventListener("chatwoot:ready", resolve, { once: true });
           });
 
           return sdkReadyPromise;
-        }
+        };
 
-        function initializeChatwoot() {
+        const initializeChatwoot = () => {
           if (sdkInitialized) {
             return waitForChatwootReady();
           }
@@ -727,39 +863,37 @@
           sdkInitialized = true;
 
           return waitForChatwootReady();
-        }
+        };
 
-        async function openSupportChat() {
-          var supportButton = document.getElementById(SUPPORT_BUTTON_ID);
-          if (!supportButton) {
+        const openSupportChat = async () => {
+          const supportButton = document.getElementById(SUPPORT_BUTTON_ID);
+          if (!(supportButton instanceof HTMLButtonElement)) {
             return;
           }
 
           supportButton.disabled = true;
-          supportButton.classList.add("support-chat-button--loading");
+          supportButton.classList.add(SUPPORT_BUTTON_LOADING_CLASS);
 
           try {
             await loadChatwootSdk();
             await initializeChatwoot();
-            if (window.$chatwoot?.toggle) {
-              window.$chatwoot.toggle("open");
-            }
+            window.$chatwoot?.toggle?.("open");
           } catch (error) {
             console.error(error);
           } finally {
             supportButton.disabled = false;
-            supportButton.classList.remove("support-chat-button--loading");
+            supportButton.classList.remove(SUPPORT_BUTTON_LOADING_CLASS);
           }
-        }
+        };
 
-        function bindSupportButtonClick() {
-          var supportButton = document.getElementById(SUPPORT_BUTTON_ID);
-          if (!supportButton) {
+        const bindSupportButtonClick = () => {
+          const supportButton = document.getElementById(SUPPORT_BUTTON_ID);
+          if (!(supportButton instanceof HTMLButtonElement)) {
             return;
           }
 
           supportButton.addEventListener("click", openSupportChat);
-        }
+        };
 
         if (document.readyState === "loading") {
           document.addEventListener(

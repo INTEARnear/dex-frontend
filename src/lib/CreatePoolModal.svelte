@@ -699,8 +699,8 @@
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: var(--status-error-soft-bg);
+    border: 1px solid var(--status-error-soft-border);
     border-radius: 0.625rem;
     margin: 0.625rem 1.5rem 0;
     margin-bottom: 1.5rem;
@@ -710,7 +710,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #ef4444;
+    color: var(--status-error-solid);
     font-size: 0.8125rem;
     font-weight: 500;
   }
@@ -853,7 +853,7 @@
     background: var(--accent-button-small);
     border: none;
     border-radius: 0.75rem;
-    color: white;
+    color: var(--text-on-accent);
     font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;

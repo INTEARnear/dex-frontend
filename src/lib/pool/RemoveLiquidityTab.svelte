@@ -624,13 +624,17 @@
     width: 1.5rem;
     height: 1.5rem;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-start),
+      var(--accent-gradient-end)
+    );
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 0.75rem;
     font-weight: 700;
-    color: white;
+    color: var(--text-on-accent);
   }
   .preview-token-amount {
     color: var(--text-primary);
@@ -684,12 +688,12 @@
     font-family: "JetBrains Mono", monospace;
   }
   .remove-warning {
-    background: rgba(245, 158, 11, 0.18);
-    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: var(--status-warning-soft-bg);
+    border: 1px solid var(--status-warning-soft-border);
     border-radius: 0.75rem;
     padding: 0.75rem 1rem;
     font-size: 0.8125rem;
-    color: var(--text-secondary);
+    color: var(--status-warning-text);
     line-height: 1.4;
   }
   .warning-box {
@@ -698,9 +702,9 @@
     font-size: 0.8125rem;
   }
   .error-box {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.25);
-    color: #f87171;
+    background: var(--status-error-soft-bg);
+    border: 1px solid var(--status-error-soft-border);
+    color: var(--status-error-text);
   }
   .primary-btn {
     width: 100%;
@@ -716,13 +720,14 @@
     gap: 0.5rem;
   }
   .primary-btn.remove-btn {
-    background: #dc2626;
+    background: var(--status-error-solid);
+    color: var(--text-on-danger);
   }
   .primary-btn.remove-btn:hover:not(:disabled) {
-    background: #b91c1c;
+    background: var(--status-error-solid-hover);
   }
   .primary-btn.remove-btn:disabled {
-    background: rgba(220, 38, 38, 0.45);
+    background: color-mix(in oklab, var(--status-error-solid), transparent 55%);
     opacity: 1;
     cursor: not-allowed;
   }

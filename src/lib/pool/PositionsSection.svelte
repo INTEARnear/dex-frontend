@@ -1532,7 +1532,7 @@
 
   .close-error {
     font-size: 0.75rem;
-    color: #ef4444;
+    color: var(--status-error-solid);
   }
 
   .positions-table {
@@ -1558,11 +1558,11 @@
   }
 
   .position-row.even .position-row-main {
-    background: rgba(0, 0, 0, 0.15);
+    background: color-mix(in oklab, var(--bg-secondary), black 5%);
   }
 
   .position-row.odd .position-row-main {
-    background: rgba(255, 255, 255, 0.02);
+    background: color-mix(in oklab, var(--bg-secondary), white 3%);
   }
 
   .position-row.odd.expanded,
@@ -1587,11 +1587,11 @@
   }
 
   .position-cell.position-value.pnl-positive {
-    color: #22c55e;
+    color: var(--status-success-text);
   }
 
   .position-cell.position-value.pnl-negative {
-    color: #ef4444;
+    color: var(--status-error-solid);
   }
 
   .position-row-main {
@@ -1611,7 +1611,7 @@
   }
 
   .position-row-main:hover {
-    background: rgba(255, 255, 255, 0.06) !important;
+    background: var(--bg-tertiary) !important;
   }
 
   .position-cell {
@@ -1654,9 +1654,9 @@
     padding: 0.375rem 0.625rem;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #f87171;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--status-error-text);
+    background: var(--status-error-soft-bg);
+    border: 1px solid var(--status-error-soft-border);
     border-radius: 0.5rem;
     cursor: pointer;
     transition:
@@ -1665,8 +1665,8 @@
   }
 
   .close-position-btn:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.18);
-    border-color: rgba(239, 68, 68, 0.45);
+    background: color-mix(in oklab, var(--status-error-soft-bg), black 10%);
+    border-color: color-mix(in oklab, var(--status-error-soft-border), black 10%);
   }
 
   .close-position-btn:disabled {
@@ -1722,11 +1722,11 @@
   }
 
   .detail-tooltip-value-positive {
-    color: var(--success, #22c55e);
+    color: var(--success);
   }
 
   .detail-tooltip-value-negative {
-    color: var(--error, #ef4444);
+    color: var(--error);
   }
 
   .detail-value {
@@ -1747,11 +1747,11 @@
   }
 
   .detail-value.pnl-positive {
-    color: #22c55e;
+    color: var(--status-success-text);
   }
 
   .detail-value.pnl-negative {
-    color: #ef4444;
+    color: var(--status-error-solid);
   }
 
   .apy-badge {

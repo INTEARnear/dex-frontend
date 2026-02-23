@@ -880,8 +880,12 @@
     font-size: 0.875rem;
     font-weight: 600;
     padding: 0.25rem 0.625rem;
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    color: white;
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-start),
+      var(--accent-gradient-end)
+    );
+    color: var(--text-on-accent);
     border-radius: 0.5rem;
     font-family: "JetBrains Mono", monospace;
   }
@@ -915,19 +919,19 @@
   }
 
   .tooltip-up {
-    color: var(--success, #22c55e);
+    color: var(--success);
   }
 
   .tooltip-down {
-    color: var(--error, #ef4444);
+    color: var(--error);
   }
 
   .tooltip-medium {
-    color: var(--warning, #eab308);
+    color: var(--warning);
   }
 
   .tooltip-low {
-    color: var(--error, #ef4444);
+    color: var(--error);
   }
 
   .tooltip-row + .tooltip-row {
@@ -937,7 +941,7 @@
   .mobile-tooltip-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--overlay-backdrop);
     z-index: 1101;
     display: flex;
     align-items: flex-end;
@@ -1011,7 +1015,7 @@
     background: var(--accent-button-small);
     border: none;
     border-radius: 0.5rem;
-    color: white;
+    color: var(--text-on-accent);
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s ease;

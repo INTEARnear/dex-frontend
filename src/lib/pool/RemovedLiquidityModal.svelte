@@ -158,8 +158,8 @@
   }
 
   .success-icon {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
+    background: var(--status-success-soft-bg);
+    color: var(--status-success-text);
   }
 
   .modal-title {
@@ -214,13 +214,13 @@
   }
 
   .pnl-positive {
-    background: rgba(34, 197, 94, 0.12);
-    color: #4ade80;
+    background: var(--status-success-soft-bg);
+    color: var(--status-success-text);
   }
 
   .pnl-negative {
-    background: rgba(239, 68, 68, 0.12);
-    color: #f87171;
+    background: var(--status-error-soft-bg);
+    color: var(--status-error-text);
   }
 
   .pnl-label {
@@ -239,9 +239,13 @@
   }
 
   .success-btn {
-    background: linear-gradient(135deg, #22c55e, #16a34a);
+    background: linear-gradient(
+      135deg,
+      var(--status-success-solid),
+      var(--status-success-solid-hover)
+    );
     border: none;
-    color: white;
+    color: var(--text-on-success);
     border-radius: 0.75rem;
     font-size: 1rem;
     font-weight: 600;
@@ -250,6 +254,10 @@
   }
 
   .success-btn:hover {
-    background: linear-gradient(135deg, #16a34a, #15803d);
+    background: linear-gradient(
+      135deg,
+      var(--status-success-solid-hover),
+      var(--status-success-text)
+    );
   }
 </style>

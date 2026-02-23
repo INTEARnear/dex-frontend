@@ -135,7 +135,7 @@
   .reputation-badge svg {
     width: 0.65rem;
     height: 0.65rem;
-    stroke: white;
+    stroke: var(--text-on-info);
   }
 
   .reputation-badge-small {
@@ -153,15 +153,15 @@
   }
 
   .reputation-reputable {
-    background: #15803d;
+    background: var(--status-success-solid-hover);
   }
 
   .reputation-notfake {
-    background: #3b82f6;
+    background: var(--status-info-solid);
   }
 
   .reputation-warning {
-    background: #dc2626;
+    background: var(--status-error-solid);
   }
 
   .reputation-warning svg {

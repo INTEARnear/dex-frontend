@@ -787,7 +787,11 @@
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #10b981);
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-start),
+      var(--status-success-solid)
+    );
     box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
   }
 
@@ -801,7 +805,7 @@
   .wallet-value-badge {
     border: 1px solid color-mix(in oklab, var(--accent-primary), black 20%);
     background: color-mix(in oklab, var(--accent-primary), black 10%);
-    color: white;
+    color: var(--text-on-accent);
     border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 700;
@@ -896,7 +900,7 @@
     gap: 0.35rem;
     border: none;
     background: var(--accent-button-small);
-    color: white;
+    color: var(--text-on-accent);
     border-radius: 0.625rem;
     padding: 0 0.875rem;
     font-size: 0.8125rem;
@@ -927,7 +931,7 @@
   .mobile-tooltip-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--overlay-backdrop);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     z-index: 1101;
@@ -1009,7 +1013,7 @@
     background: var(--accent-button-small);
     border: none;
     border-radius: 0.75rem;
-    color: white;
+    color: var(--text-on-accent);
     font-size: 0.9375rem;
     font-weight: 600;
     cursor: pointer;
@@ -1035,8 +1039,8 @@
 
   .disconnect-btn:hover {
     background: var(--bg-input);
-    border-color: #ef4444;
-    color: #ef4444;
+    border-color: var(--status-error-solid);
+    color: var(--status-error-solid);
   }
 
   @media (--tablet) {

@@ -1831,16 +1831,16 @@
   }
 
   input.insufficient-balance {
-    color: #f87171;
+    color: var(--status-error-text);
   }
 
   .input-wrapper.insufficient-balance {
-    border-color: rgba(239, 68, 68, 0.5);
+    border-color: var(--status-error-soft-border);
   }
 
   .input-wrapper.insufficient-balance:focus-within {
-    border-color: #f87171;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+    border-color: var(--status-error-text);
+    box-shadow: 0 0 0 3px var(--status-error-soft-bg);
   }
 
   input::placeholder {
@@ -1920,7 +1920,7 @@
     background: var(--accent-button);
     border: none;
     border-radius: 0.875rem;
-    color: white;
+    color: var(--text-on-accent);
     font-size: 1.25rem;
     font-weight: bold;
     cursor: pointer;
@@ -1945,11 +1945,19 @@
   }
 
   .connect-wallet-btn {
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-start),
+      var(--accent-gradient-end)
+    );
   }
 
   .connect-wallet-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-hover-start),
+      var(--accent-gradient-hover-end)
+    );
   }
 
   @keyframes spin {
@@ -2089,23 +2097,27 @@
   }
 
   .route-segment-dex {
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    color: #ffffff;
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-start),
+      var(--accent-gradient-end)
+    );
+    color: var(--text-on-accent);
   }
 
   .route-segment-best {
-    background: #16a34a;
-    color: #ffffff;
+    background: var(--status-success-solid);
+    color: var(--text-on-success);
   }
 
   .route-segment-penalty {
-    background: #facc15;
-    color: #111827;
+    background: var(--status-warning-solid);
+    color: var(--text-on-warning);
   }
 
   .route-segment-clear {
-    background: #dc2626;
-    color: #ffffff;
+    background: var(--status-error-solid);
+    color: var(--text-on-danger);
     width: var(--route-badge-height);
     padding: 0 0.25rem 0 0 !important;
     flex-shrink: 0;
@@ -2123,7 +2135,7 @@
   .route-provider-btn svg {
     width: 11px;
     height: 11px;
-    color: #ffffff;
+    color: var(--text-on-accent);
   }
 
   .route-provider-btn:disabled {
@@ -2307,13 +2319,13 @@
   }
 
   .route-picker-status-best {
-    background: #16a34a;
-    color: #ffffff;
+    background: var(--status-success-solid);
+    color: var(--text-on-success);
   }
 
   .route-picker-status-penalty {
-    background: #facc15;
-    color: #111827;
+    background: var(--status-warning-solid);
+    color: var(--text-on-warning);
   }
 
   @media (--tablet) {
@@ -2360,17 +2372,17 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    background: rgba(234, 179, 8, 0.1);
-    border: 1px solid rgba(234, 179, 8, 0.3);
+    background: var(--status-warning-soft-bg);
+    border: 1px solid var(--status-warning-soft-border);
     border-radius: 0.75rem;
-    color: #facc15;
+    color: var(--status-warning-text);
     font-size: 0.8125rem;
     font-weight: 500;
   }
 
   .price-impact-warning svg {
     flex-shrink: 0;
-    color: #facc15;
+    color: var(--status-warning-text);
   }
 
   .price-impact-warning strong {
@@ -2379,18 +2391,22 @@
   }
 
   .price-impact-warning.severe {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: #f87171;
+    background: var(--status-error-soft-bg);
+    border-color: var(--status-error-soft-border);
+    color: var(--status-error-text);
   }
 
   .price-impact-warning.severe svg {
-    color: #f87171;
+    color: var(--status-error-text);
   }
 
   .dex-badge {
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    color: white;
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-start),
+      var(--accent-gradient-end)
+    );
+    color: var(--text-on-accent);
     min-height: var(--route-badge-height);
     display: inline-flex;
     align-items: center;
@@ -2458,8 +2474,8 @@
   }
 
   .success-icon {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
+    background: var(--status-success-soft-bg);
+    color: var(--status-success-text);
   }
 
   .modal-title {
@@ -2489,11 +2505,11 @@
   }
 
   .transfer-in {
-    background: rgba(34, 197, 94, 0.1);
+    background: var(--status-success-soft-bg);
   }
 
   .transfer-out {
-    background: rgba(239, 68, 68, 0.1);
+    background: var(--status-error-soft-bg);
   }
 
   .transfer-direction {
@@ -2504,11 +2520,11 @@
   }
 
   .transfer-in .transfer-direction {
-    color: #4ade80;
+    color: var(--status-success-text);
   }
 
   .transfer-out .transfer-direction {
-    color: #f87171;
+    color: var(--status-error-text);
   }
 
   .transfer-amount {
@@ -2543,13 +2559,21 @@
   }
 
   .success-btn {
-    background: linear-gradient(135deg, #22c55e, #16a34a);
+    background: linear-gradient(
+      135deg,
+      var(--status-success-solid),
+      var(--status-success-solid-hover)
+    );
     border: none;
-    color: white;
+    color: var(--text-on-success);
   }
 
   .success-btn:hover {
-    background: linear-gradient(135deg, #16a34a, #15803d);
+    background: linear-gradient(
+      135deg,
+      var(--status-success-solid-hover),
+      var(--status-success-text)
+    );
     border: none;
   }
 

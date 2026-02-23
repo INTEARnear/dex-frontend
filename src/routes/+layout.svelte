@@ -1,9 +1,18 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import WalletButton from "../lib/WalletButton.svelte";
-  import { BookOpen } from "lucide-svelte";
+  import { BookOpen, Moon, Sun, Monitor } from "lucide-svelte";
   import { siX, siTelegram, siGithub } from "simple-icons";
   import { page } from "$app/state";
   import { tokenHubStore } from "../lib/tokenHubStore";
+  import {
+    applyThemePreference,
+    initializeTheme,
+    onSystemThemeChange,
+    persistThemePreference,
+    type ResolvedTheme,
+    type ThemePreference,
+  } from "../lib/theme";
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js");
@@ -19,6 +28,49 @@
       page.url.pathname === "/pool" ||
       page.url.pathname === "/stats",
   );
+
+  let themePreference = $state<ThemePreference>("system");
+  let resolvedTheme = $state<ResolvedTheme>("dark");
+
+  const themeButtonLabel = $derived.by(() => {
+    const currentLabel =
+      themePreference === "system"
+        ? `System (${resolvedTheme})`
+        : resolvedTheme === "dark"
+          ? "Dark"
+          : "Light";
+    const nextPreference =
+      themePreference === "system"
+        ? "light"
+        : themePreference === "light"
+          ? "dark"
+          : "system";
+    return `Theme: ${currentLabel}. Switch to ${nextPreference}.`;
+  });
+
+  onMount(() => {
+    const initializedTheme = initializeTheme();
+    themePreference = initializedTheme.preference;
+    resolvedTheme = initializedTheme.resolvedTheme;
+
+    return onSystemThemeChange((systemTheme) => {
+      if (themePreference !== "system") return;
+      resolvedTheme = applyThemePreference("system", systemTheme);
+    });
+  });
+
+  function cycleThemePreference(): void {
+    const nextPreference: ThemePreference =
+      themePreference === "system"
+        ? "light"
+        : themePreference === "light"
+          ? "dark"
+          : "system";
+
+    themePreference = nextPreference;
+    persistThemePreference(nextPreference);
+    resolvedTheme = applyThemePreference(nextPreference);
+  }
 </script>
 
 <div class="top-bar">
@@ -41,7 +93,26 @@
       >Stats</a
     >
   </nav>
-  <WalletButton />
+  <div class="top-bar-controls">
+    <button
+      type="button"
+      class="theme-toggle"
+      data-current-theme={resolvedTheme}
+      data-theme-preference={themePreference}
+      aria-label={themeButtonLabel}
+      title={themeButtonLabel}
+      onclick={cycleThemePreference}
+    >
+      {#if themePreference === "system"}
+        <Monitor size={18} />
+      {:else if resolvedTheme === "dark"}
+        <Moon size={18} />
+      {:else}
+        <Sun size={18} />
+      {/if}
+    </button>
+    <WalletButton />
+  </div>
 </div>
 
 <main class:wide={isWidePage}>
@@ -159,10 +230,65 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 
+  .top-bar-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .theme-toggle {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .theme-toggle[data-current-theme="dark"] {
+    color: var(--accent-primary);
+  }
+
+  .theme-toggle[data-current-theme="light"] {
+    color: var(--status-warning-text);
+  }
+
+  .theme-toggle[data-theme-preference="system"] {
+    color: var(--text-secondary);
+  }
+
+  .theme-toggle:hover {
+    background: var(--bg-input);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+  }
+
+  .theme-toggle:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+
   @media (--tablet) {
     .top-bar {
       max-width: 480px;
       justify-content: flex-end;
+    }
+
+    .top-bar-controls {
+      gap: 0.5rem;
+    }
+
+    .theme-toggle {
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 0.625rem;
     }
   }
 
@@ -279,6 +405,18 @@
 
     .footer-links {
       gap: 1rem;
+    }
+
+    .theme-toggle {
+      width: 2rem;
+      height: 2rem;
+    }
+  }
+
+  @media (--small-mobile) {
+    .theme-toggle {
+      width: 1.875rem;
+      height: 1.875rem;
     }
   }
 

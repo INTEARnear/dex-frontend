@@ -411,19 +411,19 @@
   }
 
   .scheduled-chart-current-line {
-    stroke: rgba(16, 185, 129, 0.75);
+    stroke: color-mix(in oklab, var(--status-success-solid), transparent 25%);
     stroke-width: 1;
     stroke-dasharray: 4 3;
   }
 
   .scheduled-chart-current-point {
-    fill: #10b981;
-    stroke: white;
+    fill: var(--status-success-solid);
+    stroke: var(--bg-card);
     stroke-width: 1.5;
   }
 
   .scheduled-chart-hover-line {
-    stroke: rgba(59, 130, 246, 0.75);
+    stroke: color-mix(in oklab, var(--accent-primary), transparent 25%);
     stroke-width: 1;
     stroke-dasharray: 3 3;
   }

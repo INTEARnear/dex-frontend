@@ -512,18 +512,18 @@
   }
 
   .private-badge {
-    color: #eab308;
-    background: rgba(234, 179, 8, 0.15);
+    color: var(--status-warning-text);
+    background: var(--status-warning-soft-bg);
   }
 
   .owner-badge {
-    color: #22c55e;
-    background: rgba(34, 197, 94, 0.15);
+    color: var(--status-success-text);
+    background: var(--status-success-soft-bg);
   }
 
   .burnt-badge {
-    color: #f87171;
-    background: rgba(239, 68, 68, 0.15);
+    color: var(--status-error-text);
+    background: var(--status-error-soft-bg);
   }
 
   .pair-symbols {
@@ -611,7 +611,7 @@
     background: var(--accent-button-small);
     border: none;
     border-radius: 0.5rem;
-    color: white;
+    color: var(--text-on-accent);
     font-weight: 600;
     font-size: 0.875rem;
     cursor: pointer;
@@ -628,10 +628,10 @@
     align-items: center;
     justify-content: center;
     padding: 0.52rem 1rem;
-    background: rgba(239, 68, 68, 0.18);
-    border: 1px solid rgba(239, 68, 68, 0.35);
+    background: var(--status-error-soft-bg);
+    border: 1px solid var(--status-error-soft-border);
     border-radius: 0.5rem;
-    color: #fca5a5;
+    color: var(--status-error-soft-text);
     font-weight: 600;
     font-size: 0.875rem;
     cursor: pointer;
@@ -639,8 +639,8 @@
   }
 
   .lock-pool-btn:hover {
-    background: rgba(239, 68, 68, 0.26);
-    border-color: rgba(239, 68, 68, 0.5);
+    background: color-mix(in oklab, var(--status-error-soft-bg), black 8%);
+    border-color: color-mix(in oklab, var(--status-error-soft-border), black 8%);
   }
 
   .modal-backdrop {
@@ -691,9 +691,9 @@
     gap: 0.625rem;
     padding: 0.875rem;
     border-radius: 0.75rem;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.25);
-    color: #fca5a5;
+    background: var(--status-error-soft-bg);
+    border: 1px solid var(--status-error-soft-border);
+    color: var(--status-error-soft-text);
     font-size: 0.875rem;
     line-height: 1.4;
   }
@@ -710,7 +710,7 @@
 
   .lock-error {
     margin: 0;
-    color: #f87171;
+    color: var(--status-error-text);
     font-size: 0.8125rem;
   }
 
@@ -748,8 +748,12 @@
 
   .confirm-lock-btn {
     border: none;
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    color: white;
+    background: linear-gradient(
+      135deg,
+      var(--status-error-solid) 0%,
+      var(--status-error-solid-hover) 100%
+    );
+    color: var(--text-on-danger);
   }
 
   .confirm-lock-btn:hover:not(:disabled) {

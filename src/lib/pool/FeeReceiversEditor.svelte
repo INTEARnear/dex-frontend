@@ -1044,7 +1044,7 @@
 
   .wallet-btn:hover {
     background: var(--accent-button-small);
-    color: white;
+    color: var(--text-on-accent);
   }
 
   .remove-btn {
@@ -1063,7 +1063,7 @@
   }
 
   .remove-btn:hover {
-    color: #ef4444;
+    color: var(--status-error-solid);
   }
 
   .amount-row {
@@ -1102,7 +1102,7 @@
 
   .amount-type-btn.active {
     background: var(--accent-button-small);
-    color: white;
+    color: var(--text-on-accent);
   }
 
   .receiver-percentage {
@@ -1240,12 +1240,12 @@
   .quick-time-btn.active {
     background: var(--accent-button-small);
     border-color: var(--accent-primary);
-    color: white;
+    color: var(--text-on-accent);
   }
 
   .quick-time-btn.active:hover {
     background: var(--accent-hover);
-    color: white;
+    color: var(--text-on-accent);
   }
 
   .duration-input-row {
@@ -1317,7 +1317,7 @@
   .warning-text {
     margin: 0 0.5rem;
     font-size: 0.825rem;
-    color: #eab308;
+    color: var(--status-warning-text);
   }
 
   .add-receiver-btn {

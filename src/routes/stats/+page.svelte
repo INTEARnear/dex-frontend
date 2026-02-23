@@ -524,7 +524,7 @@
 
   .state-panel.error p {
     margin: 0;
-    color: #f87171;
+    color: var(--status-error-text);
     text-align: center;
   }
 
@@ -532,7 +532,7 @@
     border: none;
     border-radius: 0.5rem;
     background: var(--accent-button-small);
-    color: white;
+    color: var(--text-on-accent);
     font-weight: 600;
     padding: 0.45rem 0.8rem;
     cursor: pointer;

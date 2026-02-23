@@ -67,8 +67,8 @@
   }
 
   .error-icon {
-    background: rgba(239, 68, 68, 0.15);
-    color: #f87171;
+    background: var(--status-error-soft-bg);
+    color: var(--status-error-text);
   }
 
   .modal-title {

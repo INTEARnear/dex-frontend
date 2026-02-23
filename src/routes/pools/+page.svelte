@@ -673,7 +673,7 @@
     background: var(--accent-button-small);
     border: none;
     border-radius: 0.5rem;
-    color: white;
+    color: var(--text-on-accent);
     font-weight: 600;
     font-size: 0.875rem;
     cursor: pointer;
@@ -832,39 +832,49 @@
   }
 
   .pool-card.no-deposit {
-    border-color: #ef4444;
-    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.45);
+    border-color: var(--status-error-solid);
+    box-shadow:
+      inset 0 0 0 1px
+      color-mix(in oklab, var(--status-error-solid), transparent 55%);
   }
 
   .pool-card.no-deposit:hover {
-    border-color: #dc2626;
+    border-color: var(--status-error-solid-hover);
     box-shadow:
-      inset 0 0 0 1px rgba(239, 68, 68, 0.55),
-      0 8px 20px rgba(239, 68, 68, 0.25);
+      inset 0 0 0 1px
+      color-mix(in oklab, var(--status-error-solid), transparent 45%),
+      0 8px 20px color-mix(in oklab, var(--status-error-solid), transparent 75%);
   }
 
   .pool-card.no-deposit:active {
     box-shadow:
-      inset 0 0 0 1px rgba(239, 68, 68, 0.55),
-      0 4px 12px rgba(239, 68, 68, 0.2);
+      inset 0 0 0 1px
+      color-mix(in oklab, var(--status-error-solid), transparent 45%),
+      0 4px 12px color-mix(in oklab, var(--status-error-solid), transparent 80%);
   }
 
   .pool-card.owned {
-    border-color: #22c55e;
-    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.45);
+    border-color: var(--status-success-solid);
+    box-shadow:
+      inset 0 0 0 1px
+      color-mix(in oklab, var(--status-success-solid), transparent 55%);
   }
 
   .pool-card.owned:hover {
-    border-color: #16a34a;
+    border-color: var(--status-success-solid-hover);
     box-shadow:
-      inset 0 0 0 1px rgba(34, 197, 94, 0.55),
-      0 8px 20px rgba(34, 197, 94, 0.25);
+      inset 0 0 0 1px
+      color-mix(in oklab, var(--status-success-solid), transparent 45%),
+      0 8px 20px
+      color-mix(in oklab, var(--status-success-solid), transparent 75%);
   }
 
   .pool-card.owned:active {
     box-shadow:
-      inset 0 0 0 1px rgba(34, 197, 94, 0.55),
-      0 4px 12px rgba(34, 197, 94, 0.2);
+      inset 0 0 0 1px
+      color-mix(in oklab, var(--status-success-solid), transparent 45%),
+      0 4px 12px
+      color-mix(in oklab, var(--status-success-solid), transparent 80%);
   }
 
   .pool-header {
@@ -909,8 +919,8 @@
     font-size: 0.625rem;
     font-weight: 600;
     padding: 0.25rem 0.5rem;
-    background: rgba(234, 179, 8, 0.15);
-    color: #eab308;
+    background: var(--status-warning-soft-bg);
+    color: var(--status-warning-text);
     border-radius: 0.25rem;
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -921,8 +931,8 @@
     font-size: 0.625rem;
     font-weight: 600;
     padding: 0.25rem 0.5rem;
-    background: rgba(34, 197, 94, 0.15);
-    color: #22c55e;
+    background: var(--status-success-soft-bg);
+    color: var(--status-success-text);
     border-radius: 0.25rem;
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -933,8 +943,8 @@
     font-size: 0.625rem;
     font-weight: 600;
     padding: 0.25rem 0.5rem;
-    background: rgba(239, 68, 68, 0.15);
-    color: #f87171;
+    background: var(--status-error-soft-bg);
+    color: var(--status-error-text);
     border-radius: 0.25rem;
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -968,8 +978,12 @@
 
   .your-liquidity-value {
     padding: 0.25rem 0.625rem;
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
-    color: white;
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-start),
+      var(--accent-gradient-end)
+    );
+    color: var(--text-on-accent);
     border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 600;
@@ -1013,7 +1027,7 @@
     background: var(--accent-button-small);
     border: none;
     border-radius: 0.5rem;
-    color: white;
+    color: var(--text-on-accent);
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s ease;

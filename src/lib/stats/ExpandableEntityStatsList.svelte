@@ -328,8 +328,8 @@
   }
 
   .detail-error {
-    color: #f87171;
-    border-color: rgba(248, 113, 113, 0.35);
+    color: var(--status-error-text);
+    border-color: var(--status-error-soft-border);
   }
 
   @media (--mobile) {

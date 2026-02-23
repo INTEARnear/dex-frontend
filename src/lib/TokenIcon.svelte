@@ -77,11 +77,15 @@
   }
 
   .token-icon-placeholder {
-    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
+    background: linear-gradient(
+      135deg,
+      var(--accent-gradient-start),
+      var(--accent-gradient-end)
+    );
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--text-on-accent);
     font-weight: 700;
     font-size: calc(var(--token-icon-size) * 0.4);
     line-height: 1;

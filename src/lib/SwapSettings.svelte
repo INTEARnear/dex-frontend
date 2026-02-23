@@ -233,7 +233,7 @@
 
   .slippage-option.active {
     background: var(--accent-button-small);
-    color: white;
+    color: var(--text-on-accent);
     border-color: var(--accent-primary);
   }
 

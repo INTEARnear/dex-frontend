@@ -452,8 +452,8 @@
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: var(--status-error-soft-bg);
+    border: 1px solid var(--status-error-soft-border);
     border-radius: 0.625rem;
     margin: 0.625rem 1.5rem 1rem;
   }
@@ -463,7 +463,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.875rem;
-    color: #f87171;
+    color: var(--status-error-text);
   }
 
   .modal-footer {
@@ -499,7 +499,7 @@
   .submit-btn {
     background: var(--accent-button-small);
     border: none;
-    color: white;
+    color: var(--text-on-accent);
     display: flex;
     align-items: center;
     justify-content: center;
