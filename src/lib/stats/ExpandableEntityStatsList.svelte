@@ -133,6 +133,7 @@
                   points={detailSeries}
                   metricLabel={metricLabel}
                   summaryMode={chartSummaryMode}
+                  timeframe={timeframe}
                 />
               {/if}
             </div>

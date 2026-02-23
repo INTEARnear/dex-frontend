@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { onDestroy, tick } from "svelte";
   import ResponsiveTooltip from "../ResponsiveTooltip.svelte";
   import { formatAmount } from "../utils";
-  import type { StatsSeriesPoint } from "./types";
+  import type { StatsSeriesPoint, StatsTimeframe } from "./types";
 
   interface HistogramBar {
     index: number;
@@ -9,6 +10,8 @@
     y: number;
     width: number;
     height: number;
+    topPercent: number;
+    heightPercent: number;
     timestamp: string;
     valueUsd: number;
   }
@@ -18,12 +21,13 @@
     metricLabel?: string;
     emptyMessage?: string;
     summaryMode?: "sum" | "latest";
+    timeframe: StatsTimeframe;
   }
 
   interface TooltipTarget {
     index: number;
-    leftPercent: number;
-    widthPercent: number;
+    leftPx: number;
+    widthPx: number;
     topPercent: number;
     heightPercent: number;
     timestamp: string;
@@ -34,28 +38,70 @@
     y: number;
     value: number;
     label: string;
+    topPercent: number;
   }
 
-  const CHART_WIDTH = 1000;
+  interface AxisLabel {
+    index: number;
+    label: string;
+    leftPx: number;
+    align: "start" | "center" | "end";
+  }
+
   const CHART_HEIGHT = 300;
   const PADDING_TOP = 16;
   const PADDING_RIGHT = 14;
   const PADDING_BOTTOM = 42;
-  const PADDING_LEFT = 52;
-  const BAR_GAP = 3;
+  const PADDING_LEFT = 6;
+  const BAR_GAP = 4;
+  const MIN_BAR_WIDTH = 8;
+  const DRAG_ACTIVATE_DISTANCE = 4;
+  const DESKTOP_INERTIA_MIN_VELOCITY = 0.01;
+  const DESKTOP_INERTIA_FRICTION = 0.92;
+  const DESKTOP_INERTIA_MAX_DURATION_MS = 1000;
 
   let {
     points,
     metricLabel = "USD",
     emptyMessage = "No chart data available",
     summaryMode = "latest",
+    timeframe,
   }: Props = $props();
 
   let activeIndex = $state<number | null>(null);
+  let plotScrollElelemt = $state<HTMLDivElement | null>(null);
+  let plotViewportWidth = $state(0);
+  let scrollLeft = $state(0);
+  let maxScrollLeft = $state(0);
+  let hasOverflow = $state(false);
+  let shouldAutoScrollRight = $state(true);
+  let suppressHoverUntil = $state(0);
+  let isPointerPressed = $state(false);
+  let isDragging = $state(false);
+
+  let dragStartX = 0;
+  let dragStartScrollLeft = 0;
+  let dragLastTime = 0;
+  let dragVelocity = 0;
+  let activePointerId: number | null = null;
+  let isSyncingScroll = false;
+  let inertiaFrameId: number | null = null;
+
+  const isDailyCandles = $derived(timeframe === "Month");
 
   function formatPointTimestamp(timestamp: string): string {
     const date = new Date(timestamp);
     if (!Number.isFinite(date.getTime())) return timestamp;
+    if (isDailyCandles) {
+      return date.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year:
+          date.getFullYear() !== new Date().getFullYear()
+            ? "numeric"
+            : undefined,
+      });
+    }
     return date.toLocaleString(undefined, {
       month: "short",
       day: "numeric",
@@ -67,6 +113,13 @@
   function formatExactTimestamp(timestamp: string): string {
     const date = new Date(timestamp);
     if (!Number.isFinite(date.getTime())) return timestamp;
+    if (isDailyCandles) {
+      return date.toLocaleString(undefined, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+    }
     return date.toLocaleString(undefined, {
       year: "numeric",
       month: "2-digit",
@@ -95,8 +148,10 @@
     return `$${formatAmount(valueUsd)}`;
   }
 
-  const innerWidth = CHART_WIDTH - PADDING_LEFT - PADDING_RIGHT;
   const innerHeight = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+  const axisLineTopPercent = ((PADDING_TOP + innerHeight) / CHART_HEIGHT) * 100;
+  const xAxisLabelTopPercent =
+    ((PADDING_TOP + innerHeight + 14) / CHART_HEIGHT) * 100;
 
   const maxValue = $derived.by(() => {
     const values = points.map((point) => point.valueUsd);
@@ -104,10 +159,29 @@
     return max > 0 ? max : 1;
   });
 
+  const minInnerWidth = $derived.by(() => {
+    if (points.length === 0) return 0;
+    return (
+      points.length * MIN_BAR_WIDTH + BAR_GAP * Math.max(0, points.length - 1)
+    );
+  });
+
+  const viewportInnerWidth = $derived.by(() => {
+    return Math.max(0, plotViewportWidth - PADDING_LEFT - PADDING_RIGHT);
+  });
+
+  const innerWidth = $derived.by(() => {
+    return Math.max(minInnerWidth, viewportInnerWidth);
+  });
+
+  const plotContentWidth = $derived.by(() => {
+    return innerWidth + PADDING_LEFT + PADDING_RIGHT;
+  });
+
   const bars = $derived.by<HistogramBar[]>(() => {
     if (points.length === 0) return [];
     const barWidth = Math.max(
-      1,
+      MIN_BAR_WIDTH,
       (innerWidth - BAR_GAP * (points.length - 1)) / points.length,
     );
 
@@ -125,6 +199,8 @@
         y,
         width: barWidth,
         height: boundedHeight,
+        topPercent: (y / CHART_HEIGHT) * 100,
+        heightPercent: (boundedHeight / CHART_HEIGHT) * 100,
         timestamp: point.timestamp,
         valueUsd: point.valueUsd,
       };
@@ -149,8 +225,45 @@
         y,
         value,
         label: formatYAxisLabel(value),
+        topPercent: (y / CHART_HEIGHT) * 100,
       };
     });
+  });
+
+  const axisLabels = $derived.by<AxisLabel[]>(() => {
+    if (bars.length === 0) return [];
+
+    return axisLabelIndices
+      .map((pointIndex) => {
+        const point = bars[pointIndex];
+        if (!point) return null;
+
+        if (pointIndex === 0) {
+          return {
+            index: pointIndex,
+            label: formatPointTimestamp(point.timestamp),
+            leftPx: point.x,
+            align: "start" as const,
+          };
+        }
+
+        if (pointIndex === bars.length - 1) {
+          return {
+            index: pointIndex,
+            label: formatPointTimestamp(point.timestamp),
+            leftPx: point.x + point.width,
+            align: "end" as const,
+          };
+        }
+
+        return {
+          index: pointIndex,
+          label: formatPointTimestamp(point.timestamp),
+          leftPx: point.x + point.width / 2,
+          align: "center" as const,
+        };
+      })
+      .filter((label): label is AxisLabel => label !== null);
   });
 
   const tooltipTargets = $derived.by<TooltipTarget[]>(() => {
@@ -159,15 +272,23 @@
     const chartTopPercent = (PADDING_TOP / CHART_HEIGHT) * 100;
     const chartHeightPercent = (innerHeight / CHART_HEIGHT) * 100;
 
-    return bars.map((bar) => ({
-      index: bar.index,
-      leftPercent: (bar.x / CHART_WIDTH) * 100,
-      widthPercent: (bar.width / CHART_WIDTH) * 100,
-      topPercent: chartTopPercent,
-      heightPercent: chartHeightPercent,
-      timestamp: bar.timestamp,
-      valueUsd: bar.valueUsd,
-    }));
+    return bars.map((bar) => {
+      // When hovering gap, hit the closest bar
+      const i = bar.index;
+      const n = bars.length;
+      const hitLeft = bar.x - (i > 0 ? BAR_GAP / 2 : 0);
+      const hitWidth =
+        bar.width + (i > 0 ? BAR_GAP / 2 : 0) + (i < n - 1 ? BAR_GAP / 2 : 0);
+      return {
+        index: bar.index,
+        leftPx: hitLeft,
+        widthPx: hitWidth,
+        topPercent: chartTopPercent,
+        heightPercent: chartHeightPercent,
+        timestamp: bar.timestamp,
+        valueUsd: bar.valueUsd,
+      };
+    });
   });
 
   const activeBar = $derived.by(() => {
@@ -199,6 +320,25 @@
     return latestBar ? formatPointTimestamp(latestBar.timestamp) : "";
   });
 
+  const dataScrollKey = $derived.by(() => {
+    if (points.length === 0) return "empty";
+    const firstTimestamp = points[0]?.timestamp ?? "";
+    const lastTimestamp = points[points.length - 1]?.timestamp ?? "";
+    return `${points.length}:${firstTimestamp}:${lastTimestamp}`;
+  });
+
+  const showLeftFade = $derived.by(() => {
+    return hasOverflow && scrollLeft > 1;
+  });
+
+  const showRightFade = $derived.by(() => {
+    return hasOverflow && scrollLeft < maxScrollLeft - 1;
+  });
+
+  onDestroy(() => {
+    cancelInertia();
+  });
+
   $effect(() => {
     if (bars.length === 0) {
       activeIndex = null;
@@ -210,13 +350,274 @@
     }
   });
 
+  $effect(() => {
+    void dataScrollKey;
+    shouldAutoScrollRight = true;
+  });
+
+  $effect(() => {
+    const element = plotScrollElelemt;
+    if (!element) return;
+
+    const observer = new ResizeObserver(() => {
+      updateScrollMetrics();
+    });
+    observer.observe(element);
+
+    const canvas = element.querySelector(".plot-canvas");
+    if (canvas instanceof HTMLElement) {
+      observer.observe(canvas);
+    }
+
+    updateScrollMetrics();
+
+    return () => {
+      observer.disconnect();
+    };
+  });
+
+  $effect(() => {
+    const noElement = !plotScrollElelemt;
+    const noBars = bars.length === 0;
+    const noAutoScroll = !shouldAutoScrollRight;
+    void plotContentWidth;
+
+    if (noElement || noBars || noAutoScroll) return;
+
+    let cancelled = false;
+    (async () => {
+      await tick();
+      if (cancelled) return;
+
+      const current = plotScrollElelemt;
+      if (!current) return;
+
+      const nextMaxScrollLeft = Math.max(
+        0,
+        current.scrollWidth - current.clientWidth,
+      );
+      isSyncingScroll = true;
+      current.scrollLeft = nextMaxScrollLeft;
+      scrollLeft = current.scrollLeft;
+      maxScrollLeft = nextMaxScrollLeft;
+      hasOverflow = nextMaxScrollLeft > 0;
+      queueMicrotask(() => {
+        isSyncingScroll = false;
+      });
+      shouldAutoScrollRight = false;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  function updateScrollMetrics() {
+    const element = plotScrollElelemt;
+    if (!element) {
+      plotViewportWidth = 0;
+      scrollLeft = 0;
+      maxScrollLeft = 0;
+      hasOverflow = false;
+      return;
+    }
+
+    plotViewportWidth = element.clientWidth;
+    const nextMaxScrollLeft = Math.max(
+      0,
+      element.scrollWidth - element.clientWidth,
+    );
+    maxScrollLeft = nextMaxScrollLeft;
+    hasOverflow = nextMaxScrollLeft > 0;
+
+    if (element.scrollLeft > nextMaxScrollLeft) {
+      isSyncingScroll = true;
+      element.scrollLeft = nextMaxScrollLeft;
+      queueMicrotask(() => {
+        isSyncingScroll = false;
+      });
+    }
+
+    scrollLeft = element.scrollLeft;
+  }
+
   function setActiveIndex(index: number) {
+    if (Date.now() < suppressHoverUntil) return;
+    if (isDragging) return;
     if (index < 0 || index >= bars.length) return;
     activeIndex = index;
   }
 
   function clearActiveIndex() {
+    if (isDragging) return;
     activeIndex = null;
+  }
+
+  function handleScroll() {
+    updateScrollMetrics();
+    if (!isSyncingScroll) {
+      shouldAutoScrollRight = false;
+    }
+  }
+
+  function cancelInertia() {
+    if (inertiaFrameId !== null) {
+      cancelAnimationFrame(inertiaFrameId);
+      inertiaFrameId = null;
+    }
+  }
+
+  function startDesktopInertia(initialVelocity: number) {
+    const element = plotScrollElelemt;
+    if (!element || !hasOverflow) return;
+    if (Math.abs(initialVelocity) < DESKTOP_INERTIA_MIN_VELOCITY) return;
+
+    cancelInertia();
+    shouldAutoScrollRight = false;
+    suppressHoverUntil = Date.now() + 220;
+    activeIndex = null;
+
+    let velocity = initialVelocity;
+    let lastFrameTs = performance.now();
+    let elapsedMs = 0;
+
+    const step = (timestamp: number) => {
+      const current = plotScrollElelemt;
+      if (!current) {
+        inertiaFrameId = null;
+        return;
+      }
+
+      const dt = Math.max(1, Math.min(32, timestamp - lastFrameTs));
+      lastFrameTs = timestamp;
+      elapsedMs += dt;
+
+      const previousScrollLeft = current.scrollLeft;
+      current.scrollLeft = previousScrollLeft + velocity * dt;
+      const appliedDelta = current.scrollLeft - previousScrollLeft;
+
+      velocity *= Math.pow(DESKTOP_INERTIA_FRICTION, dt / 16.667);
+
+      if (
+        elapsedMs >= DESKTOP_INERTIA_MAX_DURATION_MS ||
+        Math.abs(velocity) < DESKTOP_INERTIA_MIN_VELOCITY ||
+        Math.abs(appliedDelta) < 0.1
+      ) {
+        inertiaFrameId = null;
+        return;
+      }
+
+      inertiaFrameId = requestAnimationFrame(step);
+    };
+
+    inertiaFrameId = requestAnimationFrame(step);
+  }
+
+  function stopDragging(pointerId: number, withInertia: boolean) {
+    const element = plotScrollElelemt;
+    const releaseVelocity = dragVelocity;
+    const wasDragging = isDragging;
+    if (element && element.hasPointerCapture(pointerId)) {
+      element.releasePointerCapture(pointerId);
+    }
+    if (isDragging) {
+      suppressHoverUntil = Date.now() + 180;
+    }
+    isPointerPressed = false;
+    isDragging = false;
+    activePointerId = null;
+    dragVelocity = 0;
+
+    if (withInertia && wasDragging) {
+      startDesktopInertia(releaseVelocity);
+    }
+  }
+
+  function handlePointerDown(event: PointerEvent) {
+    if (event.pointerType === "touch") return;
+    if (event.button !== 0) return;
+
+    const element = plotScrollElelemt;
+    if (!element) return;
+
+    const canDrag = hasOverflow;
+    if (!canDrag) return;
+
+    cancelInertia();
+    activePointerId = event.pointerId;
+    isPointerPressed = true;
+    isDragging = false;
+    dragStartX = event.clientX;
+    dragStartScrollLeft = element.scrollLeft;
+    dragLastTime = performance.now();
+    dragVelocity = 0;
+    suppressHoverUntil = Date.now() + 120;
+    activeIndex = null;
+    element.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: PointerEvent) {
+    if (!isPointerPressed) return;
+    if (activePointerId !== event.pointerId) return;
+
+    const element = plotScrollElelemt;
+    if (!element) return;
+
+    const deltaX = event.clientX - dragStartX;
+    let shouldSampleVelocity = isDragging;
+    if (!isDragging && Math.abs(deltaX) >= DRAG_ACTIVATE_DISTANCE) {
+      isDragging = true;
+      suppressHoverUntil = Date.now() + 120;
+      dragLastTime = performance.now();
+      dragVelocity = 0;
+      shouldSampleVelocity = false;
+    }
+
+    if (!isDragging) return;
+
+    shouldAutoScrollRight = false;
+    const previousScrollLeft = element.scrollLeft;
+    element.scrollLeft = dragStartScrollLeft - deltaX;
+    if (shouldSampleVelocity) {
+      const now = performance.now();
+      const dt = Math.max(1, now - dragLastTime);
+      const appliedDelta = element.scrollLeft - previousScrollLeft;
+      const instantVelocity = appliedDelta / dt;
+      dragVelocity = dragVelocity * 0.68 + instantVelocity * 0.32;
+      dragLastTime = now;
+    }
+    if (activeIndex !== null) {
+      activeIndex = null;
+    }
+    event.preventDefault();
+  }
+
+  function handlePointerUp(event: PointerEvent) {
+    if (activePointerId !== event.pointerId) return;
+    stopDragging(event.pointerId, true);
+  }
+
+  function handlePointerCancel(event: PointerEvent) {
+    if (activePointerId !== event.pointerId) return;
+    stopDragging(event.pointerId, false);
+  }
+
+  function handlePointerLeave(event: PointerEvent) {
+    if (!isPointerPressed) return;
+    if (activePointerId !== event.pointerId) return;
+    stopDragging(event.pointerId, false);
+  }
+
+  function handleLostPointerCapture(event: PointerEvent) {
+    if (activePointerId !== event.pointerId) return;
+    if (isDragging) {
+      suppressHoverUntil = Date.now() + 180;
+    }
+    cancelInertia();
+    isPointerPressed = false;
+    isDragging = false;
+    activePointerId = null;
+    dragVelocity = 0;
   }
 </script>
 
@@ -224,95 +625,118 @@
   {#if bars.length > 0}
     <div class="histogram-summary">
       <span class="summary-time">{summaryTimeLabel}</span>
-      <span class="summary-value">{metricLabel}: ${formatAmount(summaryValueUsd)}</span>
+      <span class="summary-value"
+        >{metricLabel}: ${formatAmount(summaryValueUsd)}</span
+      >
     </div>
   {/if}
 
   {#if bars.length === 0}
     <div class="empty-state">{emptyMessage}</div>
   {:else}
-    <div class="chart-wrap">
-      <svg
-        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-        preserveAspectRatio="xMinYMin meet"
-        class="chart"
-        aria-label="Histogram chart"
-      >
+    <div
+      class="chart-shell"
+      class:dragging={isDragging}
+      role="img"
+      aria-label="Histogram chart"
+    >
+      <div class="y-axis-rail" aria-hidden="true">
         {#each yAxisTicks as tick, index (index)}
-          <line
-            class="y-grid-line"
-            x1={PADDING_LEFT}
-            y1={tick.y}
-            x2={CHART_WIDTH - PADDING_RIGHT}
-            y2={tick.y}
-          />
-          <text class="y-axis-label" x={PADDING_LEFT - 8} y={tick.y + 4} text-anchor="end">
+          <span class="y-axis-label" style={`top:${tick.topPercent}%;`}>
             {tick.label}
-          </text>
+          </span>
         {/each}
+      </div>
 
-        <line
-          class="axis-line"
-          x1={PADDING_LEFT}
-          y1={PADDING_TOP + innerHeight}
-          x2={CHART_WIDTH - PADDING_RIGHT}
-          y2={PADDING_TOP + innerHeight}
-        />
+      <div class="plot-region">
+        <div
+          class="plot-scroll"
+          class:overflowing={hasOverflow}
+          class:pressed={isPointerPressed || isDragging}
+          role="region"
+          aria-label="Histogram plot area"
+          bind:this={plotScrollElelemt}
+          onscroll={handleScroll}
+          onpointerdown={handlePointerDown}
+          onpointermove={handlePointerMove}
+          onpointerup={handlePointerUp}
+          onpointercancel={handlePointerCancel}
+          onpointerleave={handlePointerLeave}
+          onlostpointercapture={handleLostPointerCapture}
+        >
+          <div class="plot-canvas" style={`width:${plotContentWidth}px;`}>
+            {#each yAxisTicks as tick, index (index)}
+              <div class="y-grid-line" style={`top:${tick.topPercent}%;`}></div>
+            {/each}
 
-        {#each bars as bar (bar.index)}
-          <rect
-            class="bar"
-            class:active={activeBar?.index === bar.index}
-            x={bar.x}
-            y={bar.y}
-            width={bar.width}
-            height={Math.max(1, bar.height)}
-            rx={3}
-            ry={3}
-          />
-        {/each}
+            <div class="axis-line" style={`top:${axisLineTopPercent}%;`}></div>
 
-        {#each axisLabelIndices as pointIndex (pointIndex)}
-          {@const point = bars[pointIndex]}
-          {#if point}
-            <text
-              class="axis-label"
-              x={point.x + point.width / 2}
-              y={CHART_HEIGHT - 14}
-              text-anchor="middle"
-            >
-              {formatPointTimestamp(point.timestamp)}
-            </text>
-          {/if}
-        {/each}
-      </svg>
-      <div class="tooltip-layer">
-        {#each tooltipTargets as target (target.index)}
-          <div
-            class="tooltip-hit"
-            style={`left:${target.leftPercent}%;width:${target.widthPercent}%;top:${target.topPercent}%;height:${target.heightPercent}%;`}
-          >
-            <ResponsiveTooltip title={`${metricLabel} datapoint`}>
-              {#snippet children()}
-                <button
-                  type="button"
-                  class="tooltip-hit-target"
-                  aria-label={`${formatExactTimestamp(target.timestamp)}: $${formatExactUsd(target.valueUsd)}`}
-                  onmouseenter={() => setActiveIndex(target.index)}
-                  onmouseleave={clearActiveIndex}
-                  ontouchstart={() => setActiveIndex(target.index)}
-                ></button>
-              {/snippet}
-              {#snippet content()}
-                <div class="tooltip-content">
-                  <div class="tooltip-label">{metricLabel}</div>
-                  <div class="tooltip-value">${formatExactUsd(target.valueUsd)}</div>
-                  <div class="tooltip-time">{formatExactTimestamp(target.timestamp)}</div>
+            {#each bars as bar (bar.index)}
+              <div
+                class="bar"
+                class:active={activeBar?.index === bar.index}
+                style={`left:${bar.x}px;width:${bar.width}px;top:${bar.topPercent}%;height:${bar.heightPercent}%;`}
+              ></div>
+            {/each}
+
+            {#each axisLabels as label (label.index)}
+              <span
+                class="axis-label"
+                class:start={label.align === "start"}
+                class:center={label.align === "center"}
+                class:end={label.align === "end"}
+                style={`left:${label.leftPx}px;top:${xAxisLabelTopPercent}%;`}
+              >
+                {label.label}
+              </span>
+            {/each}
+
+            <div class="tooltip-layer">
+              {#each tooltipTargets as target (target.index)}
+                <div
+                  class="tooltip-hit"
+                  style={`left:${target.leftPx}px;width:${target.widthPx}px;top:${target.topPercent}%;height:${target.heightPercent}%;`}
+                >
+                  <ResponsiveTooltip title={`${metricLabel} datapoint`}>
+                    {#snippet children()}
+                      <button
+                        type="button"
+                        class="tooltip-hit-target"
+                        aria-label={`${formatExactTimestamp(target.timestamp)}: $${formatExactUsd(target.valueUsd)}`}
+                        onmouseenter={() => setActiveIndex(target.index)}
+                        onmouseleave={clearActiveIndex}
+                        onfocus={() => setActiveIndex(target.index)}
+                        onblur={clearActiveIndex}
+                        ontouchstart={() => setActiveIndex(target.index)}
+                      ></button>
+                    {/snippet}
+                    {#snippet content()}
+                      <div class="tooltip-content">
+                        <div class="tooltip-label">{metricLabel}</div>
+                        <div class="tooltip-value">
+                          ${formatExactUsd(target.valueUsd)}
+                        </div>
+                        <div class="tooltip-time">
+                          {formatExactTimestamp(target.timestamp)}
+                        </div>
+                      </div>
+                    {/snippet}
+                  </ResponsiveTooltip>
                 </div>
-              {/snippet}
-            </ResponsiveTooltip>
+              {/each}
+            </div>
           </div>
-        {/each}
+        </div>
+        <div
+          class="left-fade"
+          class:visible={showLeftFade}
+          aria-hidden="true"
+        ></div>
+        <div
+          class="right-fade"
+          class:visible={showRightFade}
+          aria-hidden="true"
+        ></div>
       </div>
     </div>
   {/if}
@@ -351,48 +775,190 @@
     font-family: "JetBrains Mono", monospace;
   }
 
-  .chart-wrap {
+  .chart-shell {
+    --chart-height: clamp(170px, 24vw, 220px);
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+
+  .chart-shell.dragging {
+    user-select: none;
+  }
+
+  .y-axis-rail {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    height: var(--chart-height);
+    border-right: 1px solid
+      color-mix(in srgb, var(--border-color) 70%, transparent);
+    padding-right: 0.35rem;
+    background: var(--bg-input);
+    width: 2.5rem;
+  }
+
+  .y-axis-label {
+    position: absolute;
+    right: 0.35rem;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .plot-region {
     position: relative;
-    width: 100%;
-    aspect-ratio: 1000 / 300;
-    min-height: 190px;
+    min-width: 0;
+    height: var(--chart-height);
   }
 
-  .chart {
-    width: 100%;
+  .plot-scroll {
+    position: relative;
+    overflow-x: hidden;
+    overflow-y: hidden;
     height: 100%;
-    display: block;
-    text-rendering: geometricPrecision;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    cursor: default;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overscroll-behavior-x: contain;
   }
 
+  .plot-scroll.overflowing {
+    overflow-x: auto;
+  }
+
+  .plot-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .plot-scroll.pressed {
+    cursor: grab;
+  }
+
+  .left-fade {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 72px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 5;
+    transition: opacity 320ms ease-out;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--bg-input) 90%, transparent) 0%,
+      color-mix(in srgb, var(--bg-input) 78%, transparent) 24%,
+      color-mix(in srgb, var(--bg-input) 56%, transparent) 50%,
+      color-mix(in srgb, var(--bg-input) 32%, transparent) 76%,
+      transparent 100%
+    );
+  }
+
+  .left-fade.visible {
+    opacity: 0.98;
+  }
+
+  .right-fade {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 72px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 5;
+    transition: opacity 320ms ease-out;
+    background: linear-gradient(
+      270deg,
+      color-mix(in srgb, var(--bg-input) 90%, transparent) 0%,
+      color-mix(in srgb, var(--bg-input) 78%, transparent) 24%,
+      color-mix(in srgb, var(--bg-input) 56%, transparent) 50%,
+      color-mix(in srgb, var(--bg-input) 32%, transparent) 76%,
+      transparent 100%
+    );
+  }
+
+  .right-fade.visible {
+    opacity: 0.98;
+  }
+
+  .plot-canvas {
+    position: relative;
+    min-width: 100%;
+    height: 100%;
+  }
+
+  .y-grid-line,
   .axis-line {
-    stroke: var(--border-color);
-    stroke-width: 1;
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    pointer-events: none;
   }
 
   .y-grid-line {
-    stroke: color-mix(in srgb, var(--border-color) 70%, transparent);
-    stroke-width: 1;
+    background: color-mix(in srgb, var(--border-color) 70%, transparent);
+    z-index: 0;
+  }
+
+  .axis-line {
+    background: var(--border-color);
+    z-index: 1;
   }
 
   .bar {
-    fill: color-mix(in srgb, var(--accent-primary) 75%, transparent);
+    position: absolute;
+    border-radius: 4px 4px 0 0;
+    min-height: 1px;
+    background: color-mix(in srgb, var(--accent-primary) 75%, transparent);
     transition:
-      fill 0.15s ease,
+      background-color 0.15s ease,
       opacity 0.15s ease;
     opacity: 0.55;
+    z-index: 2;
+    pointer-events: none;
   }
 
   .bar.active {
-    fill: var(--accent-primary);
+    background: var(--accent-primary);
     opacity: 1;
+  }
+
+  .axis-label {
+    position: absolute;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    user-select: none;
+    white-space: nowrap;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .axis-label.start {
+    transform: none;
+    text-align: left;
+  }
+
+  .axis-label.center {
+    transform: translateX(-50%);
+    text-align: center;
+  }
+
+  .axis-label.end {
+    transform: translateX(-100%);
+    text-align: right;
   }
 
   .tooltip-layer {
     position: absolute;
     inset: 0;
+    z-index: 4;
   }
 
   .tooltip-hit {
@@ -408,6 +974,15 @@
     padding: 0;
     margin: 0;
     cursor: default;
+  }
+
+  .plot-scroll.pressed .tooltip-hit-target {
+    cursor: grab;
+  }
+
+  .chart-shell.dragging .tooltip-hit-target {
+    cursor: grab;
+    pointer-events: none;
   }
 
   .tooltip-content {
@@ -435,20 +1010,6 @@
     font-size: 0.8rem;
   }
 
-  .axis-label {
-    fill: var(--text-muted);
-    font-size: 10px;
-    font-weight: 500;
-    user-select: none;
-  }
-
-  .y-axis-label {
-    fill: var(--text-secondary);
-    font-size: 10px;
-    font-weight: 500;
-    user-select: none;
-  }
-
   .empty-state {
     width: 100%;
     border-radius: 0.75rem;
@@ -464,16 +1025,22 @@
       padding: 0.625rem;
     }
 
-    .chart-wrap {
-      min-height: 170px;
+    .chart-shell {
+      --chart-height: 170px;
+      grid-template-columns: 50px minmax(0, 1fr);
     }
 
     .axis-label {
-      font-size: 9px;
+      font-size: 11px;
     }
 
     .y-axis-label {
-      font-size: 9px;
+      font-size: 11px;
+    }
+
+    .left-fade,
+    .right-fade {
+      width: 52px;
     }
   }
 </style>

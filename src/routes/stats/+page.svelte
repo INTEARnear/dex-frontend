@@ -406,6 +406,7 @@
         points={pageState.data.series}
         metricLabel={metricLabel(pageState.route.tab)}
         summaryMode={chartSummaryMode(pageState.route.tab)}
+        timeframe={routeState.timeframe}
       />
     </section>
   {:else if pageState.data.kind === "pool"}
