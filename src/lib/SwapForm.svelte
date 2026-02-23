@@ -27,6 +27,7 @@
     type ParsedTransferEvent,
   } from "./transferEvents";
   import {
+    assetIdToTokenId,
     AUTO_MAX_SLIPPAGE_PERCENT,
     AUTO_MIN_SLIPPAGE_PERCENT,
   } from "./pool/shared";
@@ -92,6 +93,7 @@
     dex_id: string;
     execution_instructions: ExecutionInstruction[];
     needs_unwrap: boolean;
+    token_output: string;
   }
 
   let inputAmountHumanReadable = $state("");
@@ -153,6 +155,14 @@
     currentRoute?.dex_id ?? fixedRouteDexId ?? "None",
   );
 
+  const isTwoStepRoute = $derived.by(() => {
+    if (!currentRoute || !outputToken) return false;
+    console.log(currentRoute.token_output, outputToken.account_id);
+    return (
+      assetIdToTokenId(currentRoute.token_output) !== outputToken.account_id
+    );
+  });
+
   type SwapMode = "exactIn" | "exactOut";
   let swapMode = $state<SwapMode>("exactIn");
 
@@ -162,6 +172,16 @@
   let errorMessage = $state("");
   let showSuccessModal = $state(false);
   let successTransfers = $state<SwapResultModalInfoTransfer[]>([]);
+  let successStepOneInputTransfer = $state<SwapResultModalInfoTransfer | null>(
+    null,
+  );
+  let successStepTwoIncomingTransfer = $state<SwapResultModalInfoTransfer | null>(
+    null,
+  );
+  let successStepTwoTargetTokenId = $state<string | null>(null);
+  let successStepTwoRoute = $state<Route | null>(null);
+  let isFetchingSuccessStepTwoRoute = $state(false);
+  let isExecutingSuccessStepTwoRoute = $state(false);
   const chatwootModalVisibility = createChatwootModalVisibilityController();
 
   onDestroy(() => {
@@ -328,8 +348,8 @@
     }
   });
 
-  function getTokenIdForRouter(token: Token): string {
-    return token.account_id === "near" ? "near" : token.account_id;
+  function getTokenIdForRouter(tokenId: string): string {
+    return tokenId === "near" ? "near" : tokenId;
   }
 
   async function fetchRoute() {
@@ -369,8 +389,8 @@
     isFetchingRoute = true;
 
     try {
-      const tokenIn = getTokenIdForRouter(inputToken);
-      const tokenOut = getTokenIdForRouter(outputToken);
+      const tokenIn = getTokenIdForRouter(inputToken.account_id);
+      const tokenOut = getTokenIdForRouter(outputToken.account_id);
 
       const params = new URLSearchParams({
         token_in: tokenIn,
@@ -805,17 +825,18 @@
     return result;
   }
 
+  function getTokenById(tokenId: string): Token | null {
+    if (inputToken?.account_id === tokenId) return inputToken;
+    if (outputToken?.account_id === tokenId) return outputToken;
+    return $tokenHubStore.tokensById[tokenId] ?? null;
+  }
+
   function getTokenSymbol(tokenId: string): string | null {
-    if (inputToken?.account_id === tokenId) return inputToken.metadata.symbol;
-    if (outputToken?.account_id === tokenId) return outputToken.metadata.symbol;
-    return null;
+    return getTokenById(tokenId)?.metadata.symbol ?? null;
   }
 
   function getTokenDecimals(tokenId: string): number | null {
-    if (inputToken?.account_id === tokenId) return inputToken.metadata.decimals;
-    if (outputToken?.account_id === tokenId)
-      return outputToken.metadata.decimals;
-    return null;
+    return getTokenById(tokenId)?.metadata.decimals ?? null;
   }
 
   function formatTransferAmount(
@@ -828,6 +849,274 @@
     const num = parseFloat(humanAmount);
     if (isNaN(num)) return null;
     return formatAmount(num);
+  }
+
+  function getConversionEstimatedOutputAmount(route: Route, tokenId: string): string {
+    const raw = route.estimated_amount.amount_out;
+    if (!raw) return "?";
+    return formatTransferAmount(raw, tokenId) ?? "?";
+  }
+
+  function resetSuccessStepTwoState() {
+    successStepOneInputTransfer = null;
+    successStepTwoIncomingTransfer = null;
+    successStepTwoTargetTokenId = null;
+    successStepTwoRoute = null;
+    isFetchingSuccessStepTwoRoute = false;
+    isExecutingSuccessStepTwoRoute = false;
+  }
+
+  function closeSuccessModal() {
+    showSuccessModal = false;
+    resetSuccessStepTwoState();
+  }
+
+  function getSuccessStepTwoConvertLabel(): string {
+    if (
+      !successStepTwoIncomingTransfer ||
+      !successStepTwoTargetTokenId ||
+      !successStepTwoRoute
+    ) {
+      return "Conversion route unavailable";
+    }
+
+    const fromAmount =
+      formatTransferAmount(
+        successStepTwoIncomingTransfer.amountRaw,
+        successStepTwoIncomingTransfer.tokenId,
+      ) ?? "?";
+    const fromSymbol = getTokenSymbol(successStepTwoIncomingTransfer.tokenId) ?? "?";
+    const toAmount = getConversionEstimatedOutputAmount(
+      successStepTwoRoute,
+      successStepTwoTargetTokenId,
+    );
+    const toSymbol = getTokenSymbol(successStepTwoTargetTokenId) ?? "?";
+    return `Convert ${fromAmount} ${fromSymbol} to ${toAmount} ${toSymbol}`;
+  }
+
+  function getSuccessStepTwoKeepLabel(): string {
+    if (!successStepTwoIncomingTransfer) return "Done";
+    const amount =
+      formatTransferAmount(
+        successStepTwoIncomingTransfer.amountRaw,
+        successStepTwoIncomingTransfer.tokenId,
+      ) ?? "?";
+    const symbol = getTokenSymbol(successStepTwoIncomingTransfer.tokenId) ?? "?";
+    return `Keep ${amount} ${symbol}`;
+  }
+
+  function getSuccessModalTitle(): string {
+    if (successStepTwoIncomingTransfer && successStepTwoTargetTokenId) {
+      return "You Swapped (step 1/2)";
+    }
+    return "You Swapped";
+  }
+
+  function buildTransactionsFromRoute(route: Route) {
+    return route.execution_instructions
+      .filter(
+        (instruction): instruction is NearTransaction =>
+          "NearTransaction" in instruction,
+      )
+      .map((instruction) => {
+        const tx = instruction.NearTransaction;
+
+        // Convert actions to near-connect format (js object in args)
+        const actions = tx.actions.map((action) => {
+          if ("FunctionCall" in action) {
+            const fc = action.FunctionCall;
+            return {
+              type: "FunctionCall",
+              params: {
+                methodName: fc.method_name,
+                args: JSON.parse(atob(fc.args)),
+                gas: fc.gas.toString(),
+                deposit: fc.deposit,
+              },
+            };
+          }
+          console.error("Unsupported action type:", action);
+          throw new Error(
+            "Unsupported action type. Please report this issue to support.",
+          );
+        });
+
+        return {
+          receiverId: tx.receiver_id,
+          actions,
+        };
+      });
+  }
+
+  function assertOutcomesHaveNoFailures(outcomes: unknown) {
+    if (!outcomes || !Array.isArray(outcomes)) return;
+
+    // Check all receipt outcomes for errors
+    for (const outcome of outcomes) {
+      if (!outcome) continue;
+      const receiptsOutcome = (
+        outcome as { receipts_outcome?: unknown[] }
+      ).receipts_outcome;
+      if (!receiptsOutcome || !Array.isArray(receiptsOutcome)) continue;
+      for (const receiptOutcome of receiptsOutcome) {
+        const status = (receiptOutcome as { outcome?: { status?: any } }).outcome
+          ?.status;
+        if (status?.Failure) {
+          const executionError =
+            status.Failure?.ActionError?.kind?.FunctionCallError?.ExecutionError;
+          if (
+            [
+              "Smart contract panicked: Output amount is less than constraint",
+              "Smart contract panicked: Input amount is greater than constraint",
+              "Smart contract panicked: E68: slippage error",
+            ].some((error) => error.includes(executionError))
+          ) {
+            throw new Error(
+              "Slippage error: The price has changed while you were confirming transaction. Please try again.",
+            );
+          }
+          throw new Error(executionError || JSON.stringify(status.Failure));
+        }
+      }
+    }
+  }
+
+  async function fetchOneShotExactInRoute(
+    tokenInId: string,
+    tokenOutId: string,
+    amountInRaw: string,
+  ): Promise<Route | null> {
+    const params = new URLSearchParams({
+      token_in: getTokenIdForRouter(tokenInId),
+      token_out: getTokenIdForRouter(tokenOutId),
+      max_wait_ms: "1500",
+      dexes: "Rhea,RheaDcl,Aidols,Wrap,MetaPool,Linear,XRhea,RNear,Plach",
+    });
+
+    if (swapSlippageMode === "auto") {
+      params.set("slippage_type", "Auto");
+      params.set("min_slippage", (AUTO_MIN_SLIPPAGE_PERCENT / 100).toFixed(3));
+      params.set("max_slippage", (AUTO_MAX_SLIPPAGE_PERCENT / 100).toFixed(3));
+    } else {
+      params.set("slippage_type", "Fixed");
+      params.set("slippage", String(swapSlippageValue / 100));
+    }
+
+    params.set("amount_in", amountInRaw);
+
+    if ($walletStore.accountId) {
+      params.set("trader_account_id", $walletStore.accountId);
+    }
+
+    const response = await fetch(`${ROUTER_API}/route?${params}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP ${response.status}`);
+    }
+
+    const routes: Route[] = await response.json();
+    const validRoutes = routes.filter((route) =>
+      route.execution_instructions.every((instr) => "NearTransaction" in instr),
+    );
+    return validRoutes[0] ?? null;
+  }
+
+  async function fetchSuccessStepTwoRoute(
+    incomingTransfer: SwapResultModalInfoTransfer,
+    targetTokenId: string,
+  ) {
+    isFetchingSuccessStepTwoRoute = true;
+    successStepTwoRoute = null;
+    try {
+      successStepTwoRoute = await fetchOneShotExactInRoute(
+        incomingTransfer.tokenId,
+        targetTokenId,
+        incomingTransfer.amountRaw,
+      );
+    } catch (error) {
+      console.error("Failed to fetch step-2 route:", error);
+    } finally {
+      isFetchingSuccessStepTwoRoute = false;
+    }
+  }
+
+  async function handleConvertFromSuccessModal() {
+    if (
+      !successStepTwoIncomingTransfer ||
+      !successStepTwoTargetTokenId ||
+      !successStepTwoRoute
+    ) {
+      return;
+    }
+    if (
+      !$walletStore.isConnected ||
+      !$walletStore.wallet ||
+      !$walletStore.accountId
+    ) {
+      return;
+    }
+
+    const accountId = $walletStore.accountId;
+    const stepTwoRoute = successStepTwoRoute;
+    const stepOneInputTransfer = successStepOneInputTransfer;
+
+    if (!accountId || !stepTwoRoute) {
+      return;
+    }
+
+    isExecutingSuccessStepTwoRoute = true;
+    try {
+      const transactions = buildTransactionsFromRoute(stepTwoRoute);
+      const outcomes = await $walletStore.wallet.signAndSendTransactions({
+        transactions,
+      });
+      tokenHubStore.refreshBalances();
+      assertOutcomesHaveNoFailures(outcomes);
+
+      const stepTwoTransfers: SwapResultModalInfoTransfer[] = [];
+      if (Array.isArray(outcomes)) {
+        for (const outcome of outcomes) {
+          if (outcome) {
+            stepTwoTransfers.push(...extractTransfersFromOutcome(outcome, accountId));
+          }
+        }
+      }
+
+      const consolidatedStepTwoTransfers = consolidateTransfers(stepTwoTransfers);
+      const stepTwoDetectedOutputTokenId = assetIdToTokenId(stepTwoRoute.token_output);
+      const stepTwoOutputTransfer =
+        (stepTwoDetectedOutputTokenId
+          ? (consolidatedStepTwoTransfers.find(
+              (transfer) =>
+                transfer.direction === "in" &&
+                transfer.tokenId === stepTwoDetectedOutputTokenId,
+            ) ?? null)
+          : null) ??
+        (consolidatedStepTwoTransfers.find(
+          (transfer) => transfer.direction === "in",
+        ) ?? null);
+
+      if (stepOneInputTransfer && stepTwoOutputTransfer) {
+        successTransfers = [stepOneInputTransfer, stepTwoOutputTransfer];
+      } else {
+        console.error(
+          "Could not build final success transfers after step 2.",
+          "Step 1 input transfer:",
+          stepOneInputTransfer,
+          "Step 2 transfers:",
+          consolidatedStepTwoTransfers,
+        );
+      }
+
+      resetSuccessStepTwoState();
+      showSuccessModal = true;
+    } catch (error) {
+      console.error("Step-2 conversion failed:", error);
+      errorMessage = error instanceof Error ? error.message : "Unknown error";
+      showErrorModal = true;
+    } finally {
+      isExecutingSuccessStepTwoRoute = false;
+    }
   }
 
   async function handleSwap() {
@@ -863,81 +1152,31 @@
       return;
     }
 
+    const routeAtSwap = currentRoute;
+    const userRequestedOutputTokenId = outputToken.account_id;
+    const routeOutputTokenId = assetIdToTokenId(routeAtSwap.token_output);
+    const isTwoStepSwap =
+      routeOutputTokenId !== null &&
+      routeOutputTokenId !== userRequestedOutputTokenId;
+
     isSwapping = true;
     const allTransfers: SwapResultModalInfoTransfer[] = [];
 
     try {
       const wallet = $walletStore.wallet;
       const accountId = $walletStore.accountId;
+      if (!wallet || !accountId) {
+        throw new Error("Wallet is not connected");
+      }
 
-      const transactions = currentRoute.execution_instructions
-        .filter(
-          (instruction): instruction is NearTransaction =>
-            "NearTransaction" in instruction,
-        )
-        .map((instruction) => {
-          const tx = instruction.NearTransaction;
-
-          // Convert actions to near-connect format (js object in args)
-          const actions = tx.actions.map((action) => {
-            if ("FunctionCall" in action) {
-              const fc = action.FunctionCall;
-              return {
-                type: "FunctionCall",
-                params: {
-                  methodName: fc.method_name,
-                  args: JSON.parse(atob(fc.args)),
-                  gas: fc.gas.toString(),
-                  deposit: fc.deposit,
-                },
-              };
-            }
-            console.error("Unsupported action type:", action);
-            throw new Error(
-              "Unsupported action type. Please report this issue to support.",
-            );
-          });
-
-          return {
-            receiverId: tx.receiver_id,
-            actions,
-          };
-        });
-
+      const transactions = buildTransactionsFromRoute(routeAtSwap);
       const outcomes = await wallet.signAndSendTransactions({ transactions });
       tokenHubStore.refreshBalances();
 
       console.log("Transaction results:", outcomes);
+      assertOutcomesHaveNoFailures(outcomes);
 
-      if (outcomes && Array.isArray(outcomes)) {
-        // Check all receipt outcomes for errors
-        for (const outcome of outcomes) {
-          if (outcome && outcome.receipts_outcome) {
-            for (const receiptOutcome of outcome.receipts_outcome) {
-              const status = receiptOutcome.outcome?.status;
-              if (status?.Failure) {
-                const executionError =
-                  status.Failure?.ActionError?.kind?.FunctionCallError
-                    ?.ExecutionError;
-                if (
-                  [
-                    "Smart contract panicked: Output amount is less than constraint",
-                    "Smart contract panicked: Input amount is greater than constraint",
-                    "Smart contract panicked: E68: slippage error",
-                  ].some((error) => error.includes(executionError))
-                ) {
-                  throw new Error(
-                    "Slippage error: The price has changed while you were confirming transaction. Please try again.",
-                  );
-                }
-                throw new Error(
-                  executionError || JSON.stringify(status.Failure),
-                );
-              }
-            }
-          }
-        }
-
+      if (Array.isArray(outcomes)) {
         for (const outcome of outcomes) {
           if (outcome) {
             const transfers = extractTransfersFromOutcome(outcome, accountId);
@@ -949,7 +1188,7 @@
         }
       }
 
-      if (currentRoute.needs_unwrap) {
+      if (routeAtSwap.needs_unwrap) {
         console.error("Manual unwrap may be needed, but not implemented yet.");
       }
 
@@ -960,24 +1199,52 @@
       availableRoutes = [];
       currentRoute = null;
 
-      // Filter to only transfers with swap-related tokens (getTokenSymbol and
-      // getTokenDecimals return null if not related)
-      const knownTransfers = allTransfers.filter(
-        (t) =>
-          getTokenSymbol(t.tokenId) !== null &&
-          getTokenDecimals(t.tokenId) !== null,
+      const consolidatedTransfers = consolidateTransfers(allTransfers);
+      const stepOneInputTransfer =
+        consolidatedTransfers.find(
+          (transfer) =>
+            transfer.direction === "out" && transfer.tokenId === inputToken.account_id,
+        ) ?? null;
+      const stepTwoIncomingTransfer =
+        isTwoStepSwap && routeOutputTokenId
+          ? (consolidatedTransfers.find(
+              (transfer) =>
+                transfer.direction === "in" &&
+                transfer.tokenId === routeOutputTokenId,
+            ) ?? null)
+          : null;
+
+      // Keep only swap-relevant tokens, including intermediate token_output for
+      // two-step routes.
+      const swapRelevantTokenIds = new Set<string>([
+        inputToken.account_id,
+        userRequestedOutputTokenId,
+      ]);
+      if (routeOutputTokenId) {
+        swapRelevantTokenIds.add(routeOutputTokenId);
+      }
+      const relevantTransfers = consolidatedTransfers.filter((t) =>
+        swapRelevantTokenIds.has(t.tokenId),
       );
 
-      const consolidatedTransfers = consolidateTransfers(knownTransfers);
-
-      if (consolidatedTransfers.length >= 2) {
-        successTransfers = consolidatedTransfers;
+      if (relevantTransfers.length >= 2) {
+        successTransfers = relevantTransfers;
+        resetSuccessStepTwoState();
+        successStepOneInputTransfer = stepOneInputTransfer;
+        if (stepTwoIncomingTransfer) {
+          successStepTwoIncomingTransfer = stepTwoIncomingTransfer;
+          successStepTwoTargetTokenId = userRequestedOutputTokenId;
+          void fetchSuccessStepTwoRoute(
+            stepTwoIncomingTransfer,
+            userRequestedOutputTokenId,
+          );
+        }
         showSuccessModal = true;
       } else {
         // Couldn't extract transfers, log for debugging
         console.error(
           "Could not extract transfer amounts from transaction results. Extracted:",
-          consolidatedTransfers,
+          relevantTransfers,
           "All transfers:",
           allTransfers,
           "Outcomes:",
@@ -1403,6 +1670,14 @@
           {/if}
         </div>
       </div>
+      {#if isTwoStepRoute}
+        <div class="route-row two-step-route-note">
+          <span class="route-label"></span>
+          <span class="route-value two-step-route-note-text"
+            >Two-step route</span
+          >
+        </div>
+      {/if}
     </div>
   {:else if isFetchingRoute && inputToken && outputToken}
     <div class="route-info">
@@ -1573,7 +1848,7 @@
 <!-- Success Modal -->
 <ModalShell
   isOpen={showSuccessModal}
-  onClose={() => (showSuccessModal = false)}
+  onClose={closeSuccessModal}
   modalClassName="success-modal"
   dialogLabel="Swap complete"
 >
@@ -1590,7 +1865,7 @@
       <polyline points="9 12 11 14 15 10" />
     </svg>
   </div>
-  <h3 class="modal-title">You Swapped</h3>
+  <h3 class="modal-title">{getSuccessModalTitle()}</h3>
   <div class="transfers-list">
     {#each successTransfers as transfer}
       <div
@@ -1611,12 +1886,36 @@
       </div>
     {/each}
   </div>
-  <button
-    class="modal-btn success-btn"
-    onclick={() => (showSuccessModal = false)}
-  >
-    Done
-  </button>
+  {#if successStepTwoIncomingTransfer && successStepTwoTargetTokenId}
+    <button
+      class="modal-btn success-btn"
+      onclick={handleConvertFromSuccessModal}
+      disabled={
+        isFetchingSuccessStepTwoRoute ||
+        isExecutingSuccessStepTwoRoute ||
+        !successStepTwoRoute
+      }
+    >
+      {#if isExecutingSuccessStepTwoRoute}
+        Converting...
+      {:else if isFetchingSuccessStepTwoRoute}
+        Preparing conversion route...
+      {:else}
+        {getSuccessStepTwoConvertLabel()}
+      {/if}
+    </button>
+    <button
+      class="modal-btn keep-btn"
+      onclick={closeSuccessModal}
+      disabled={isExecutingSuccessStepTwoRoute}
+    >
+      {getSuccessStepTwoKeepLabel()}
+    </button>
+  {:else}
+    <button class="modal-btn success-btn" onclick={closeSuccessModal}>
+      Done
+    </button>
+  {/if}
 </ModalShell>
 
 <ModalShell
@@ -2017,6 +2316,16 @@
 
   .route-value.no-route {
     color: var(--text-muted);
+  }
+
+  .route-row.two-step-route-note {
+    margin-top: -0.25rem;
+  }
+
+  .two-step-route-note-text {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-secondary);
   }
 
   .route-badge-stack {
@@ -2558,6 +2867,16 @@
     border-color: var(--accent-primary);
   }
 
+  .modal-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  .modal-btn:disabled:hover {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+  }
+
   .success-btn {
     background: linear-gradient(
       135deg,
@@ -2575,6 +2894,21 @@
       var(--status-success-text)
     );
     border: none;
+  }
+
+  .success-btn:disabled:hover {
+    background: linear-gradient(
+      135deg,
+      var(--status-success-solid),
+      var(--status-success-solid-hover)
+    );
+    border: none;
+  }
+
+  .keep-btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
   }
 
   @media (--short-screen) {
