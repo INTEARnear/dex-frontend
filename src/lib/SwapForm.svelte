@@ -133,9 +133,25 @@
   }
 
   let currentRoute = $state<Route | null>(null);
+  let availableRoutes = $state<Route[]>([]);
+  let fixedRouteDexId = $state<string | null>(null);
+  let isRoutePickerOpen = $state(false);
   let isFetchingRoute = $state(false);
   let routeAbortController: AbortController | null = null;
   let quoteRefreshInterval: ReturnType<typeof setInterval> | null = null;
+
+  const bestRoute = $derived.by(() => availableRoutes[0] ?? null);
+
+  const isRouteFixed = $derived(fixedRouteDexId !== null);
+
+  const isCurrentRouteBest = $derived.by(() => {
+    if (!currentRoute || !bestRoute) return false;
+    return currentRoute.dex_id === bestRoute.dex_id;
+  });
+
+  const displayedRouteDexId = $derived(
+    currentRoute?.dex_id ?? fixedRouteDexId ?? "None",
+  );
 
   type SwapMode = "exactIn" | "exactOut";
   let swapMode = $state<SwapMode>("exactIn");
@@ -153,7 +169,9 @@
   });
 
   $effect(() => {
-    chatwootModalVisibility.setVisible(showErrorModal || showSuccessModal);
+    chatwootModalVisibility.setVisible(
+      showErrorModal || showSuccessModal || isRoutePickerOpen,
+    );
   });
 
   let inputTokenBalance = $state<string | null>(null);
@@ -320,6 +338,7 @@
     routeAbortController = controller;
 
     if (!inputToken || !outputToken) {
+      availableRoutes = [];
       currentRoute = null;
       return;
     }
@@ -330,8 +349,9 @@
         !inputAmountHumanReadable ||
         parseFloat(inputAmountHumanReadable) <= 0
       ) {
+        availableRoutes = [];
         currentRoute = null;
-        outputAmountHumanReadable = "";
+        clearEstimatedAmountForCurrentMode();
         return;
       }
     } else {
@@ -339,8 +359,9 @@
         !outputAmountHumanReadable ||
         parseFloat(outputAmountHumanReadable) <= 0
       ) {
+        availableRoutes = [];
         currentRoute = null;
-        inputAmountHumanReadable = "";
+        clearEstimatedAmountForCurrentMode();
         return;
       }
     }
@@ -415,43 +436,33 @@
       );
 
       if (validRoutes.length === 0) {
+        availableRoutes = [];
         currentRoute = null;
-        if (swapMode === "exactIn") {
-          outputAmountHumanReadable = "";
-        } else {
-          inputAmountHumanReadable = "";
-        }
+        clearEstimatedAmountForCurrentMode();
         return;
       }
 
-      // Best route is guaranteed to be first
-      currentRoute = validRoutes[0];
+      availableRoutes = validRoutes;
 
-      // Update the estimated amount
-      if (swapMode === "exactIn") {
-        if (currentRoute.estimated_amount.amount_out) {
-          outputAmountHumanReadable = rawAmountToHumanReadable(
-            currentRoute.estimated_amount.amount_out,
-            outputToken.metadata.decimals,
-          );
-        }
-      } else {
-        if (currentRoute.estimated_amount.amount_in) {
-          inputAmountHumanReadable = rawAmountToHumanReadable(
-            currentRoute.estimated_amount.amount_in,
-            inputToken.metadata.decimals,
-          );
-        }
+      const selectedRoute = fixedRouteDexId
+        ? (validRoutes.find((route) => route.dex_id === fixedRouteDexId) ??
+          null)
+        : validRoutes[0];
+
+      if (!selectedRoute) {
+        currentRoute = null;
+        clearEstimatedAmountForCurrentMode();
+        return;
       }
+
+      currentRoute = selectedRoute;
+      applyEstimatedAmountFromRoute(selectedRoute);
     } catch (error) {
       if (controller.signal.aborted) return;
       console.error("Failed to fetch quote:", error);
+      availableRoutes = [];
       currentRoute = null;
-      if (swapMode === "exactIn") {
-        outputAmountHumanReadable = "";
-      } else {
-        inputAmountHumanReadable = "";
-      }
+      clearEstimatedAmountForCurrentMode();
     } finally {
       if (!controller.signal.aborted) {
         isFetchingRoute = false;
@@ -472,12 +483,9 @@
     const hasValidAmount = userTypedAmount && parseFloat(userTypedAmount) > 0;
 
     if (!hasValidAmount || !inToken || !outToken) {
+      availableRoutes = [];
       currentRoute = null;
-      if (swapMode === "exactIn") {
-        outputAmountHumanReadable = "";
-      } else {
-        inputAmountHumanReadable = "";
-      }
+      clearEstimatedAmountForCurrentMode();
       return;
     }
 
@@ -540,6 +548,136 @@
       }
     }
     return null;
+  }
+
+  function clearEstimatedAmountForCurrentMode() {
+    if (swapMode === "exactIn") {
+      outputAmountHumanReadable = "";
+    } else {
+      inputAmountHumanReadable = "";
+    }
+  }
+
+  function applyEstimatedAmountFromRoute(route: Route) {
+    if (!inputToken || !outputToken) return;
+
+    if (swapMode === "exactIn") {
+      if (route.estimated_amount.amount_out) {
+        outputAmountHumanReadable = rawAmountToHumanReadable(
+          route.estimated_amount.amount_out,
+          outputToken.metadata.decimals,
+        );
+      }
+      return;
+    }
+
+    if (route.estimated_amount.amount_in) {
+      inputAmountHumanReadable = rawAmountToHumanReadable(
+        route.estimated_amount.amount_in,
+        inputToken.metadata.decimals,
+      );
+    }
+  }
+
+  function parseRouteAmount(raw: string | undefined): bigint | null {
+    if (!raw) return null;
+    try {
+      return BigInt(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  function getRouteComparisonAmount(route: Route): bigint | null {
+    if (swapMode === "exactIn") {
+      return parseRouteAmount(route.estimated_amount.amount_out);
+    }
+    return parseRouteAmount(route.estimated_amount.amount_in);
+  }
+
+  function calculateRoutePenaltyPercent(
+    route: Route,
+    best: Route,
+  ): number | null {
+    const currentAmount = getRouteComparisonAmount(route);
+    const bestAmount = getRouteComparisonAmount(best);
+
+    if (currentAmount === null || bestAmount === null || bestAmount <= 0n) {
+      return null;
+    }
+
+    if (swapMode === "exactIn") {
+      if (currentAmount >= bestAmount) return 0;
+      const penaltyBps = ((bestAmount - currentAmount) * 10000n) / bestAmount;
+      if (penaltyBps === 0n && currentAmount !== bestAmount) return 0.01;
+      return Number(penaltyBps) / 100;
+    }
+
+    if (currentAmount <= bestAmount) return 0;
+    const penaltyBps = ((currentAmount - bestAmount) * 10000n) / bestAmount;
+    if (penaltyBps === 0n && currentAmount !== bestAmount) return 0.01;
+    return Number(penaltyBps) / 100;
+  }
+
+  const selectedRoutePenaltyPercent = $derived.by(() => {
+    if (!isRouteFixed || !currentRoute || !bestRoute || isCurrentRouteBest) {
+      return null;
+    }
+    return calculateRoutePenaltyPercent(currentRoute, bestRoute);
+  });
+
+  function formatPenaltyPercent(percent: number): string {
+    if (!Number.isFinite(percent) || percent <= 0) return "0.00";
+    const fixed = percent >= 10 ? percent.toFixed(1) : percent.toFixed(2);
+    return fixed.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  }
+
+  function clearFixedRouteSelection() {
+    fixedRouteDexId = null;
+    isRoutePickerOpen = false;
+    if (bestRoute) {
+      currentRoute = bestRoute;
+      applyEstimatedAmountFromRoute(bestRoute);
+    } else {
+      currentRoute = null;
+    }
+  }
+
+  function handleSelectFixedRoute(route: Route) {
+    fixedRouteDexId = route.dex_id;
+    currentRoute = route;
+    applyEstimatedAmountFromRoute(route);
+    isRoutePickerOpen = false;
+  }
+
+  function openRoutePicker() {
+    if (availableRoutes.length === 0) return;
+    isRoutePickerOpen = true;
+  }
+
+  function formatRoutePreviewAmount(route: Route): string {
+    if (!inputToken || !outputToken) return "\u2014";
+
+    const rawAmount =
+      swapMode === "exactIn"
+        ? route.estimated_amount.amount_out
+        : route.estimated_amount.amount_in;
+    if (!rawAmount) return "\u2014";
+
+    const decimals =
+      swapMode === "exactIn"
+        ? outputToken.metadata.decimals
+        : inputToken.metadata.decimals;
+    const symbol =
+      swapMode === "exactIn"
+        ? outputToken.metadata.symbol
+        : inputToken.metadata.symbol;
+
+    const humanReadable = rawAmountToHumanReadable(rawAmount, decimals);
+    const numeric = parseFloat(humanReadable);
+    if (!Number.isFinite(numeric)) return "\u2014";
+
+    return `${formatAmount(numeric)} ${symbol}`;
   }
 
   // Get output amount for display (only formatted when it's estimated)
@@ -819,6 +957,7 @@
 
       inputAmountHumanReadable = "";
       outputAmountHumanReadable = "";
+      availableRoutes = [];
       currentRoute = null;
 
       // Filter to only transfers with swap-related tokens (getTokenSymbol and
@@ -865,6 +1004,7 @@
   function switchTokens() {
     [inputTokenId, outputTokenId] = [outputTokenId, inputTokenId];
 
+    availableRoutes = [];
     currentRoute = null;
     if (swapMode === "exactIn") {
       swapMode = "exactOut";
@@ -1211,7 +1351,57 @@
       {/if}
       <div class="route-row">
         <span class="route-label">Route via</span>
-        <span class="route-value dex-badge">{currentRoute.dex_id}</span>
+        <div class="route-badge-stack">
+          <button
+            type="button"
+            class="route-provider-btn route-segment route-segment-dex"
+            onclick={openRoutePicker}
+            aria-label="Select route provider"
+            aria-haspopup="dialog"
+          >
+            <span>{displayedRouteDexId}</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          {#if !isRouteFixed || isCurrentRouteBest}
+            <span class="route-segment route-segment-best">Best</span>
+          {:else if selectedRoutePenaltyPercent !== null}
+            <span class="route-segment route-segment-penalty"
+              >-{formatPenaltyPercent(selectedRoutePenaltyPercent)}%</span
+            >
+          {/if}
+
+          {#if isRouteFixed}
+            <button
+              type="button"
+              class="route-unfix-btn route-segment route-segment-clear"
+              onclick={clearFixedRouteSelection}
+              aria-label="Clear fixed route"
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <path d="M18 6L6 18" />
+                <path d="M6 6L18 18" />
+              </svg>
+            </button>
+          {/if}
+        </div>
       </div>
     </div>
   {:else if isFetchingRoute && inputToken && outputToken}
@@ -1238,7 +1428,51 @@
       </div>
       <div class="route-row">
         <span class="route-label">Route via</span>
-        <span class="route-value dex-badge">None</span>
+        {#if isRouteFixed}
+          <div class="route-badge-stack">
+            <button
+              type="button"
+              class="route-provider-btn route-segment route-segment-dex"
+              onclick={openRoutePicker}
+              disabled={availableRoutes.length === 0}
+              aria-label="Select route provider"
+              aria-haspopup="dialog"
+            >
+              <span>{displayedRouteDexId}</span>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="route-unfix-btn route-segment route-segment-clear"
+              onclick={clearFixedRouteSelection}
+              aria-label="Clear fixed route"
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <path d="M18 6L6 18" />
+                <path d="M6 6L18 18" />
+              </svg>
+            </button>
+          </div>
+        {:else}
+          <span class="route-value dex-badge">None</span>
+        {/if}
       </div>
     </div>
   {/if}
@@ -1383,6 +1617,85 @@
   >
     Done
   </button>
+</ModalShell>
+
+<ModalShell
+  isOpen={isRoutePickerOpen}
+  onClose={() => (isRoutePickerOpen = false)}
+  modalClassName="route-picker-modal"
+  dialogLabel="Select route provider"
+>
+  <div class="route-picker-header">
+    <h3 class="route-picker-title">Select route provider</h3>
+    <button
+      type="button"
+      class="route-picker-close-btn"
+      onclick={() => (isRoutePickerOpen = false)}
+      aria-label="Close route provider picker"
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+      >
+        <path d="M18 6L6 18" />
+        <path d="M6 6L18 18" />
+      </svg>
+    </button>
+  </div>
+
+  <div class="route-picker-body">
+    {#if availableRoutes.length === 0}
+      <p class="route-picker-empty">No routes available yet.</p>
+    {:else}
+      <div class="route-picker-list">
+        {#each availableRoutes as route, routeIndex (`${route.dex_id}-${routeIndex}`)}
+          {@const isBestInList = routeIndex === 0}
+          {@const isFixedInList = fixedRouteDexId === route.dex_id}
+          {@const isSelectedRoute = currentRoute
+            ? currentRoute.dex_id === route.dex_id
+            : isFixedInList}
+          {@const routePenalty =
+            bestRoute && !isBestInList
+              ? calculateRoutePenaltyPercent(route, bestRoute)
+              : null}
+          <button
+            type="button"
+            class="route-picker-item"
+            class:selected={isSelectedRoute}
+            onclick={() => handleSelectFixedRoute(route)}
+            aria-pressed={isSelectedRoute}
+          >
+            <div class="route-picker-item-main">
+              <span class="route-picker-provider">{route.dex_id}</span>
+            </div>
+            <div class="route-picker-item-right">
+              <span class="route-picker-amount"
+                >{formatRoutePreviewAmount(route)}</span
+              >
+              <div class="route-picker-item-badges">
+                {#if isBestInList}
+                  <span
+                    class="route-picker-status-badge route-picker-status-best"
+                    >Best</span
+                  >
+                {:else if routePenalty !== null}
+                  <span
+                    class="route-picker-status-badge route-picker-status-penalty"
+                    >-{formatPenaltyPercent(routePenalty)}%</span
+                  >
+                {/if}
+              </div>
+            </div>
+          </button>
+        {/each}
+      </div>
+    {/if}
+  </div>
 </ModalShell>
 
 <style>
@@ -1666,6 +1979,7 @@
   }
 
   .route-info {
+    --route-badge-height: 1.625rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -1695,6 +2009,350 @@
 
   .route-value.no-route {
     color: var(--text-muted);
+  }
+
+  .route-badge-stack {
+    display: inline-flex;
+    justify-content: flex-end;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 0;
+    max-width: 72%;
+    height: var(--route-badge-height);
+    overflow: hidden;
+  }
+
+  .route-badge-stack > .route-segment {
+    position: relative;
+    border-radius: 0;
+  }
+
+  .route-badge-stack > .route-segment:not(:first-child) {
+    padding-left: 0.6rem;
+    position: relative;
+    left: -0.3rem;
+    border-radius: 0 1rem 1rem 0;
+  }
+
+  .route-badge-stack > .route-segment:not(:first-child)::before {
+    content: "";
+    position: absolute;
+    left: -1.5rem;
+    top: 0;
+    width: 1.5rem;
+    height: 100%;
+    background: inherit;
+    pointer-events: none;
+  }
+
+  .route-badge-stack > .route-segment:first-child {
+    border-radius: 1rem;
+  }
+
+  .route-badge-stack > .route-segment:nth-child(1) {
+    z-index: 100;
+  }
+
+  .route-badge-stack > .route-segment:nth-child(2) {
+    z-index: 99;
+  }
+
+  .route-badge-stack > .route-segment:nth-child(3) {
+    z-index: 98;
+  }
+
+  .route-badge-stack > .route-segment:nth-child(4) {
+    z-index: 97;
+  }
+
+  .route-badge-stack > .route-segment:nth-child(5) {
+    z-index: 96;
+  }
+
+  .route-badge-stack > .route-segment:nth-child(6) {
+    z-index: 95;
+  }
+
+  .route-segment {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 0 0.68rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    font-family: "JetBrains Mono", monospace;
+    white-space: nowrap;
+    border: none;
+    border-radius: 0;
+  }
+
+  .route-segment-dex {
+    background: linear-gradient(135deg, var(--accent-primary), #2563eb);
+    color: #ffffff;
+  }
+
+  .route-segment-best {
+    background: #16a34a;
+    color: #ffffff;
+  }
+
+  .route-segment-penalty {
+    background: #facc15;
+    color: #111827;
+  }
+
+  .route-segment-clear {
+    background: #dc2626;
+    color: #ffffff;
+    width: var(--route-badge-height);
+    padding: 0 0.25rem 0 0 !important;
+    flex-shrink: 0;
+  }
+
+  .route-provider-btn {
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    line-height: 1;
+  }
+
+  .route-provider-btn svg {
+    width: 11px;
+    height: 11px;
+    color: #ffffff;
+  }
+
+  .route-provider-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.75;
+  }
+
+  .route-provider-btn:focus-visible,
+  .route-unfix-btn:focus-visible,
+  .route-picker-item:focus-visible,
+  .route-picker-close-btn:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+  }
+
+  .route-unfix-btn {
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+  }
+
+  .route-unfix-btn:hover {
+    filter: brightness(1.08);
+  }
+
+  :global(.result-modal.route-picker-modal) {
+    width: 100%;
+    max-width: 520px;
+    max-height: 78dvh;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 1.25rem;
+  }
+
+  .route-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+  }
+
+  .route-picker-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .route-picker-close-btn {
+    width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .route-picker-close-btn:hover {
+    background: var(--bg-input);
+    color: var(--text-primary);
+  }
+
+  .route-picker-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .route-picker-empty {
+    margin: auto;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    text-align: center;
+    padding: 1.25rem 1rem;
+  }
+
+  .route-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    max-height: 24rem;
+    overflow-y: auto;
+    width: 100%;
+    padding: 0.75rem;
+  }
+
+  .route-picker-item {
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: 0.625rem;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 4.25rem;
+    padding: 0.8rem 0.9rem;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
+  }
+
+  .route-picker-item:hover {
+    border-color: var(--accent-primary);
+  }
+
+  .route-picker-item.selected {
+    border-color: var(--accent-primary);
+    background: rgba(59, 130, 246, 0.08);
+  }
+
+  .route-picker-item-main {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .route-picker-provider {
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-family: "JetBrains Mono", monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .route-picker-item-badges {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 1.25rem;
+  }
+
+  .route-picker-item-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+  }
+
+  .route-picker-amount {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-weight: 700;
+    font-family: "JetBrains Mono", monospace;
+    white-space: nowrap;
+  }
+
+  .route-picker-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.2rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.35rem;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.675rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .route-picker-status-best {
+    background: #16a34a;
+    color: #ffffff;
+  }
+
+  .route-picker-status-penalty {
+    background: #facc15;
+    color: #111827;
+  }
+
+  @media (--tablet) {
+    :global(.result-modal.route-picker-modal) {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      max-width: 100%;
+      max-height: 92dvh;
+      border-radius: 1.1rem 1.1rem 0 0;
+      border-bottom: none;
+      animation: routePickerSheetIn 0.2s ease-out;
+    }
+
+    .route-picker-header {
+      padding: 0.9rem 1rem;
+    }
+
+    .route-picker-title {
+      font-size: 1.05rem;
+    }
+
+    .route-picker-list {
+      padding: 0.625rem 0.625rem calc(0.625rem + env(safe-area-inset-bottom));
+      max-height: none;
+    }
+  }
+
+  @keyframes routePickerSheetIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .price-impact-warning {
@@ -1733,10 +2391,14 @@
   .dex-badge {
     background: linear-gradient(135deg, var(--accent-primary), #2563eb);
     color: white;
-    padding: 0.125rem 0.5rem;
-    border-radius: 0.375rem;
+    min-height: var(--route-badge-height);
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.65rem;
+    border-radius: 0.55rem;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 700;
+    line-height: 1;
   }
 
   .skeleton-text {
@@ -1756,9 +2418,14 @@
 
   .skeleton-badge {
     font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.125rem 0.5rem;
-    border-radius: 0.375rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--route-badge-height);
+    padding: 0 0.65rem;
+    border-radius: 0.55rem;
+    box-sizing: border-box;
     color: transparent;
     background: linear-gradient(
       90deg,
@@ -1954,6 +2621,7 @@
     }
 
     .route-info {
+      --route-badge-height: 1.5rem;
       padding: 0.625rem 0.75rem;
       gap: 0.375rem;
     }
@@ -1961,6 +2629,54 @@
     .route-label,
     .route-value {
       font-size: 0.75rem;
+    }
+
+    .route-badge-stack {
+      max-width: 68%;
+      height: var(--route-badge-height);
+    }
+
+    .route-segment {
+      font-size: 0.6875rem;
+      padding: 0 0.52rem;
+    }
+
+    .route-badge-stack > .route-segment:not(:first-child) {
+      padding-left: 0.68rem;
+    }
+
+    .route-badge-stack > .route-segment:not(:first-child)::before {
+      left: -0.32rem;
+      width: 0.64rem;
+    }
+
+    .route-badge-stack > .route-segment:first-child {
+      padding-left: 0.6rem;
+      padding-right: 0.78rem;
+    }
+
+    .route-segment-clear {
+      width: var(--route-badge-height);
+    }
+
+    .route-provider-btn svg {
+      width: 10px;
+      height: 10px;
+    }
+
+    .route-picker-item {
+      min-height: 3.85rem;
+      padding: 0.62rem 0.72rem;
+    }
+
+    .route-picker-amount {
+      font-size: 0.78rem;
+    }
+
+    .route-picker-status-badge {
+      min-height: 1.1rem;
+      font-size: 0.625rem;
+      padding: 0.08rem 0.34rem;
     }
 
     .price-impact-warning {
@@ -1996,6 +2712,7 @@
     }
 
     .route-info {
+      --route-badge-height: 1.45rem;
       padding: 0.5rem 0.625rem;
       gap: 0.25rem;
     }
@@ -2037,6 +2754,7 @@
     }
 
     .route-info {
+      --route-badge-height: 1.4rem;
       padding: 0.375rem 0.5rem;
     }
   }
