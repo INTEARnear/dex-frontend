@@ -89,6 +89,9 @@ export interface XykPool {
   pool: XykPoolData;
   volume_24h_usd: number;
   volume_7d_usd: number;
+  liquidity_usd: string;
+  owned_liquidity_usd?: string;
+  apy: number;
 }
 
 export interface NormalizedPool {

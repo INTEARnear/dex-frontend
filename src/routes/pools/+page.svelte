@@ -33,12 +33,6 @@
     apyPercent: number;
   }
 
-  interface PoolWithOwnedLiquidity extends XykPool {
-    liquidity_usd: string;
-    owned_liquidity_usd?: string;
-    apy: number;
-  }
-
   type SortByMetric = "liquidity" | "volume" | "apy";
   const TRUSTED_REPUTATIONS = new Set(["NotFake", "Reputable"]);
   const SORT_BY_LABELS: Record<SortByMetric, string> = {
@@ -251,7 +245,7 @@
         throw new Error("Failed to fetch pools");
       }
 
-      const data: PoolWithOwnedLiquidity[] = await response.json();
+      const data: XykPool[] = await response.json();
       if (id !== fetchId) return;
 
       const processedPools: PoolDisplay[] = [];

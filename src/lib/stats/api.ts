@@ -22,6 +22,7 @@ type TimeframeSegment = "day" | "week" | "month";
 
 interface PoolDescriptor {
   poolId: number;
+  liquidityUsd: number;
   assets: [AssetWithBalance, AssetWithBalance];
   tokens: [TokenInfo | null, TokenInfo | null];
 }
@@ -44,21 +45,11 @@ function toTimeframeSegment(timeframe: StatsTimeframe): TimeframeSegment {
   return TIMEFRAME_TO_SEGMENT[timeframe];
 }
 
-function parseNonNegativeNumber(value: unknown): number {
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number.parseFloat(value)
-        : Number.NaN;
-  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
-  return parsed;
-}
-
 async function fetchPoolDescriptors(): Promise<PoolDescriptor[]> {
   const pools = await fetchJson<XykPool[]>("/pools/all");
   const descriptors: Array<{
     poolId: number;
+    liquidityUsd: number;
     assets: [AssetWithBalance, AssetWithBalance];
   }> = [];
   const uniqueAssetIds = new Set<string>();
@@ -73,6 +64,7 @@ async function fetchPoolDescriptors(): Promise<PoolDescriptor[]> {
 
     descriptors.push({
       poolId: pool.id,
+      liquidityUsd: parseFloat(pool.liquidity_usd),
       assets,
     });
   }
@@ -91,22 +83,6 @@ async function fetchPoolDescriptors(): Promise<PoolDescriptor[]> {
       tokenHubStore.selectToken(descriptor.assets[1].asset_id),
     ] as [TokenInfo | null, TokenInfo | null],
   }));
-}
-
-function calculateAssetUsd(asset: AssetWithBalance): number {
-  const token = tokenHubStore.selectToken(asset.asset_id);
-  if (!token) return 0;
-
-  const decimals = token.metadata.decimals;
-  const rawBalance = Number.parseFloat(asset.balance);
-  const price = Number.parseFloat(token.price_usd || "0");
-  if (!Number.isFinite(rawBalance) || !Number.isFinite(price)) return 0;
-
-  const amount = rawBalance / Math.pow(10, decimals);
-  const usdValue = amount * price;
-  if (!Number.isFinite(usdValue) || usdValue <= 0) return 0;
-
-  return usdValue;
 }
 
 function sortPoolsByValue(items: StatsPoolListItem[]): StatsPoolListItem[] {
@@ -129,7 +105,7 @@ function normalizeVolumeSeries(
   return rows
     .map((row) => ({
       timestamp: row.timestamp,
-      valueUsd: parseNonNegativeNumber(row.volume_usd),
+      valueUsd: row.volume_usd,
     }))
     .sort(
       (left, right) =>
@@ -144,7 +120,7 @@ function normalizeTvlSeries(
   return rows
     .map((row) => ({
       timestamp: row.timestamp,
-      valueUsd: parseNonNegativeNumber(row.tvl_usd),
+      valueUsd: row.tvl_usd,
     }))
     .sort(
       (left, right) =>
@@ -223,7 +199,7 @@ export async function fetchVolumePoolItems(
 
   const valueByPoolId = new Map<number, number>();
   for (const row of topRows) {
-    valueByPoolId.set(row.pool_id, parseNonNegativeNumber(row.volume_usd));
+    valueByPoolId.set(row.pool_id, row.volume_usd);
   }
 
   const items: StatsPoolListItem[] = descriptors.map((descriptor) => {
@@ -243,7 +219,7 @@ export async function fetchVolumePoolItems(
     items.push({
       kind: "pool",
       poolId: row.pool_id,
-      valueUsd: parseNonNegativeNumber(row.volume_usd),
+      valueUsd: row.volume_usd,
       primaryLabel: `Pool #${row.pool_id}`,
       secondaryLabel: "?-?",
       tokens: [null, null],
@@ -266,7 +242,7 @@ export async function fetchVolumeAssetItems(
 
   const valueByAssetId = new Map<string, number>();
   for (const row of topRows) {
-    valueByAssetId.set(row.asset_id, parseNonNegativeNumber(row.volume_usd));
+    valueByAssetId.set(row.asset_id, row.volume_usd);
   }
 
   const allAssetIds = new Set<string>();
@@ -297,13 +273,10 @@ export async function fetchTvlPoolItems(): Promise<StatsPoolListItem[]> {
   const descriptors = await fetchPoolDescriptors();
   const items: StatsPoolListItem[] = descriptors.map((descriptor) => {
     const [tokenA, tokenB] = descriptor.tokens;
-    const valueUsd =
-      calculateAssetUsd(descriptor.assets[0]) +
-      calculateAssetUsd(descriptor.assets[1]);
     return {
       kind: "pool",
       poolId: descriptor.poolId,
-      valueUsd,
+      valueUsd: descriptor.liquidityUsd,
       primaryLabel: `Pool #${descriptor.poolId}`,
       secondaryLabel: `${tokenA?.metadata.symbol ?? "?"}-${tokenB?.metadata.symbol ?? "?"}`,
       tokens: descriptor.tokens,
@@ -318,9 +291,10 @@ export async function fetchTvlAssetItems(): Promise<StatsAssetListItem[]> {
   const valueByAssetId = new Map<string, number>();
 
   for (const descriptor of descriptors) {
+    const valuePerAsset = descriptor.liquidityUsd / 2;
     for (const asset of descriptor.assets) {
       const current = valueByAssetId.get(asset.asset_id) ?? 0;
-      valueByAssetId.set(asset.asset_id, current + calculateAssetUsd(asset));
+      valueByAssetId.set(asset.asset_id, current + valuePerAsset);
     }
   }
 
