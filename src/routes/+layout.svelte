@@ -26,7 +26,11 @@
   const isWidePage = $derived(
     page.url.pathname === "/pools" ||
       page.url.pathname === "/pool" ||
-      page.url.pathname === "/stats",
+      page.url.pathname === "/stats" ||
+      page.url.pathname === "/launch",
+  );
+  const productLabel = $derived(
+    page.url.pathname === "/launch" ? "Launch" : "DEX",
   );
 
   let themePreference = $state<ThemePreference>("system");
@@ -92,6 +96,12 @@
       aria-current={page.url.pathname === "/stats" ? "page" : undefined}
       >Stats</a
     >
+    <a
+      href="/launch"
+      class:active={page.url.pathname === "/launch"}
+      aria-current={page.url.pathname === "/launch" ? "page" : undefined}
+      >Launch</a
+    >
   </nav>
   <div class="top-bar-controls">
     <button
@@ -117,7 +127,7 @@
 
 <main class:wide={isWidePage}>
   <header>
-    <h1>Intear <span class="accent">DEX</span></h1>
+    <h1>Intear <span class="accent">{productLabel}</span></h1>
   </header>
 
   <nav class="mobile-nav">
@@ -137,6 +147,12 @@
       class:active={page.url.pathname === "/stats"}
       aria-current={page.url.pathname === "/stats" ? "page" : undefined}
       >Stats</a
+    >
+    <a
+      href="/launch"
+      class:active={page.url.pathname === "/launch"}
+      aria-current={page.url.pathname === "/launch" ? "page" : undefined}
+      >Launch</a
     >
   </nav>
 
@@ -323,15 +339,16 @@
     display: none;
   }
 
-  @media (--tablet) {
-    .desktop-nav {
-      display: none;
-    }
-
+  @media (max-width: 860px) {
     .mobile-nav {
       display: flex;
     }
+    .desktop-nav {
+      display: none;
+    }
+  }
 
+  @media (--tablet) {
     main {
       gap: 1rem;
     }
@@ -417,6 +434,12 @@
     .theme-toggle {
       width: 1.875rem;
       height: 1.875rem;
+    }
+
+    nav a {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.8125rem;
+      font-size: 0.75rem;
     }
   }
 

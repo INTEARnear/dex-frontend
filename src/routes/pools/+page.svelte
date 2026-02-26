@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
+  import { ChevronDown, Plus } from "lucide-svelte";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
   import {
@@ -103,6 +104,7 @@
   let sortBy = $state<SortByMetric>("liquidity");
   let ownedFirst = $state(true);
   let hideSuspicious = $state(true);
+  let isMobileSortOpen = $state(false);
 
   const accountId = $derived($walletStore.accountId);
   let isConnecting = $state(false);
@@ -167,6 +169,10 @@
 
   function cycleSortBy() {
     sortBy = NEXT_SORT_BY[sortBy];
+  }
+
+  function toggleMobileSort() {
+    isMobileSortOpen = !isMobileSortOpen;
   }
 
   function getSortMetric(pool: PoolDisplay, liquidityUsd: number): number {
@@ -368,7 +374,7 @@
 <div class="liquidity-page">
   <div class="page-header">
     <h2>Plach Liquidity Pools</h2>
-    <div class="header-actions">
+    <div class="header-actions" class:mobile-config-open={isMobileSortOpen}>
       <div
         class="sort-settings"
         role="group"
@@ -456,6 +462,45 @@
           <path d="M16 21h5v-5" />
         </svg>
       </button>
+
+      <div class="mobile-sort-controls">
+        <div class="mobile-sort-row">
+          <button
+            type="button"
+            class="mobile-sort-toggle"
+            aria-expanded={isMobileSortOpen}
+            onclick={toggleMobileSort}
+          >
+            <span>Sort By</span>
+            <span class="mobile-sort-chevron" class:open={isMobileSortOpen}>
+              <ChevronDown size={16} />
+            </span>
+          </button>
+
+          {#if $walletStore.isConnected}
+            <button
+              type="button"
+              class="mobile-create-pool-btn"
+              onclick={() => (showCreatePoolModal = true)}
+              aria-label="Create Pool"
+              title="Create Pool"
+            >
+              <Plus size={16} />
+            </button>
+          {:else}
+            <button
+              type="button"
+              class="mobile-create-pool-btn"
+              onclick={handleConnectWallet}
+              disabled={isConnecting}
+              aria-label="Connect Wallet"
+              title={isConnecting ? "Connecting..." : "Connect Wallet"}
+            >
+              <Plus size={16} />
+            </button>
+          {/if}
+        </div>
+      </div>
     </div>
   </div>
 
@@ -577,6 +622,7 @@
     justify-content: space-between;
     margin-bottom: 1.5rem;
     gap: 1rem;
+    flex-wrap: wrap;
   }
 
   .page-header h2 {
@@ -687,6 +733,62 @@
     flex-shrink: 0;
   }
 
+  .mobile-sort-controls {
+    display: none;
+    width: 100%;
+  }
+
+  .mobile-sort-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .mobile-sort-toggle {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.4rem;
+    padding: 0.45rem 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .mobile-sort-chevron {
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+  }
+
+  .mobile-sort-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .mobile-create-pool-btn {
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: var(--accent-button-small);
+    color: var(--text-on-accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .mobile-create-pool-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
   .refresh-btn {
     display: flex;
     align-items: center;
@@ -785,6 +887,60 @@
 
     .sort-cycle-btn {
       margin-left: 0;
+    }
+  }
+
+  @media (--mobile) {
+    .header-actions {
+      width: 100%;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.35rem;
+    }
+
+    .sort-settings {
+      display: none;
+      order: 2;
+      width: 100%;
+      padding: 0;
+      gap: 0.55rem;
+      background: transparent;
+    }
+
+    .header-actions.mobile-config-open .sort-settings {
+      display: flex;
+      align-items: stretch;
+      flex-wrap: wrap;
+      width: 100%;
+      flex-direction: column;
+    }
+
+    .header-actions.mobile-config-open .sort-by-control {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .header-actions.mobile-config-open .sort-cycle-btn {
+      width: 100%;
+      min-width: 0;
+      margin-left: 0;
+    }
+
+    .header-actions.mobile-config-open .filter-toggle {
+      width: auto;
+      justify-content: flex-start;
+      align-self: flex-start;
+    }
+
+    .create-pool-btn,
+    .refresh-btn {
+      display: none;
+    }
+
+    .mobile-sort-controls {
+      display: block;
+      order: 1;
+      width: 100%;
     }
   }
 
