@@ -885,9 +885,9 @@
         </div>
       </div>
 
-      {#if isLoading && trades.length === 0}
+      {#if isLoading && !trades?.length}
         <div class="table-state">Loading recent trades...</div>
-      {:else if trades.length === 0}
+      {:else if !trades?.length}
         <div class="table-state">No recent trades yet.</div>
       {:else}
         <div class="trade-body">
