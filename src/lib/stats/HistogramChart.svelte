@@ -796,7 +796,6 @@
       color-mix(in srgb, var(--border-color) 70%, transparent);
     padding-right: 0.35rem;
     background: var(--bg-input);
-    width: 2.5rem;
   }
 
   .y-axis-label {

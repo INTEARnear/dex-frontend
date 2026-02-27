@@ -96,6 +96,25 @@
     token_output: string;
   }
 
+  type ActionLabelsMode = "swap" | "buySell";
+  interface LockedSwapPair {
+    baseTokenId: string;
+    quoteTokenId: string;
+  }
+  interface SwapFormProps {
+    compact?: boolean;
+    hideSubtitle?: boolean;
+    lockedPair?: LockedSwapPair | null;
+    actionLabels?: ActionLabelsMode;
+  }
+
+  let {
+    compact = false,
+    hideSubtitle = false,
+    lockedPair = null,
+    actionLabels = "swap",
+  }: SwapFormProps = $props();
+
   let inputAmountHumanReadable = $state("");
   let outputAmountHumanReadable = $state("");
   let isSwapping = $state(false);
@@ -166,6 +185,16 @@
   type SwapMode = "exactIn" | "exactOut";
   let swapMode = $state<SwapMode>("exactIn");
 
+  const primaryActionLabel = $derived.by(() => {
+    if (actionLabels !== "buySell") return "Swap";
+    if (!inputToken || !outputToken) return "Buy";
+    const inputIsNear = inputToken.account_id === "near";
+    const outputIsNear = outputToken.account_id === "near";
+    if (inputIsNear && !outputIsNear) return "Buy";
+    if (!inputIsNear && outputIsNear) return "Sell";
+    return "Swap";
+  });
+
   type SwapResultModalInfoTransfer = ParsedTransferEvent;
 
   let showErrorModal = $state(false);
@@ -227,6 +256,17 @@
   let initialTokensLoaded = false;
   $effect(() => {
     if (initialTokensLoaded) return;
+    if (lockedPair !== null) {
+      initialTokensLoaded = true;
+      const baseTokenId = lockedPair.baseTokenId;
+      const quoteTokenId = lockedPair.quoteTokenId;
+      if (!baseTokenId || !quoteTokenId) return;
+      (async () => {
+        await loadDefaultToken(baseTokenId, true);
+        await loadDefaultToken(quoteTokenId, false);
+      })();
+      return;
+    }
     const fromParam = page.url.searchParams.get("from");
     const toParam = page.url.searchParams.get("to");
     if (fromParam && toParam) {
@@ -281,8 +321,23 @@
     }
   }
 
+  $effect(() => {
+    if (lockedPair === null) return;
+    const baseTokenId = lockedPair.baseTokenId;
+    const quoteTokenId = lockedPair.quoteTokenId;
+
+    inputTokenId = baseTokenId;
+    outputTokenId = quoteTokenId;
+    availableRoutes = [];
+    currentRoute = null;
+    inputAmountHumanReadable = "";
+    outputAmountHumanReadable = "";
+    swapMode = "exactIn";
+  });
+
   // Save input token to localStorage when it changes
   $effect(() => {
+    if (lockedPair !== null) return;
     if (inputTokenId) {
       try {
         localStorage.setItem("intear-dex-input-token", inputTokenId);
@@ -294,6 +349,7 @@
 
   // Save output token to localStorage when it changes
   $effect(() => {
+    if (lockedPair !== null) return;
     if (outputTokenId) {
       try {
         localStorage.setItem("intear-dex-output-token", outputTokenId);
@@ -1369,9 +1425,11 @@
   }
 </script>
 
-<p class="subtitle">{randomPhrase}</p>
+{#if !hideSubtitle}
+  <p class="subtitle">{randomPhrase}</p>
+{/if}
 
-<div class="swap-card" class:disabled={!$walletStore.isConnected}>
+<div class="swap-card" class:disabled={!$walletStore.isConnected} class:compact>
   <TradeSettingsRow
     bind:open={swapSettingsOpen}
     settingsLabel={swapSettingsDisplay}
@@ -1490,30 +1548,43 @@
             <span class="usd-value" style="width: 8rem">&nbsp;</span>
           {/if}
         </div>
-        <button
-          class="token-select"
-          disabled={!$walletStore.isConnected}
-          onclick={() => (inputTokenSelectorOpen = true)}
-        >
-          {#if inputToken}
-            <TokenIcon token={inputToken} size={24} showBadge badgeSmall />
-            <span class="token-symbol"
-              >{truncateSymbol(inputToken.metadata.symbol)}</span
-            >
-          {:else}
-            Select
-          {/if}
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
+        {#if lockedPair !== null}
+          <div class="token-lock-chip">
+            {#if inputToken}
+              <TokenIcon token={inputToken} size={24} showBadge badgeSmall />
+              <span class="token-symbol"
+                >{truncateSymbol(inputToken.metadata.symbol)}</span
+              >
+            {:else}
+              Loading
+            {/if}
+          </div>
+        {:else}
+          <button
+            class="token-select"
+            disabled={!$walletStore.isConnected}
+            onclick={() => (inputTokenSelectorOpen = true)}
           >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
+            {#if inputToken}
+              <TokenIcon token={inputToken} size={24} showBadge badgeSmall />
+              <span class="token-symbol"
+                >{truncateSymbol(inputToken.metadata.symbol)}</span
+              >
+            {:else}
+              Select
+            {/if}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        {/if}
       </div>
     </div>
 
@@ -1579,30 +1650,43 @@
             <span class="usd-value" style="width: 8rem">&nbsp;</span>
           {/if}
         </div>
-        <button
-          class="token-select"
-          disabled={!$walletStore.isConnected}
-          onclick={() => (outputTokenSelectorOpen = true)}
-        >
-          {#if outputToken}
-            <TokenIcon token={outputToken} size={24} showBadge badgeSmall />
-            <span class="token-symbol"
-              >{truncateSymbol(outputToken.metadata.symbol)}</span
-            >
-          {:else}
-            Select
-          {/if}
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
+        {#if lockedPair !== null}
+          <div class="token-lock-chip">
+            {#if outputToken}
+              <TokenIcon token={outputToken} size={24} showBadge badgeSmall />
+              <span class="token-symbol"
+                >{truncateSymbol(outputToken.metadata.symbol)}</span
+              >
+            {:else}
+              Loading
+            {/if}
+          </div>
+        {:else}
+          <button
+            class="token-select"
+            disabled={!$walletStore.isConnected}
+            onclick={() => (outputTokenSelectorOpen = true)}
           >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
+            {#if outputToken}
+              <TokenIcon token={outputToken} size={24} showBadge badgeSmall />
+              <span class="token-symbol"
+                >{truncateSymbol(outputToken.metadata.symbol)}</span
+              >
+            {:else}
+              Select
+            {/if}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        {/if}
       </div>
     </div>
   </div>
@@ -1819,23 +1903,25 @@
       {:else if !currentRoute && hasValidAmount}
         No route found
       {:else}
-        Swap
+        {primaryActionLabel}
       {/if}
     </button>
   {/if}
 </div>
 
-<TokenSelector
-  isOpen={inputTokenSelectorOpen}
-  onClose={() => (inputTokenSelectorOpen = false)}
-  onSelectToken={handleSelectInputToken}
-/>
+{#if lockedPair === null}
+  <TokenSelector
+    isOpen={inputTokenSelectorOpen}
+    onClose={() => (inputTokenSelectorOpen = false)}
+    onSelectToken={handleSelectInputToken}
+  />
 
-<TokenSelector
-  isOpen={outputTokenSelectorOpen}
-  onClose={() => (outputTokenSelectorOpen = false)}
-  onSelectToken={handleSelectOutputToken}
-/>
+  <TokenSelector
+    isOpen={outputTokenSelectorOpen}
+    onClose={() => (outputTokenSelectorOpen = false)}
+    onSelectToken={handleSelectOutputToken}
+  />
+{/if}
 
 <ErrorModal
   isOpen={showErrorModal}
@@ -2021,6 +2107,13 @@
       0 0 0 1px rgba(59, 130, 246, 0.05);
   }
 
+  .swap-card.compact {
+    padding: 0.9rem;
+    border-radius: 1rem;
+    gap: 0.55rem;
+    box-shadow: none;
+  }
+
   .swap-card.disabled .input-wrapper {
     opacity: 0.6;
   }
@@ -2038,6 +2131,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+
+  .swap-card.compact .swap-fields {
+    gap: 0.375rem;
   }
 
   .input-header {
@@ -2062,6 +2159,12 @@
     margin: 0;
   }
 
+  .swap-card.compact .balance-display,
+  .swap-card.compact label,
+  .swap-card.compact .usd-value {
+    font-size: 0.75rem;
+  }
+
   .balance-display.clickable {
     cursor: pointer;
     transition: color 0.15s ease;
@@ -2084,6 +2187,12 @@
       box-shadow 0.2s ease;
   }
 
+  .swap-card.compact .input-wrapper {
+    padding: 0.65rem 0.75rem;
+    gap: 0.35rem;
+    border-radius: 0.75rem;
+  }
+
   .input-wrapper:focus-within {
     border-color: var(--border-focus);
     box-shadow: 0 0 0 3px var(--accent-glow);
@@ -2093,6 +2202,10 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+  }
+
+  .swap-card.compact .amount-row {
+    gap: 0.5rem;
   }
 
   .amount-column {
@@ -2112,6 +2225,10 @@
     font-weight: 600;
     color: var(--text-primary);
     min-width: 0;
+  }
+
+  .swap-card.compact input {
+    font-size: 1.1rem;
   }
 
   .usd-value {
@@ -2160,6 +2277,28 @@
     cursor: pointer;
     transition: all 0.2s ease;
     white-space: nowrap;
+  }
+
+  .token-lock-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.625rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .swap-card.compact .token-select,
+  .swap-card.compact .token-lock-chip {
+    gap: 0.35rem;
+    padding: 0.36rem 0.58rem;
+    font-size: 0.8rem;
+    border-radius: 0.5rem;
   }
 
   .token-select:hover:not(:disabled) {
@@ -2212,6 +2351,17 @@
     opacity: 0.5;
   }
 
+  .swap-card.compact .switch-btn {
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.62rem;
+  }
+
+  .swap-card.compact .switch-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
   .swap-btn {
     width: 100%;
     padding: 1rem;
@@ -2228,6 +2378,13 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+  }
+
+  .swap-card.compact .swap-btn {
+    margin-top: 0.2rem;
+    padding: 0.75rem;
+    border-radius: 0.72rem;
+    font-size: 0.95rem;
   }
 
   .swap-btn:hover:not(:disabled):not(.connect-wallet-btn) {
@@ -2294,6 +2451,12 @@
     background: var(--bg-input);
     border: 1px solid var(--border-color);
     border-radius: 0.75rem;
+  }
+
+  .swap-card.compact .route-info {
+    --route-badge-height: 1.45rem;
+    gap: 0.35rem;
+    padding: 0.6rem 0.72rem;
   }
 
   .route-row {
@@ -2961,7 +3124,8 @@
       font-size: 0.75rem;
     }
 
-    .token-select {
+    .token-select,
+    .token-lock-chip {
       gap: 0.375rem;
       padding: 0.375rem 0.625rem;
       font-size: 0.8125rem;
