@@ -321,18 +321,32 @@
     }
   }
 
+  let lastAppliedLockedPairKey = $state<string | null>(null);
   $effect(() => {
-    if (lockedPair === null) return;
+    if (lockedPair === null) {
+      lastAppliedLockedPairKey = null;
+      return;
+    }
     const baseTokenId = lockedPair.baseTokenId;
     const quoteTokenId = lockedPair.quoteTokenId;
+    const pairKey = `${baseTokenId}::${quoteTokenId}`;
+    if (pairKey === lastAppliedLockedPairKey) return;
 
-    inputTokenId = baseTokenId;
-    outputTokenId = quoteTokenId;
-    availableRoutes = [];
-    currentRoute = null;
-    inputAmountHumanReadable = "";
-    outputAmountHumanReadable = "";
-    swapMode = "exactIn";
+    const alreadyUsingLockedPair =
+      (inputTokenId === baseTokenId && outputTokenId === quoteTokenId) ||
+      (inputTokenId === quoteTokenId && outputTokenId === baseTokenId);
+
+    if (!alreadyUsingLockedPair) {
+      inputTokenId = baseTokenId;
+      outputTokenId = quoteTokenId;
+      availableRoutes = [];
+      currentRoute = null;
+      inputAmountHumanReadable = "";
+      outputAmountHumanReadable = "";
+      swapMode = "exactIn";
+    }
+
+    lastAppliedLockedPairKey = pairKey;
   });
 
   // Save input token to localStorage when it changes

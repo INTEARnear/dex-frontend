@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
+  import { get } from "svelte/store";
   import Spinner from "../../lib/Spinner.svelte";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import type { TokenInfo } from "../../lib/types";
@@ -218,9 +218,14 @@
     ownedFirst = next;
   }
 
-  async function fetchLaunchData(): Promise<void> {
-    launchApiError = null;
-    isLaunchApiLoading = true;
+  async function fetchLaunchData(options?: {
+    background?: boolean;
+  }): Promise<void> {
+    const background = options?.background ?? false;
+    if (!background) {
+      launchApiError = null;
+      isLaunchApiLoading = true;
+    }
 
     try {
       const response = await fetch(`${DEX_BACKEND_API}/launch/launch-data`);
@@ -228,12 +233,17 @@
         throw new Error(`Failed to fetch launch data: HTTP ${response.status}`);
       }
       launchDataByTokenId = (await response.json()) as LaunchApiResponse;
+      launchApiError = null;
     } catch (error) {
-      launchApiError =
-        error instanceof Error ? error.message : "Failed to fetch launch data";
-      launchDataByTokenId = {};
+      if (!background) {
+        launchApiError =
+          error instanceof Error ? error.message : "Failed to fetch launch data";
+        launchDataByTokenId = {};
+      }
     } finally {
-      isLaunchApiLoading = false;
+      if (!background) {
+        isLaunchApiLoading = false;
+      }
     }
   }
 
@@ -250,27 +260,14 @@
     await Promise.all([fetchTokenData(), fetchLaunchData()]);
   }
 
-  function openToken(tokenId: string): void {
-    void goto(`/launch?token=${encodeURIComponent(tokenId)}`, {
-      replaceState: true,
-      noScroll: true,
-      keepFocus: true,
-      invalidateAll: false,
-    });
-  }
-
-  function handleTokenCardKeydown(event: KeyboardEvent, tokenId: string): void {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    openToken(tokenId);
-  }
-
   onMount(() => {
+    tokenHubStore.updatePricesEvery(1_000);
+
     const loaded = loadSortSettings();
     if (loaded.sortBy !== undefined) sortBy = loaded.sortBy;
     if (loaded.ownedFirst !== undefined) ownedFirst = loaded.ownedFirst;
     hasRestoredSortSettings = true;
-    void reloadPageData();
+    reloadPageData();
   });
 
   $effect(() => {
@@ -280,6 +277,23 @@
     if (hasRestoredSortSettings) {
       saveSortSettings(sortBy, ownedFirst);
     }
+  });
+
+  let launchDataRefreshInFlight = $state(false);
+  $effect(() => {
+    if (showTokenDetail) return;
+
+    const refreshTimer = setInterval(() => {
+      if (launchDataRefreshInFlight) return;
+      launchDataRefreshInFlight = true;
+      fetchLaunchData({ background: true }).finally(() => {
+        launchDataRefreshInFlight = false;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(refreshTimer);
+    };
   });
 </script>
 
@@ -315,8 +329,6 @@
       onCycleSortBy={cycleSortBy}
       onToggleMobileSort={toggleMobileSort}
       onOwnedFirstChange={setOwnedFirst}
-      onOpenToken={openToken}
-      onTokenCardKeydown={handleTokenCardKeydown}
       {formatMarketCap}
     />
   {/if}

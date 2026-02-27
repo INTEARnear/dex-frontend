@@ -15,8 +15,6 @@
     onCycleSortBy: () => void;
     onToggleMobileSort: () => void;
     onOwnedFirstChange: (next: boolean) => void;
-    onOpenToken: (tokenId: string) => void;
-    onTokenCardKeydown: (event: KeyboardEvent, tokenId: string) => void;
     formatMarketCap: (token: TokenInfo) => string;
   }
 
@@ -30,17 +28,11 @@
     onCycleSortBy,
     onToggleMobileSort,
     onOwnedFirstChange,
-    onOpenToken,
-    onTokenCardKeydown,
     formatMarketCap,
   }: Props = $props();
 
   function hasAnySocialLinks(data: LaunchToken["launchData"]): boolean {
     return Boolean(data.x || data.telegram || data.website);
-  }
-
-  function stopCardNavigation(event: MouseEvent): void {
-    event.stopPropagation();
   }
 </script>
 
@@ -141,12 +133,12 @@
       <div
         class="token-card"
         class:selected={selectedTokenId === launchToken.token.account_id}
-        role="link"
-        tabindex="0"
-        onclick={() => onOpenToken(launchToken.token.account_id)}
-        onkeydown={(event) =>
-          onTokenCardKeydown(event, launchToken.token.account_id)}
       >
+        <a
+          class="token-card-link-overlay"
+          href={`/launch?token=${launchToken.token.account_id}`}
+          aria-label={`Open ${launchToken.token.metadata.name}`}
+        ></a>
         <div class="token-icon-shell">
           {#if iconSrc}
             <img
@@ -173,7 +165,6 @@
                 rel="noopener noreferrer"
                 class="launched-by-inline"
                 title={launchToken.launchData.launched_by}
-                onclick={stopCardNavigation}
               >
                 {launchToken.launchData.launched_by}
               </a>
@@ -194,7 +185,6 @@
                 rel="noopener noreferrer"
                 class="launched-by-btn"
                 title={launchToken.launchData.launched_by}
-                onclick={stopCardNavigation}
               >
                 {launchToken.launchData.launched_by}
               </a>
@@ -211,7 +201,6 @@
                       rel="noopener noreferrer"
                       class="token-link-btn"
                       aria-label="Token X"
-                      onclick={stopCardNavigation}
                     >
                       <svg
                         width="14"
@@ -231,7 +220,6 @@
                       rel="noopener noreferrer"
                       class="token-link-btn"
                       aria-label="Token Telegram"
-                      onclick={stopCardNavigation}
                     >
                       <svg
                         width="14"
@@ -251,7 +239,6 @@
                       rel="noopener noreferrer"
                       class="token-link-btn"
                       aria-label="Token Website"
-                      onclick={stopCardNavigation}
                     >
                       <Globe size={14} />
                     </a>
@@ -466,6 +453,7 @@
   .token-card {
     --token-card-height: 132px;
     --token-card-padding: 0.625rem;
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.9rem;
@@ -481,6 +469,18 @@
       box-shadow 0.2s ease;
     cursor: pointer;
     overflow: hidden;
+  }
+
+  .token-card-link-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+  }
+
+  .token-card-link-overlay:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
   }
 
   .token-card:hover {
@@ -600,6 +600,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     padding: 0;
+    position: relative;
+    z-index: 2;
   }
 
   .launched-by-inline:hover {
@@ -652,6 +654,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: relative;
+    z-index: 2;
   }
 
   .launched-by-btn:hover {
@@ -683,6 +687,8 @@
     align-items: center;
     justify-content: center;
     padding: 0;
+    position: relative;
+    z-index: 2;
     transition:
       border-color 0.2s ease,
       color 0.2s ease,

@@ -784,6 +784,7 @@
   }
 
   .account-icon {
+    flex-shrink: 0;
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 50%;
@@ -1135,6 +1136,7 @@
     .disconnect-btn {
       padding: 0 0.5rem;
       height: 1.875rem;
+      font-size: 0.75rem;
     }
   }
 

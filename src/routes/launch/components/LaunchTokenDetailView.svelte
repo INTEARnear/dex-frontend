@@ -143,8 +143,8 @@
           </div>
         {/if}
 
-        <div class="launched-by-row">
-          <span>Launched by</span>
+        <p class="launch-meta">
+          Launched by
           <a
             href={`https://nearblocks.io/address/${launchData.launched_by}`}
             target="_blank"
@@ -153,9 +153,9 @@
           >
             {launchData.launched_by}
           </a>
-        </div>
-
-        <p class="launch-timestamp">Launched {launchTimestamp}</p>
+          at
+          <span>{launchTimestamp}</span>
+        </p>
       </article>
 
       <article class="swap-panel">
@@ -203,6 +203,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
+    min-width: 0;
   }
 
   .token-meta-card {
@@ -329,35 +330,7 @@
     background: var(--bg-input);
   }
 
-  .launched-by-row {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    min-width: 0;
-    color: var(--text-muted);
-    font-size: 0.86rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  .launched-by-row a {
-    min-width: 0;
-    color: var(--text-primary);
-    font-family: "JetBrains Mono", monospace;
-    text-decoration: none;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-transform: none;
-    letter-spacing: normal;
-  }
-
-  .launched-by-row a:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .launch-timestamp {
+  .launch-meta {
     position: absolute;
     right: 1rem;
     bottom: 0.9rem;
@@ -366,6 +339,22 @@
     font-size: 0.78rem;
     font-family: "JetBrains Mono", monospace;
     text-align: right;
+  }
+
+  .launch-meta a {
+    display: inline-block;
+    max-width: 15rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    vertical-align: bottom;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .launch-meta a:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .swap-panel {
@@ -377,6 +366,14 @@
   @media (max-width: 960px) {
     .detail-layout {
       grid-template-columns: 1fr;
+    }
+
+    .content-panel {
+      order: 1;
+    }
+
+    .chart-panel {
+      order: 2;
     }
 
     .chart-panel {
@@ -424,12 +421,16 @@
       width: 100%;
     }
 
-    .launch-timestamp {
+    .launch-meta {
       right: 0.8rem;
       bottom: 0.75rem;
       font-size: 0.74rem;
       max-width: calc(100% - 1.6rem);
-      text-align: left;
+      text-align: right;
+    }
+
+    .launch-meta a {
+      max-width: 10.5rem;
     }
   }
 </style>
