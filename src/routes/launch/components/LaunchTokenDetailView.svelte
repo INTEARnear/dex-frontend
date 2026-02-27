@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { Globe } from "lucide-svelte";
   import { siTelegram, siX } from "simple-icons";
+  import LaunchRecentTradesGrid from "./LaunchRecentTradesGrid.svelte";
   import SwapForm from "../../../lib/SwapForm.svelte";
   import type { TokenInfo } from "../../../lib/types";
   import { getTokenIcon } from "../../../lib/utils";
@@ -170,11 +171,16 @@
       </article>
     </section>
   </div>
+
+  <LaunchRecentTradesGrid tokenAccountId={token.account_id} />
 </div>
 
 <style>
   .detail-view {
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .detail-layout {
@@ -185,16 +191,13 @@
   }
 
   .chart-panel {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 1rem;
     overflow: hidden;
-    min-height: 620px;
+    height: 100%;
   }
 
   .chart-frame {
     width: 100%;
-    min-height: 620px;
+    height: 100%;
     border: 0;
     display: block;
   }

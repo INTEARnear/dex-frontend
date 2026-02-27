@@ -29,30 +29,19 @@
     volume: "newest",
   };
 
-  function loadSortSettings(): Partial<{
+  interface StoredLaunchSortSettings {
     sortBy: LaunchSortBy;
     ownedFirst: boolean;
-  }> {
+  }
+
+  function loadSortSettings(): StoredLaunchSortSettings {
     try {
       const raw = localStorage.getItem(LAUNCH_SORT_STORAGE_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const out: Partial<{ sortBy: LaunchSortBy; ownedFirst: boolean }> = {};
-
-      if (
-        parsed.sortBy === "newest" ||
-        parsed.sortBy === "marketCap" ||
-        parsed.sortBy === "volume"
-      ) {
-        out.sortBy = parsed.sortBy;
-      }
-      if (typeof parsed.ownedFirst === "boolean") {
-        out.ownedFirst = parsed.ownedFirst;
-      }
-
-      return out;
+      if (!raw) return { sortBy: "volume", ownedFirst: true };
+      const parsed = JSON.parse(raw) as StoredLaunchSortSettings;
+      return parsed;
     } catch {
-      return {};
+      return { sortBy: "volume", ownedFirst: true };
     }
   }
 
@@ -262,10 +251,11 @@
 
   onMount(() => {
     tokenHubStore.updatePricesEvery(1_000);
+    tokenHubStore.updateBalancesEvery(1_000);
 
     const loaded = loadSortSettings();
-    if (loaded.sortBy !== undefined) sortBy = loaded.sortBy;
-    if (loaded.ownedFirst !== undefined) ownedFirst = loaded.ownedFirst;
+    sortBy = loaded.sortBy;
+    ownedFirst = loaded.ownedFirst;
     hasRestoredSortSettings = true;
     reloadPageData();
   });

@@ -159,7 +159,7 @@
   let isRoutePickerOpen = $state(false);
   let isFetchingRoute = $state(false);
   let routeAbortController: AbortController | null = null;
-  let quoteRefreshInterval: ReturnType<typeof setInterval> | null = null;
+  let quoteRefreshInterval: number | null = null;
 
   const bestRoute = $derived.by(() => availableRoutes[0] ?? null);
 
