@@ -51,7 +51,7 @@
     points,
     currentTimestampNanos = null,
     showCurrentPoint = true,
-    tooltipTitle = "Scheduled fee point",
+    tooltipTitle = "Scheduled fee at point in time",
     xAxisLabel = "Time",
     formatTimeLabel,
   }: Props = $props();
@@ -410,7 +410,7 @@
                 onmouseleave={clearHover}
                 ontouchstart={updateHoverFromEvent}
                 ontouchmove={updateHoverFromEvent}
-                ontouchend={clearHover}
+                ontouchend={updateHoverFromEvent}
               ></button>
             {/snippet}
             {#snippet content()}

@@ -19,9 +19,16 @@
   let { title, content, children }: Props = $props();
 
   const tooltipId = createTooltipId();
+  const desktopTooltipOffsetPx = 12;
+  const desktopTooltipSidePaddingPx = 16;
   let hovered = $state(false);
   let tooltipX = $state(0);
   let tooltipY = $state(0);
+  let tooltipFlippedLeft = $state(false);
+  let tooltipElement = $state<HTMLDivElement | null>(null);
+  let tooltipWidthPx = $state(0);
+  let lastPointerX = $state<number | null>(null);
+  let lastPointerY = $state<number | null>(null);
   let mobileOpen = $state(false);
   let isMobile = $state(false);
   let supportsTouch = $state(false);
@@ -30,6 +37,7 @@
   let longPressActive = $state(false);
   let touchStartX = 0;
   let touchStartY = 0;
+  let triggerElement = $state<HTMLSpanElement | null>(null);
   const chatwootModalVisibility = createChatwootModalVisibilityController();
 
   onDestroy(() => {
@@ -96,18 +104,71 @@
     }
   });
 
+  $effect(() => {
+    if (!tooltipElement) return;
+    const element = tooltipElement;
+
+    const updateWidth = () => {
+      const width = element.getBoundingClientRect().width;
+      if (width > 0) {
+        tooltipWidthPx = width;
+      }
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
+
+  $effect(() => {
+    if (
+      !hovered ||
+      (isMobile && supportsTouch) ||
+      tooltipWidthPx <= 0 ||
+      lastPointerX === null ||
+      lastPointerY === null
+    ) {
+      return;
+    }
+    updateDesktopTooltipPosition(lastPointerX, lastPointerY);
+  });
+
+  function updateDesktopTooltipPosition(clientX: number, clientY: number): void {
+    tooltipY = clientY + desktopTooltipOffsetPx;
+    const tooltipRightX = clientX + desktopTooltipOffsetPx;
+    const rightEdge = window.innerWidth - desktopTooltipSidePaddingPx;
+    const rightPlacementOverflows =
+      tooltipWidthPx > 0 && tooltipRightX + tooltipWidthPx > rightEdge;
+    const distanceToLeftEdge = Math.max(clientX - desktopTooltipSidePaddingPx, 0);
+    const distanceToRightEdge = Math.max(rightEdge - clientX, 0);
+    const rightSideIsClosest = distanceToRightEdge <= distanceToLeftEdge;
+    tooltipFlippedLeft = rightPlacementOverflows && rightSideIsClosest;
+    tooltipX = tooltipFlippedLeft
+      ? clientX - desktopTooltipOffsetPx
+      : tooltipRightX;
+  }
+
   function handleTooltipMove(event: MouseEvent) {
     if (isMobile && supportsTouch) return;
     if (Date.now() < hoverSuppressUntil) return;
     hovered = true;
     activeMobileTooltipId.set(null);
     activeFloatingTooltipId.set(tooltipId);
-    tooltipX = event.clientX + 12;
-    tooltipY = event.clientY + 12;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+    updateDesktopTooltipPosition(event.clientX, event.clientY);
   }
 
   function handleTooltipLeave() {
+    clearFloatingTooltip();
+  }
+
+  function clearFloatingTooltip() {
     hovered = false;
+    tooltipFlippedLeft = false;
+    lastPointerX = null;
+    lastPointerY = null;
     if (get(activeFloatingTooltipId) === tooltipId) {
       activeFloatingTooltipId.set(null);
     }
@@ -174,10 +235,33 @@
     mobileOpen = false;
     longPressActive = false;
   }
+
+  $effect(() => {
+    if (!supportsTouch || isMobile || !hovered || $activeFloatingTooltipId !== tooltipId) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return;
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        clearFloatingTooltip();
+        return;
+      }
+      if (triggerElement?.contains(target)) return;
+      clearFloatingTooltip();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  });
 </script>
 
 <span
   class="tooltip-trigger"
+  bind:this={triggerElement}
   role="button"
   tabindex="0"
   aria-label={title}
@@ -198,8 +282,9 @@
 {#if hovered && (!isMobile || !supportsTouch) && $activeFloatingTooltipId === tooltipId}
   <div
     class="detail-tooltip"
+    bind:this={tooltipElement}
     role="tooltip"
-    style={`left: ${tooltipX}px; top: ${tooltipY}px;`}
+    style={`left: ${tooltipX}px; top: ${tooltipY}px; ${tooltipFlippedLeft ? "transform: translateX(-100%);" : ""}`}
   >
     {@render content()}
   </div>

@@ -315,8 +315,11 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    color: var(--text-secondary);
     font-size: 0.875rem;
+  }
+
+  .empty {
+    color: var(--text-secondary);
     padding: 1rem 0.75rem;
     border: 1px dashed var(--border-color);
     border-radius: 0.625rem;
@@ -324,7 +327,16 @@
 
   .detail-loading,
   .detail-error {
-    min-height: 396.35px;
+    --detail-chart-height: clamp(170px, 24vw, 220px);
+    --detail-card-padding-y-total: 1.5rem;
+    min-height: calc(
+      var(--detail-chart-height) + var(--detail-card-padding-y-total) + 2rem + 1.125px
+    );
+    color: var(--text-secondary);
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.875rem;
+    background: var(--bg-input);
   }
 
   .detail-error {
@@ -353,7 +365,9 @@
 
     .detail-loading,
     .detail-error {
-      min-height: 242px;
+      --detail-chart-height: 170px;
+      --detail-card-padding-y-total: 1.25rem;
+      padding: 0.625rem;
     }
   }
 </style>

@@ -36,6 +36,7 @@
 
   const TABS: StatsTab[] = ["Volume", "Tvl"];
   const TIMEFRAMES: StatsTimeframe[] = ["Day", "Week", "Month"];
+  const LIST_SORT_TIMEFRAME: StatsTimeframe = "Day";
 
   const parsedQuery = $derived(parseStatsQuery(page.url.searchParams));
   const routeState = $derived(parsedQuery.state);
@@ -140,7 +141,7 @@
     if (state.selection.kind === "pool") {
       const items =
         state.tab === "Volume"
-          ? await fetchVolumePoolItems(state.timeframe)
+          ? await fetchVolumePoolItems(LIST_SORT_TIMEFRAME)
           : await fetchTvlPoolItems();
       const series =
         state.selection.poolId === null
@@ -157,7 +158,7 @@
 
     const items =
       state.tab === "Volume"
-        ? await fetchVolumeAssetItems(state.timeframe)
+        ? await fetchVolumeAssetItems(LIST_SORT_TIMEFRAME)
         : await fetchTvlAssetItems();
     const series =
       state.selection.assetId === null
@@ -337,7 +338,10 @@
         onTimeframeChange={handleTimeframeChange}
       />
     {:else}
-      <div class="state-panel loading">
+      <div
+        class="state-panel loading"
+        class:total-loading={routeState.selection.kind === "total"}
+      >
         <Spinner size={28} borderWidth={3} />
         <span>Loading statistics...</span>
       </div>
@@ -522,6 +526,10 @@
     color: var(--text-secondary);
   }
 
+  .state-panel.total-loading {
+    min-height: 364px;
+  }
+
   .state-panel.error p {
     margin: 0;
     color: var(--status-error-text);
@@ -587,6 +595,10 @@
 
     .total-card {
       padding: 0.8rem;
+    }
+
+    .state-panel.total-loading {
+      min-height: 300px;
     }
   }
 </style>

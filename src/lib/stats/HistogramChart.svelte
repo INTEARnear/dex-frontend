@@ -697,7 +697,7 @@
                   class="tooltip-hit"
                   style={`left:${target.leftPx}px;width:${target.widthPx}px;top:${target.topPercent}%;height:${target.heightPercent}%;`}
                 >
-                  <ResponsiveTooltip title={`${metricLabel} datapoint`}>
+                  <ResponsiveTooltip title={`${metricLabel} at ${formatExactTimestamp(target.timestamp)}`}>
                     {#snippet children()}
                       <button
                         type="button"
