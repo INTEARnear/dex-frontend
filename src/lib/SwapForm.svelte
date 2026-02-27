@@ -1565,7 +1565,7 @@
         {#if lockedPair !== null}
           <div class="token-lock-chip">
             {#if inputToken}
-              <TokenIcon token={inputToken} size={24} showBadge badgeSmall />
+              <TokenIcon token={inputToken} size={24} />
               <span class="token-symbol"
                 >{truncateSymbol(inputToken.metadata.symbol)}</span
               >
@@ -1667,7 +1667,7 @@
         {#if lockedPair !== null}
           <div class="token-lock-chip">
             {#if outputToken}
-              <TokenIcon token={outputToken} size={24} showBadge badgeSmall />
+              <TokenIcon token={outputToken} size={24} />
               <span class="token-symbol"
                 >{truncateSymbol(outputToken.metadata.symbol)}</span
               >

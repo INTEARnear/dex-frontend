@@ -290,7 +290,7 @@
   .chart-frame {
     width: 100%;
     height: 100%;
-    border: 1px solid var(--border-color);
+    border: 1.2px solid var(--border-color);
     border-radius: 0.375rem 1rem 1rem 1rem;
     display: block;
   }
@@ -304,7 +304,7 @@
 
   .token-meta-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-color);
+    border: 1.2px solid var(--border-color);
     border-radius: 1rem;
     padding: 1rem;
     display: flex;
@@ -490,6 +490,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
+  }
+
+  .swap-panel :global(.swap-card) {
+    border: 1.2px solid var(--border-color);
   }
 
   @media (max-width: 960px) {
