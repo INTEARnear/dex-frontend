@@ -15,9 +15,33 @@
     timestampNanos: number;
   }
 
+  interface GuideLine {
+    label: string;
+    yPercent: number;
+  }
+
+  interface RenderPoint {
+    id: string;
+    x: number;
+    y: number;
+    xRatio: number;
+    yRatio: number;
+    xPercent: number;
+    yPercent: number;
+  }
+
+  interface RenderSegment {
+    id: string;
+    xPercent: number;
+    yPercent: number;
+    widthPx: number;
+    angleDeg: number;
+  }
+
   interface Props {
     points: ScheduledFeeChartPoint[];
     currentTimestampNanos?: number | null;
+    showCurrentPoint?: boolean;
     tooltipTitle?: string;
     xAxisLabel?: string;
     formatTimeLabel?: (timestampNanos: number) => string;
@@ -26,6 +50,7 @@
   let {
     points,
     currentTimestampNanos = null,
+    showCurrentPoint = true,
     tooltipTitle = "Scheduled fee point",
     xAxisLabel = "Time",
     formatTimeLabel,
@@ -33,10 +58,15 @@
 
   const width = 300;
   const height = 130;
-  const left = 44;
+  const left = 12;
   const right = 286;
   const top = 10;
-  const bottom = 92;
+  const bottom = 118;
+  const plotLeftPercent = (left / width) * 100;
+  const plotTopPercent = (top / height) * 100;
+  const plotBottomPercent = (bottom / height) * 100;
+  const plotWidthPercent = ((right - left) / width) * 100;
+  const plotHeightPercent = ((bottom - top) / height) * 100;
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
@@ -165,28 +195,68 @@
     return top + ((maxFeePercent - feePercent) / feeRange) * plotHeight;
   }
 
-  const guides = $derived.by(() =>
+  function toXPercent(x: number): number {
+    return (x / width) * 100;
+  }
+
+  function toYPercent(y: number): number {
+    return (y / height) * 100;
+  }
+
+  const guides = $derived.by<GuideLine[]>(() =>
     [0.25, 0.5, 0.75, 1].map((multiplier) => {
       const value = maxFeePercent * multiplier;
+      const y = toY(value);
       return {
         label: `${formatPercentage(value)}%`,
-        y: toY(value),
+        yPercent: toYPercent(y),
       };
     }),
   );
 
-  const polylinePoints = $derived.by(() =>
-    normalizedPoints
-      .map((point) => `${toX(point.timestampNanos)},${toY(point.feePercent)}`)
-      .join(" "),
+  const guideLabelsTopDown = $derived.by(() =>
+    [...guides]
+      .sort((a, b) => a.yPercent - b.yPercent)
+      .map((guide) => guide.label),
   );
 
-  const chartPoints = $derived.by(() =>
-    normalizedPoints.map((point) => ({
-      x: toX(point.timestampNanos),
-      y: toY(point.feePercent),
-    })),
+  const chartPoints = $derived.by<RenderPoint[]>(() =>
+    normalizedPoints.map((point, index) => {
+      const x = toX(point.timestampNanos);
+      const y = toY(point.feePercent);
+      const xRatio = x / width;
+      const yRatio = y / height;
+      return {
+        id: `${point.timestampNanos}-${index}`,
+        x,
+        y,
+        xRatio,
+        yRatio,
+        xPercent: xRatio * 100,
+        yPercent: yRatio * 100,
+      };
+    }),
   );
+
+  const chartSegments = $derived.by<RenderSegment[]>(() => {
+    const segments: RenderSegment[] = [];
+    for (let index = 0; index < chartPoints.length - 1; index++) {
+      const start = chartPoints[index];
+      const end = chartPoints[index + 1];
+      const dxPx = (end.xRatio - start.xRatio) * plotWidthPx;
+      const dyPx = (end.yRatio - start.yRatio) * plotHeightPx;
+      const length = Math.hypot(dxPx, dyPx);
+      if (length <= 0) continue;
+      segments.push({
+        id: `${start.id}-${end.id}`,
+        xPercent: start.xPercent,
+        yPercent: start.yPercent,
+        widthPx: length,
+        angleDeg: (Math.atan2(dyPx, dxPx) * 180) / Math.PI,
+      });
+    }
+    return segments;
+  });
 
   const currentPoint = $derived.by(() => {
     if (currentTimestampNanos === null || normalizedPoints.length === 0) return null;
@@ -199,17 +269,41 @@
     };
   });
 
+  let plotElement = $state<HTMLDivElement | null>(null);
+  let plotWidthPx = $state(width);
+  let plotHeightPx = $state(height);
+  const yLabelOffsetTopPx = $derived((top / height) * plotHeightPx);
+  const yLabelStackHeightPx = $derived(((bottom - top) / height) * plotHeightPx);
+
+  $effect(() => {
+    if (!plotElement) return;
+    const element = plotElement;
+
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        plotWidthPx = rect.width;
+        plotHeightPx = rect.height;
+      }
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => {
+      updateSize();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
+
   let hoverRatio = $state<number | null>(null);
 
   function updateHoverFromEvent(event: MouseEvent | TouchEvent): void {
     const target = event.currentTarget;
     if (!(target instanceof HTMLElement)) return;
     const rect = target.getBoundingClientRect();
-    if (rect.width <= 0) return;
-
-    const plotLeftPx = rect.left + (left / width) * rect.width;
-    const plotRightPx = rect.left + (right / width) * rect.width;
-    const plotWidthPx = plotRightPx - plotLeftPx;
+    const plotLeftPx = rect.left;
+    const plotWidthPx = rect.width;
     if (plotWidthPx <= 0) return;
 
     const clientX =
@@ -241,100 +335,98 @@
 
 {#if normalizedPoints.length > 0}
   <div class="scheduled-chart">
-    <div class="scheduled-chart-wrap">
-      <svg
-        class="scheduled-chart-svg"
-        viewBox={`0 0 ${width} ${height}`}
-        preserveAspectRatio="none"
-      >
-        <line class="scheduled-chart-axis" x1={left} y1={top} x2={left} y2={bottom} />
-        <line
-          class="scheduled-chart-axis"
-          x1={left}
-          y1={bottom}
-          x2={right}
-          y2={bottom}
-        />
-        {#each guides as guide, index (index)}
-          <line
-            class="scheduled-chart-guide"
-            x1={left}
-            y1={guide.y}
-            x2={right}
-            y2={guide.y}
-          />
-          <text
-            class="scheduled-chart-level-label"
-            x={left - 6}
-            y={guide.y + 3}
-            text-anchor="end"
-          >
-            {guide.label}
-          </text>
-        {/each}
-        <polyline class="scheduled-chart-line" points={polylinePoints} />
-        {#each chartPoints as point, index (index)}
-          <circle class="scheduled-chart-point" cx={point.x} cy={point.y} r="3" />
-        {/each}
-        {#if currentPoint}
-          <line
-            class="scheduled-chart-current-line"
-            x1={currentPoint.x}
-            y1={top}
-            x2={currentPoint.x}
-            y2={bottom}
-          />
-          <circle
-            class="scheduled-chart-current-point"
-            cx={currentPoint.x}
-            cy={currentPoint.y}
-            r="4"
-          />
-        {/if}
-        {#if hoverPoint}
-          <line
-            class="scheduled-chart-hover-line"
-            x1={hoverPoint.x}
-            y1={top}
-            x2={hoverPoint.x}
-            y2={bottom}
-          />
-          <circle
-            class="scheduled-chart-hover-point"
-            cx={hoverPoint.x}
-            cy={hoverPoint.y}
-            r="3.5"
-          />
-        {/if}
-      </svg>
-      <div class="scheduled-chart-hit-layer">
-        <ResponsiveTooltip title={tooltipTitle}>
-          {#snippet children()}
-            <button
-              type="button"
-              class="scheduled-chart-hit-target"
-              aria-label="Inspect scheduled fee curve"
-              onmouseenter={updateHoverFromEvent}
-              onmousemove={updateHoverFromEvent}
-              onmouseleave={clearHover}
-              ontouchstart={updateHoverFromEvent}
-              ontouchmove={updateHoverFromEvent}
-              ontouchend={clearHover}
-            ></button>
-          {/snippet}
-          {#snippet content()}
-            {#if hoverPoint}
-              <div class="scheduled-tooltip">
-                <div class="scheduled-tooltip-fee">
-                  {formatPercentage(hoverPoint.feePercent)}%
+    <div class="scheduled-chart-layout">
+      <div class="scheduled-chart-y-axis">
+        <div
+          class="scheduled-chart-y-label-stack"
+          style={`margin-top:${yLabelOffsetTopPx}px;height:${yLabelStackHeightPx}px;`}
+        >
+          {#each guideLabelsTopDown as label, index (index)}
+            <span class="scheduled-chart-level-label">{label}</span>
+          {/each}
+        </div>
+      </div>
+      <div class="scheduled-chart-wrap">
+        <div class="scheduled-chart-plot" bind:this={plotElement} aria-hidden="true">
+          <div
+            class="scheduled-chart-axis-line scheduled-chart-axis-line-y"
+            style={`left:${plotLeftPercent}%;top:${plotTopPercent}%;height:${plotHeightPercent}%;`}
+          ></div>
+          <div
+            class="scheduled-chart-axis-line scheduled-chart-axis-line-x"
+            style={`left:${plotLeftPercent}%;top:${plotBottomPercent}%;width:${plotWidthPercent}%;`}
+          ></div>
+          {#each guides as guide, index (index)}
+            <div
+              class="scheduled-chart-guide"
+              style={`left:${plotLeftPercent}%;top:${guide.yPercent}%;width:${plotWidthPercent}%;`}
+            ></div>
+          {/each}
+          {#each chartSegments as segment (segment.id)}
+            <div
+              class="scheduled-chart-line-segment"
+              style={`left:${segment.xPercent}%;top:${segment.yPercent}%;width:${segment.widthPx}px;transform:translateY(-50%) rotate(${segment.angleDeg}deg);`}
+            ></div>
+          {/each}
+          {#each chartPoints as point (point.id)}
+            <div
+              class="scheduled-chart-point"
+              style={`left:${point.xPercent}%;top:${point.yPercent}%;`}
+            ></div>
+          {/each}
+          {#if currentPoint && showCurrentPoint}
+            <div
+              class="scheduled-chart-current-line"
+              style={`left:${toXPercent(currentPoint.x)}%;top:${plotTopPercent}%;height:${plotHeightPercent}%;`}
+            ></div>
+            <div
+              class="scheduled-chart-current-point"
+              style={`left:${toXPercent(currentPoint.x)}%;top:${toYPercent(currentPoint.y)}%;`}
+            ></div>
+          {/if}
+          {#if hoverPoint}
+            <div
+              class="scheduled-chart-hover-line"
+              style={`left:${toXPercent(hoverPoint.x)}%;top:${plotTopPercent}%;height:${plotHeightPercent}%;`}
+            ></div>
+            <div
+              class="scheduled-chart-hover-point"
+              style={`left:${toXPercent(hoverPoint.x)}%;top:${toYPercent(hoverPoint.y)}%;`}
+            ></div>
+          {/if}
+        </div>
+        <div
+          class="scheduled-chart-hit-layer"
+          style={`left:${plotLeftPercent}%;top:${plotTopPercent}%;width:${plotWidthPercent}%;height:${plotHeightPercent}%;`}
+        >
+          <ResponsiveTooltip title={tooltipTitle}>
+            {#snippet children()}
+              <button
+                type="button"
+                class="scheduled-chart-hit-target"
+                aria-label="Inspect scheduled fee curve"
+                onmouseenter={updateHoverFromEvent}
+                onmousemove={updateHoverFromEvent}
+                onmouseleave={clearHover}
+                ontouchstart={updateHoverFromEvent}
+                ontouchmove={updateHoverFromEvent}
+                ontouchend={clearHover}
+              ></button>
+            {/snippet}
+            {#snippet content()}
+              {#if hoverPoint}
+                <div class="scheduled-tooltip">
+                  <div class="scheduled-tooltip-fee">
+                    {formatPercentage(hoverPoint.feePercent)}%
+                  </div>
+                  <div class="scheduled-tooltip-time">
+                    {timeLabelFormatter(hoverPoint.timestampNanos)}
+                  </div>
                 </div>
-                <div class="scheduled-tooltip-time">
-                  {timeLabelFormatter(hoverPoint.timestampNanos)}
-                </div>
-              </div>
-            {/if}
-          {/snippet}
-        </ResponsiveTooltip>
+              {/if}
+            {/snippet}
+          </ResponsiveTooltip>
+        </div>
       </div>
     </div>
     <span class="scheduled-chart-axis-x">{xAxisLabel}</span>
@@ -343,10 +435,30 @@
 
 <style>
   .scheduled-chart {
-    padding: 0.625rem;
+    padding: 0.625rem 0.625rem 0.625rem 0.25rem;
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
     background: var(--bg-secondary);
+  }
+
+  .scheduled-chart-layout {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: stretch;
+    padding-left: 0.25rem;
+  }
+
+  .scheduled-chart-y-axis {
+    display: flex;
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  .scheduled-chart-y-label-stack {
+    display: grid;
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    justify-items: end;
+    align-content: stretch;
   }
 
   .scheduled-chart-wrap {
@@ -356,43 +468,72 @@
     min-height: 120px;
   }
 
-  .scheduled-chart-svg {
-    width: 100%;
-    height: 100%;
-    display: block;
+  .scheduled-chart-plot {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
   }
 
-  .scheduled-chart-axis {
-    stroke: var(--border-color);
-    stroke-width: 1;
+  .scheduled-chart-axis-line {
+    position: absolute;
+    background: var(--border-color);
+    z-index: 1;
+  }
+
+  .scheduled-chart-axis-line-y {
+    width: 1px;
+    transform: translateX(-0.5px);
+  }
+
+  .scheduled-chart-axis-line-x {
+    height: 1px;
+    transform: translateY(-0.5px);
   }
 
   .scheduled-chart-guide {
-    stroke: var(--border-color);
-    stroke-dasharray: 3 3;
-    stroke-width: 1;
+    position: absolute;
+    height: 1px;
+    border-top: 1px dashed var(--border-color);
+    transform: translateY(-0.5px);
     opacity: 0.75;
+    z-index: 0;
+    box-sizing: border-box;
   }
 
-  .scheduled-chart-line {
-    fill: none;
-    stroke: var(--accent-primary);
-    stroke-width: 2;
+  .scheduled-chart-line-segment {
+    position: absolute;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--accent-primary);
+    transform-origin: left center;
+    z-index: 2;
   }
 
   .scheduled-chart-point {
-    fill: var(--accent-primary);
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    transform: translate(-50%, -50%);
+    z-index: 3;
   }
 
   .scheduled-chart-level-label {
-    fill: var(--text-muted);
-    font-size: 8px;
+    display: block;
+    align-self: start;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 10px;
     font-family: "JetBrains Mono", monospace;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .scheduled-chart-hit-layer {
     position: absolute;
     inset: 0;
+    z-index: 10;
   }
 
   .scheduled-chart-hit-target {
@@ -411,27 +552,41 @@
   }
 
   .scheduled-chart-current-line {
-    stroke: color-mix(in oklab, var(--status-success-solid), transparent 25%);
-    stroke-width: 1;
-    stroke-dasharray: 4 3;
+    position: absolute;
+    width: 1px;
+    border-left: 1px dashed color-mix(in oklab, var(--status-success-solid), transparent 25%);
+    transform: translateX(-0.5px);
+    z-index: 4;
   }
 
   .scheduled-chart-current-point {
-    fill: var(--status-success-solid);
-    stroke: var(--bg-card);
-    stroke-width: 1.5;
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--status-success-solid);
+    border: 1.5px solid var(--bg-card);
+    transform: translate(-50%, -50%);
+    z-index: 5;
   }
 
   .scheduled-chart-hover-line {
-    stroke: color-mix(in oklab, var(--accent-primary), transparent 25%);
-    stroke-width: 1;
-    stroke-dasharray: 3 3;
+    position: absolute;
+    width: 1px;
+    border-left: 1px dashed color-mix(in oklab, var(--accent-primary), transparent 25%);
+    transform: translateX(-0.5px);
+    z-index: 6;
   }
 
   .scheduled-chart-hover-point {
-    fill: white;
-    stroke: var(--accent-primary);
-    stroke-width: 2;
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid var(--accent-primary);
+    transform: translate(-50%, -50%);
+    z-index: 7;
   }
 
   .scheduled-chart-axis-x {

@@ -858,6 +858,7 @@
               <ScheduledFeeChart
                 points={scheduledChartPoints}
                 currentTimestampNanos={nowTimestampNs}
+                showCurrentPoint={false}
               />
             {/if}
           {/if}
