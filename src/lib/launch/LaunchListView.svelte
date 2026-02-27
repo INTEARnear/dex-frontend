@@ -1,9 +1,9 @@
 <script lang="ts">
   import { ChevronDown, Globe, Plus } from "lucide-svelte";
   import { siTelegram, siX } from "simple-icons";
-  import type { TokenInfo } from "../../../lib/types";
-  import { getTokenIcon } from "../../../lib/utils";
-  import type { LaunchToken } from "../types";
+  import type { TokenInfo } from "$lib/types";
+  import { getTokenIcon } from "$lib/utils";
+  import type { LaunchToken } from "./types";
 
   interface Props {
     visibleLaunchTokens: LaunchToken[];

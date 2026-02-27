@@ -7,14 +7,14 @@
   import type { TokenInfo } from "../../lib/types";
   import { DEX_BACKEND_API, formatCompact } from "../../lib/utils";
   import { walletStore } from "../../lib/walletStore";
-  import LaunchListView from "./components/LaunchListView.svelte";
-  import LaunchTokenDetailView from "./components/LaunchTokenDetailView.svelte";
+  import LaunchListView from "$lib/launch/LaunchListView.svelte";
+  import LaunchTokenDetailView from "$lib/launch/LaunchTokenDetailView.svelte";
   import type {
     LaunchApiResponse,
     LaunchSortBy,
     LaunchApiTokenData,
     LaunchToken,
-  } from "./types";
+  } from "$lib/launch/types";
 
   const LAUNCH_SORT_STORAGE_KEY = "dex-launch-sort-settings";
 

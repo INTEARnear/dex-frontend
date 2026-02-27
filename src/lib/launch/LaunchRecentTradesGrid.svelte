@@ -3,20 +3,20 @@
   import { Check, Copy, ExternalLink } from "lucide-svelte";
   import { onMount } from "svelte";
   import { cubicOut } from "svelte/easing";
-  import { tokenHubStore } from "../../../lib/tokenHubStore";
-  import { formatCompact, formatRelativeDate } from "../../../lib/utils";
+  import { tokenHubStore } from "$lib/tokenHubStore";
+  import { formatCompact, formatRelativeDate } from "$lib/utils";
   import {
     DEFAULT_LAUNCH_TRADES_VIEWER_CONFIG,
     loadLaunchTradesViewerConfigWithMeta,
     saveLaunchTradesViewerConfig,
-  } from "../launchTradesConfig";
+  } from "./launchTradesConfig";
   import type {
     LaunchTradeSwapEvent,
     LaunchTradesColumnKey,
     LaunchTradesColumnWidths,
     LaunchTradesViewerConfig,
     LaunchTradeType,
-  } from "../types";
+  } from "./types";
 
   const TRADE_EVENTS_API =
     "https://events-v3.intear.tech/v3/trade_swap/by_token_newest";

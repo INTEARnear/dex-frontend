@@ -3,12 +3,12 @@
   import { Globe } from "lucide-svelte";
   import { siTelegram, siX } from "simple-icons";
   import LaunchRecentTradesGrid from "./LaunchRecentTradesGrid.svelte";
-  import PoolFeeBreakdown from "../../../lib/pool/PoolFeeBreakdown.svelte";
-  import { assetIdToTokenId } from "../../../lib/pool/shared";
-  import SwapForm from "../../../lib/SwapForm.svelte";
-  import type { TokenInfo, XykFeeConfiguration, XykPool } from "../../../lib/types";
-  import { DEX_BACKEND_API, getTokenIcon } from "../../../lib/utils";
-  import type { LaunchApiTokenData } from "../types";
+  import PoolFeeBreakdown from "$lib/pool/PoolFeeBreakdown.svelte";
+  import { assetIdToTokenId } from "$lib/pool/shared";
+  import SwapForm from "$lib/SwapForm.svelte";
+  import type { TokenInfo, XykFeeConfiguration, XykPool } from "$lib/types";
+  import { DEX_BACKEND_API, getTokenIcon } from "$lib/utils";
+  import type { LaunchApiTokenData } from "./types";
 
   interface Props {
     token: TokenInfo;

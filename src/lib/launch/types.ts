@@ -1,4 +1,4 @@
-import type { TokenInfo } from "../../lib/types";
+import type { TokenInfo } from "../types";
 
 export type LaunchSortBy = "newest" | "marketCap" | "volume";
 
