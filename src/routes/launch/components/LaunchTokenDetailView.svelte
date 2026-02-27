@@ -22,6 +22,8 @@
   let activeLaunchPoolRequestId = 0;
   let isLaunchPoolFeeLoading = $state(false);
   let oldestLaunchPoolFeeConfiguration = $state<XykFeeConfiguration | null>(null);
+  let contentPanelElement = $state<HTMLElement | null>(null);
+  let snappedChartPanelHeight = $state<number | null>(null);
 
   interface OldestLaunchPoolFeeInfo {
     poolId: number;
@@ -34,6 +36,16 @@
     return document.documentElement.dataset.theme === "light"
       ? "light"
       : "dark";
+  }
+
+  function syncChartPanelHeight(desktopMediaQuery: MediaQueryList): void {
+    if (!desktopMediaQuery.matches || !contentPanelElement) {
+      snappedChartPanelHeight = null;
+      return;
+    }
+
+    const contentHeight = Math.ceil(contentPanelElement.getBoundingClientRect().height);
+    snappedChartPanelHeight = contentHeight > 0 ? contentHeight : null;
   }
 
   const launchTimestamp = $derived.by(() => {
@@ -121,20 +133,46 @@
 
   onMount(() => {
     chartTheme = resolveTheme();
-    const observer = new MutationObserver(() => {
+    const themeObserver = new MutationObserver(() => {
       chartTheme = resolveTheme();
     });
-    observer.observe(document.documentElement, {
+    themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"],
     });
-    return () => observer.disconnect();
+
+    const desktopMediaQuery = window.matchMedia("(min-width: 961px)");
+    const resizeObserver = new ResizeObserver(() => {
+      syncChartPanelHeight(desktopMediaQuery);
+    });
+    if (contentPanelElement) {
+      resizeObserver.observe(contentPanelElement);
+    }
+
+    const onDesktopMediaQueryChange = () => {
+      syncChartPanelHeight(desktopMediaQuery);
+    };
+
+    desktopMediaQuery.addEventListener("change", onDesktopMediaQueryChange);
+
+    syncChartPanelHeight(desktopMediaQuery);
+
+    return () => {
+      themeObserver.disconnect();
+      resizeObserver.disconnect();
+      desktopMediaQuery.removeEventListener("change", onDesktopMediaQueryChange);
+    };
   });
 </script>
 
 <div class="detail-view">
   <div class="detail-layout">
-    <section class="chart-panel">
+    <section
+      class="chart-panel"
+      style={snappedChartPanelHeight === null
+        ? undefined
+        : `--chart-panel-height:${snappedChartPanelHeight}px;`}
+    >
       <iframe
         src={chartSrc}
         title={`${token.metadata.symbol} launch chart`}
@@ -144,7 +182,7 @@
       ></iframe>
     </section>
 
-    <section class="content-panel">
+    <section class="content-panel" bind:this={contentPanelElement}>
       <article class="token-meta-card">
         <div class="token-main-layout">
           <div class="token-main-content">
@@ -277,14 +315,14 @@
 
   .detail-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 540px);
     gap: 1rem;
     align-items: start;
   }
 
   .chart-panel {
     overflow: hidden;
-    height: 100%;
+    height: var(--chart-panel-height, 100%);
   }
 
   .chart-frame {

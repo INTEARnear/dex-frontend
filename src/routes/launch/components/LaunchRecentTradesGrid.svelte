@@ -1129,6 +1129,14 @@
     transition: background-color 0.16s ease;
   }
 
+  .trade-body .trade-row:nth-child(odd) {
+    background: color-mix(in oklab, var(--bg-card), var(--bg-input) 4%);
+  }
+
+  .trade-body .trade-row:nth-child(even) {
+    background: color-mix(in oklab, var(--bg-card), var(--bg-input) 28%);
+  }
+
   .trade-row:last-child {
     border-bottom: none;
   }
