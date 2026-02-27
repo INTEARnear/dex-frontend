@@ -204,7 +204,7 @@
   }
 
   function mergeTrades(nextTrades: LaunchTradeSwapEvent[]) {
-    if (nextTrades.length === 0) return;
+    if (!nextTrades?.length) return;
 
     const mergedByKey = new Map<string, LaunchTradeSwapEvent>();
     for (const trade of trades) {

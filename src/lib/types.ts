@@ -103,12 +103,14 @@ export interface NormalizedPool {
   locked: boolean;
 }
 
+export type XykFeeEntry = [XykFeeReceiver, XykFeeAmount];
+
 export type XykCurrentFees = {
   receivers: [XykFeeReceiver, number][];
 };
 
 export type XykFeeConfigurationV2 = {
-  receivers: [XykFeeReceiver, XykFeeAmount][];
+  receivers: XykFeeEntry[];
 };
 
 export type XykFeeAmount =
@@ -117,7 +119,7 @@ export type XykFeeAmount =
       Scheduled: {
         start: [number, number];
         end: [number, number];
-        curve: { Linear: {} };
+        curve: "Linear";
       };
     }
   | { Dynamic: { min: number; max: number } };

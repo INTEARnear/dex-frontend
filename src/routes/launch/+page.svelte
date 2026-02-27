@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { get } from "svelte/store";
@@ -15,6 +16,7 @@
     LaunchApiTokenData,
     LaunchToken,
   } from "$lib/launch/types";
+  import CreateTokenModal from "$lib/launch/CreateTokenModal.svelte";
 
   const LAUNCH_SORT_STORAGE_KEY = "dex-launch-sort-settings";
 
@@ -61,6 +63,8 @@
   let sortBy = $state<LaunchSortBy>("volume");
   let ownedFirst = $state(true);
   let isMobileSortOpen = $state(false);
+  let showCreateTokenModal = $state(false);
+  let isConnecting = $state(false);
   let hasRestoredSortSettings = $state(false);
 
   const launchTokens = $derived.by(() =>
@@ -136,6 +140,9 @@
   const showTokenDetail = $derived(
     selectedToken !== null && selectedLaunchData !== null,
   );
+  const isSelectedTokenPending = $derived(
+    selectedTokenId !== null && !showTokenDetail,
+  );
 
   const attemptedIconLoads = new Set<string>();
   $effect(() => {
@@ -207,6 +214,22 @@
     ownedFirst = next;
   }
 
+  function openCreateTokenModal(): void {
+    showCreateTokenModal = true;
+    isMobileSortOpen = false;
+  }
+
+  async function handleConnectWallet(): Promise<void> {
+    isConnecting = true;
+    try {
+      await walletStore.connect();
+    } catch (error) {
+      console.error("Connection failed:", error);
+    } finally {
+      isConnecting = false;
+    }
+  }
+
   async function fetchLaunchData(options?: {
     background?: boolean;
   }): Promise<void> {
@@ -221,8 +244,10 @@
       if (!response.ok) {
         throw new Error(`Failed to fetch launch data: HTTP ${response.status}`);
       }
-      launchDataByTokenId = (await response.json()) as LaunchApiResponse;
+      const launchData = (await response.json()) as LaunchApiResponse;
+      launchDataByTokenId = launchData;
       launchApiError = null;
+      hydrateUnknownLaunchTokens(launchData);
     } catch (error) {
       if (!background) {
         launchApiError =
@@ -236,12 +261,28 @@
     }
   }
 
-  async function fetchTokenData(): Promise<void> {
-    hasTokenApiReturned = false;
+  async function hydrateUnknownLaunchTokens(
+    launchData: LaunchApiResponse,
+  ) {
+    const tokensById = get(tokenHubStore).tokensById;
+    const unknownTokenIds = Object.keys(launchData).filter(
+      (tokenId) => tokensById[tokenId] === undefined,
+    );
+    if (unknownTokenIds.length === 0) return;
+    await Promise.allSettled(
+      unknownTokenIds.map((tokenId) => tokenHubStore.ensureTokenById(tokenId)),
+    );
+  }
+
+  async function fetchTokenData(options?: {
+    background?: boolean;
+  }): Promise<void> {
+    const background = options?.background ?? false;
+    if (!background) hasTokenApiReturned = false;
     try {
       await tokenHubStore.refreshTokens();
     } finally {
-      hasTokenApiReturned = true;
+      if (!background) hasTokenApiReturned = true;
     }
   }
 
@@ -270,15 +311,34 @@
   });
 
   let launchDataRefreshInFlight = $state(false);
+  let tokenDataRefreshInFlight = $state(false);
+  let selectedTokenRefreshInFlight = $state(false);
   $effect(() => {
-    if (showTokenDetail) return;
-
     const refreshTimer = setInterval(() => {
-      if (launchDataRefreshInFlight) return;
-      launchDataRefreshInFlight = true;
-      fetchLaunchData({ background: true }).finally(() => {
-        launchDataRefreshInFlight = false;
-      });
+      if (!launchDataRefreshInFlight) {
+        launchDataRefreshInFlight = true;
+        fetchLaunchData({ background: true }).finally(() => {
+          launchDataRefreshInFlight = false;
+        });
+      }
+
+      if (!tokenDataRefreshInFlight) {
+        tokenDataRefreshInFlight = true;
+        fetchTokenData({ background: true }).finally(() => {
+          tokenDataRefreshInFlight = false;
+        });
+      }
+
+      if (
+        selectedTokenId &&
+        !showTokenDetail &&
+        !selectedTokenRefreshInFlight
+      ) {
+        selectedTokenRefreshInFlight = true;
+        tokenHubStore.ensureTokenById(selectedTokenId).finally(() => {
+          selectedTokenRefreshInFlight = false;
+        });
+      }
     }, 1000);
 
     return () => {
@@ -298,16 +358,21 @@
       <p>{combinedError}</p>
       <button type="button" onclick={() => reloadPageData()}>Retry</button>
     </div>
-  {:else if visibleLaunchTokens.length === 0}
-    <div class="state-panel empty">
-      <p>No launch tokens found.</p>
-    </div>
   {:else if showTokenDetail && selectedToken && selectedLaunchData}
     <LaunchTokenDetailView
       token={selectedToken}
       launchData={selectedLaunchData}
       marketCap={formatMarketCap(selectedToken)}
     />
+  {:else if isSelectedTokenPending}
+    <div class="state-panel loading">
+      <Spinner size={30} borderWidth={3} />
+      <p>Loading selected token data (retrying every second)...</p>
+    </div>
+  {:else if visibleLaunchTokens.length === 0}
+    <div class="state-panel empty">
+      <p>No launch tokens found.</p>
+    </div>
   {:else}
     <LaunchListView
       {visibleLaunchTokens}
@@ -316,6 +381,9 @@
       {isMobileSortOpen}
       {ownedFirst}
       walletConnected={$walletStore.isConnected}
+      isConnectingWallet={isConnecting}
+      onCreateTokenClick={openCreateTokenModal}
+      onConnectWalletClick={handleConnectWallet}
       onCycleSortBy={cycleSortBy}
       onToggleMobileSort={toggleMobileSort}
       onOwnedFirstChange={setOwnedFirst}
@@ -323,6 +391,12 @@
     />
   {/if}
 </div>
+
+<CreateTokenModal
+  isOpen={showCreateTokenModal}
+  onClose={() => (showCreateTokenModal = false)}
+  onSuccess={(tokenId) => goto(`/launch?token=${encodeURIComponent(tokenId)}`)}
+/>
 
 <style>
   .launch-page {

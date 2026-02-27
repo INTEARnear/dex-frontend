@@ -1,5 +1,4 @@
 import { type Schema, serialize } from "borsh";
-import type { XykFeeAmount } from "./types";
 
 const AccountIdSchema: Schema = "string";
 
