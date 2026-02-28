@@ -206,16 +206,18 @@
               {launchToken.launchData.description}
             </p>
             <div class="token-right">
-              <span class="launched-by-label">by</span>
-              <a
-                href={`https://nearblocks.io/address/${launchToken.launchData.launched_by}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="launched-by-btn"
-                title={launchToken.launchData.launched_by}
-              >
-                {launchToken.launchData.launched_by}
-              </a>
+              <div class="launched-by-row">
+                <span class="launched-by-label">by</span>
+                <a
+                  href={`https://nearblocks.io/address/${launchToken.launchData.launched_by}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="launched-by-btn"
+                  title={launchToken.launchData.launched_by}
+                >
+                  {launchToken.launchData.launched_by}
+                </a>
+              </div>
               <span class="mcap-mobile-label">mcap</span>
               <span class="mcap-mobile-value">
                 {formatMarketCap(launchToken.token)}
@@ -660,8 +662,21 @@
   }
 
   .token-right {
-    min-width: 140px;
     max-width: 160px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .launched-by-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .launched-by-label {
@@ -669,10 +684,11 @@
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.03em;
+    flex-shrink: 0;
   }
 
   .launched-by-btn {
-    max-width: 100%;
+    min-width: 0;
     padding: 0.2rem 0.42rem;
     color: var(--text-primary);
     text-decoration: none;
@@ -702,6 +718,7 @@
     justify-content: flex-end;
     gap: 0.35rem;
     margin-top: 0.35rem;
+    flex-shrink: 0;
   }
 
   .token-link-btn {
@@ -844,8 +861,7 @@
       display: inline-block;
     }
 
-    .launched-by-label,
-    .launched-by-btn {
+    .launched-by-row {
       display: none;
     }
 
