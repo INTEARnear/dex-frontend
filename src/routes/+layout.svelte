@@ -14,9 +14,9 @@
     type ThemePreference,
   } from "../lib/theme";
 
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js");
-  }
+  // if ("serviceWorker" in navigator) {
+  //   navigator.serviceWorker.register("/sw.js");
+  // }
 
   tokenHubStore.init();
   tokenHubStore.start();

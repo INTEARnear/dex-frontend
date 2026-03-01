@@ -136,12 +136,12 @@
   const revenueSharingBreakdown = $derived.by(() => {
     if (!poolData) return [] as [string, number][];
     const amountsByAccount = new Map<string, number>();
-    const connectedAccountId = $walletStore.accountId?.toLowerCase();
+    const connectedAccountId = $walletStore.accountId;
     for (const [receiver, amount] of poolData.fees.receivers) {
       if (receiver === "Pool") {
         continue;
       }
-      const receiverAccountId = receiver.Account.toLowerCase();
+      const receiverAccountId = receiver.Account;
       if (
         receiverAccountId === "plach.intear.near" ||
         (connectedAccountId !== undefined &&
@@ -321,25 +321,26 @@
   function getMaxAddableAmount0Raw(): bigint | null {
     const balance0 = getToken0EffectiveBalanceRaw();
     const balance1 = getToken1EffectiveBalanceRaw();
-    if (balance0 === null || balance1 === null || !token0 || !token1) return null;
+    if (balance0 === null || balance1 === null || !token0 || !token1)
+      return null;
     if (balance0 <= 0n || balance1 <= 0n) return 0n;
 
     const dec0 = token0.metadata.decimals;
     const dec1 = token1.metadata.decimals;
 
     if (poolRatio !== null && poolRatio > 0) {
-      const maxFrom1 = (balance1 * BigInt(10 ** dec0)) / BigInt(
-        Math.max(1, Math.round(poolRatio * 10 ** dec1)),
-      );
+      const maxFrom1 =
+        (balance1 * BigInt(10 ** dec0)) /
+        BigInt(Math.max(1, Math.round(poolRatio * 10 ** dec1)));
       const max0 = balance0 < maxFrom1 ? balance0 : maxFrom1;
       return max0;
     }
 
     const fallbackRatio = getPriceRatioFallback();
     if (fallbackRatio === null || fallbackRatio <= 0) return balance0;
-    const maxFrom1 = (balance1 * BigInt(10 ** dec0)) / BigInt(
-      Math.max(1, Math.round(fallbackRatio * 10 ** dec1)),
-    );
+    const maxFrom1 =
+      (balance1 * BigInt(10 ** dec0)) /
+      BigInt(Math.max(1, Math.round(fallbackRatio * 10 ** dec1)));
     const max0 = balance0 < maxFrom1 ? balance0 : maxFrom1;
     return max0;
   }
@@ -1003,9 +1004,7 @@
   {/if}
 
   {#if isLaunchPool}
-    <button class="primary-btn" disabled>
-      This is a Launch Pool
-    </button>
+    <button class="primary-btn" disabled> This is a Launch Pool </button>
   {:else if !$walletStore.isConnected}
     <button
       class="primary-btn"

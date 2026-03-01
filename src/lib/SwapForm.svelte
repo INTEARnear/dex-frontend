@@ -1877,7 +1877,7 @@
       <span
         >Price impact is high: you will receive <strong
           >{priceImpact?.toFixed(2)}%</strong
-        > less than you pay</span
+        > less than you pay. This can happen if you swap large amounts of tokens, or if the token has a high trading fee.</span
       >
     </div>
   {/if}

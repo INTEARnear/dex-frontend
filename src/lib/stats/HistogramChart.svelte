@@ -752,6 +752,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    user-select: none;
   }
 
   .histogram-summary {
