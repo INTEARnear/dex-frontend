@@ -14,9 +14,14 @@
     type ThemePreference,
   } from "../lib/theme";
 
-  // if ("serviceWorker" in navigator) {
-  //   navigator.serviceWorker.register("/sw.js");
-  // }
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function (registrations) {
+      for (let registration of registrations) {
+        registration.unregister();
+      }
+    });
+    // navigator.serviceWorker.register("/sw.js");
+  }
 
   tokenHubStore.init();
   tokenHubStore.start();
