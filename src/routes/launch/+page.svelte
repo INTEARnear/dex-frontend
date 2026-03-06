@@ -17,6 +17,7 @@
     LaunchToken,
   } from "$lib/launch/types";
   import CreateTokenModal from "$lib/launch/CreateTokenModal.svelte";
+  import EditTokenModal from "$lib/launch/EditTokenModal.svelte";
   import { scoreTermAgainstToken } from "$lib/tokenSearch";
 
   const LAUNCH_SORT_STORAGE_KEY = "dex-launch-sort-settings";
@@ -69,6 +70,7 @@
   let ownedFirst = $state(true);
   let searchQuery = $state("");
   let showCreateTokenModal = $state(false);
+  let showEditTokenModal = $state(false);
   let hasRestoredSortSettings = $state(false);
 
   const launchTokens = $derived.by(() =>
@@ -384,6 +386,9 @@
       token={selectedToken}
       launchData={selectedLaunchData}
       marketCap={formatMarketCap(selectedToken)}
+      onEditClick={() => {
+        showEditTokenModal = true;
+      }}
     />
   {:else if isSelectedTokenPending}
     <div class="state-panel loading">
@@ -419,6 +424,19 @@
   onClose={() => (showCreateTokenModal = false)}
   onSuccess={(tokenId) => goto(`/launch?token=${encodeURIComponent(tokenId)}`)}
 />
+
+{#if showTokenDetail && selectedToken && selectedLaunchData}
+  <EditTokenModal
+    isOpen={showEditTokenModal}
+    tokenAccountId={selectedToken.account_id}
+    initialLaunchData={selectedLaunchData}
+    onClose={() => (showEditTokenModal = false)}
+    onSuccess={() => {
+      showEditTokenModal = false;
+      fetchLaunchData({ background: false });
+    }}
+  />
+{/if}
 
 <style>
   .launch-page {

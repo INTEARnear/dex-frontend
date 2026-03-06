@@ -7,6 +7,7 @@
   import { tokenHubStore } from "../tokenHubStore";
   import { createChatwootModalVisibilityController } from "../chatwootBubbleVisibility";
   import ErrorModal from "../ErrorModal.svelte";
+  import LaunchDataFields from "./LaunchDataFields.svelte";
   import FeeReceiversEditor, {
     type FeeAmountDraft,
     type FeeReceiverDraft,
@@ -15,6 +16,7 @@
   import { draftAmountToSchemaXykFeeAmount } from "../pool/feeUtils";
   import { GAS_RESERVE_NEAR, assertOutcomesSucceeded } from "../pool/shared";
   import { humanReadableToRawAmount, rawAmountToHumanReadable } from "../utils";
+  import type { LaunchDataArgs } from "./types";
   import type { XykFeeAmount, XykFeeEntry } from "$lib/types";
   import type { FinalExecutionOutcome } from "@hot-labs/near-connect/build/types";
 
@@ -28,13 +30,6 @@
   const MIN_TOTAL_SUPPLY = 1_000n;
   const MAX_TOTAL_SUPPLY = 1_000_000_000_000_000_000n;
   const DEFAULT_TOTAL_SUPPLY = "1000000000";
-
-  interface LaunchDataArgs {
-    telegram: string | null;
-    x: string | null;
-    website: string | null;
-    description: string | null;
-  }
 
   interface LaunchTokenArgs {
     name: string;
@@ -203,6 +198,11 @@
     nearBalanceYocto < requiredNearWithGasYocto,
   );
 
+  const shortCaTokenExists = $derived.by(() => {
+    const id = `${symbol.toLowerCase()}.launch.intear.near`;
+    return tokenHubStore.selectToken(id) !== null;
+  });
+
   const validationErrors = $derived.by(() => {
     const errors: string[] = [];
     if (!isNameValid) errors.push("Name is required");
@@ -231,6 +231,9 @@
     if (hasScheduledDurationError) errors.push("Scheduled fee duration must be set");
     if (hasScheduledFeeDirectionError) {
       errors.push("Scheduled fee end must be lower than start");
+    }
+    if (shortId && shortCaTokenExists) {
+      errors.push(`Token ${symbol.toLowerCase()}.launch.intear.near already exists`);
     }
     return errors;
   });
@@ -608,7 +611,7 @@
         <div class="section">
           <label class="switch-row">
             <input type="checkbox" bind:checked={shortId} />
-            <span>Short CA</span>
+            <span>Short CA without numbers</span>
           </label>
         </div>
 
@@ -626,53 +629,7 @@
           </label>
         </div>
 
-        <div class="section">
-          <label class="field">
-            <span class="field-label">Description (optional)</span>
-            <textarea
-              placeholder="Describe your token. Lore, source of the meme, etc."
-              bind:value={description}
-              maxlength={200}
-              rows={3}
-            ></textarea>
-            <span class="field-counter">{description.length}/200</span>
-          </label>
-        </div>
-
-        <div class="section">
-          <div class="links-grid">
-            <label class="field">
-              <span class="field-label">Telegram</span>
-              <input
-                type="url"
-                placeholder="https://t.me/tokenchat"
-                bind:value={telegram}
-                maxlength={50}
-                spellcheck="false"
-              />
-            </label>
-            <label class="field">
-              <span class="field-label">X</span>
-              <input
-                type="url"
-                placeholder="https://x.com/yourtoken"
-                bind:value={x}
-                maxlength={50}
-                spellcheck="false"
-              />
-            </label>
-            <label class="field full-width">
-              <span class="field-label">Website</span>
-              <input
-                type="url"
-                placeholder="https://example.com"
-                bind:value={website}
-                maxlength={50}
-                spellcheck="false"
-              />
-            </label>
-          </div>
-        </div>
+        <LaunchDataFields bind:description bind:telegram bind:x bind:website />
 
         <div class="section">
           <label class="field">
@@ -842,16 +799,6 @@
     gap: 0.75rem;
   }
 
-  .links-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
-  }
-
-  .full-width {
-    grid-column: 1 / -1;
-  }
-
   .field {
     display: flex;
     flex-direction: column;
@@ -865,15 +812,7 @@
     color: var(--text-secondary);
   }
 
-  .field-counter {
-    margin-left: auto;
-    color: var(--text-muted);
-    font-size: 0.72rem;
-    font-family: "JetBrains Mono", monospace;
-  }
-
-  .field input,
-  .field textarea {
+  .field input {
     width: 100%;
     background: var(--bg-input);
     border: 1px solid var(--border-color);
@@ -883,13 +822,7 @@
     font-size: 0.875rem;
   }
 
-  .field textarea {
-    resize: vertical;
-    min-height: 5rem;
-  }
-
-  .field input:focus-visible,
-  .field textarea:focus-visible {
+  .field input:focus-visible {
     outline: none;
     border-color: var(--accent-primary);
   }
@@ -1123,8 +1056,7 @@
   }
 
   @media (--mobile) {
-    .two-cols,
-    .links-grid {
+    .two-cols {
       grid-template-columns: 1fr;
     }
   }

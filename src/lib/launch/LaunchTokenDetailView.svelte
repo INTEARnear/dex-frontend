@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { Check, Copy, Globe } from "lucide-svelte";
+  import { Check, Copy, Globe, Pencil } from "lucide-svelte";
   import { siTelegram, siX } from "simple-icons";
   import LaunchRecentTradesGrid from "./LaunchRecentTradesGrid.svelte";
   import PoolFeeBreakdown from "$lib/pool/PoolFeeBreakdown.svelte";
@@ -8,15 +8,22 @@
   import SwapForm from "$lib/SwapForm.svelte";
   import type { TokenInfo, XykFeeConfiguration, XykPool } from "$lib/types";
   import { DEX_BACKEND_API, getTokenIcon } from "$lib/utils";
+  import { walletStore } from "$lib/walletStore";
   import type { LaunchApiTokenData } from "./types";
 
   interface Props {
     token: TokenInfo;
     launchData: LaunchApiTokenData;
     marketCap: string;
+    onEditClick: () => void;
   }
 
-  let { token, launchData, marketCap }: Props = $props();
+  let { token, launchData, marketCap, onEditClick }: Props = $props();
+
+  const canEdit = $derived(
+    $walletStore.isConnected &&
+      $walletStore.accountId === launchData.launched_by,
+  );
 
   let chartTheme = $state<"light" | "dark">("dark");
   let activeLaunchPoolRequestId = 0;
@@ -258,6 +265,17 @@
         </div>
 
         <div class="token-footer">
+          {#if canEdit}
+            <button
+              type="button"
+              class="edit-btn"
+              onclick={onEditClick}
+              aria-label="Edit token"
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+          {/if}
           {#if hasAnySocialLinks(launchData)}
             <div class="token-links">
               {#if launchData.x}
@@ -575,6 +593,30 @@
   }
 
   .token-link-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+    background: var(--bg-input);
+  }
+
+  .edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      border-color 0.2s ease,
+      color 0.2s ease,
+      background 0.2s ease;
+  }
+
+  .edit-btn:hover {
     border-color: var(--accent-primary);
     color: var(--text-primary);
     background: var(--bg-input);

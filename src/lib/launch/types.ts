@@ -2,11 +2,14 @@ import type { TokenInfo } from "../types";
 
 export type LaunchSortBy = "newest" | "marketCap" | "volume";
 
-export interface LaunchApiTokenData {
-  x: string | null;
+export interface LaunchDataArgs {
   telegram: string | null;
+  x: string | null;
   website: string | null;
   description: string | null;
+}
+
+export interface LaunchApiTokenData extends LaunchDataArgs {
   launched_by: string;
   launched_at_ns: number;
 }
