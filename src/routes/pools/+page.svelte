@@ -53,21 +53,34 @@
 
   const POOLS_SORT_STORAGE_KEY = "dex-pools-sort-settings";
 
+  const LOW_TVL_THRESHOLD_USD = 100;
   interface PoolsSortSettings {
     sortBy: SortByMetric;
     ownedFirst: boolean;
     hideSuspicious: boolean;
+    hideLowTvl: boolean;
   }
 
   function loadSortSettings(): PoolsSortSettings {
     try {
       const raw = localStorage.getItem(POOLS_SORT_STORAGE_KEY);
       if (!raw)
-        return { sortBy: "liquidity", ownedFirst: true, hideSuspicious: true };
+        return {
+          sortBy: "liquidity",
+          ownedFirst: true,
+          hideSuspicious: true,
+          hideLowTvl: false,
+        };
       const parsed = JSON.parse(raw) as PoolsSortSettings;
+      if (parsed.hideLowTvl === undefined) parsed.hideLowTvl = false;
       return parsed;
     } catch {
-      return { sortBy: "liquidity", ownedFirst: true, hideSuspicious: true };
+      return {
+        sortBy: "liquidity",
+        ownedFirst: true,
+        hideSuspicious: true,
+        hideLowTvl: false,
+      };
     }
   }
 
@@ -75,10 +88,11 @@
     sortBy: SortByMetric,
     ownedFirst: boolean,
     hideSuspicious: boolean,
+    hideLowTvl: boolean,
   ) {
     localStorage.setItem(
       POOLS_SORT_STORAGE_KEY,
-      JSON.stringify({ sortBy, ownedFirst, hideSuspicious }),
+      JSON.stringify({ sortBy, ownedFirst, hideSuspicious, hideLowTvl }),
     );
   }
 
@@ -95,6 +109,7 @@
   let sortBy = $state<SortByMetric>("liquidity");
   let ownedFirst = $state(true);
   let hideSuspicious = $state(true);
+  let hideLowTvl = $state(false);
   let searchQuery = $state("");
 
   const accountId = $derived($walletStore.accountId);
@@ -107,6 +122,10 @@
 
   function setHideSuspicious(next: boolean) {
     hideSuspicious = next;
+  }
+
+  function setHideLowTvl(next: boolean) {
+    hideLowTvl = next;
   }
 
   function setSearchQuery(next: string) {
@@ -126,6 +145,12 @@
       label: "Hide Suspicious",
       checked: hideSuspicious,
       onChange: setHideSuspicious,
+    },
+    {
+      id: "hide-low-tvl-toggle",
+      label: "Hide Low TVL",
+      checked: hideLowTvl,
+      onChange: setHideLowTvl,
     },
   ]);
 
@@ -237,9 +262,14 @@
       searchScore: 0,
     }));
 
-    const filteredByFlags = hideSuspicious
+    const filteredBySuspicious = hideSuspicious
       ? list.filter((entry) => !isSuspiciousPool(entry.pool))
       : list;
+    const filteredByFlags = hideLowTvl
+      ? filteredBySuspicious.filter(
+          (entry) => entry.liquidityUsd >= LOW_TVL_THRESHOLD_USD,
+        )
+      : filteredBySuspicious;
     const searchTerms = searchQuery.trim().split(POOL_QUERY_SPLIT_REGEX);
     const filtered =
       searchTerms.length === 0
@@ -309,6 +339,9 @@
       const processedPools: PoolDisplay[] = [];
 
       for (const pool of data) {
+        if ("Launch" in pool.pool) {
+          continue;
+        }
         const normalizedPool = normalizePool(pool.pool);
         const fees = normalizedPool.fees;
         const totalFeePercent =
@@ -400,6 +433,7 @@
     sortBy = loaded.sortBy;
     ownedFirst = loaded.ownedFirst;
     hideSuspicious = loaded.hideSuspicious;
+    hideLowTvl = loaded.hideLowTvl;
     hasRestoredSortSettings = true;
 
     tokenHubStore.updatePricesEvery(10_000);
@@ -410,9 +444,10 @@
     sortBy;
     ownedFirst;
     hideSuspicious;
+    hideLowTvl;
     hasRestoredSortSettings;
     if (hasRestoredSortSettings) {
-      saveSortSettings(sortBy, ownedFirst, hideSuspicious);
+      saveSortSettings(sortBy, ownedFirst, hideSuspicious, hideLowTvl);
     }
   });
 
@@ -524,7 +559,7 @@
               >
             </div>
             <div class="stat">
-              <span class="stat-label">APY</span>
+              <span class="stat-label">7d Avg APY</span>
               <span class="stat-value">{formatApy(pool.apyPercent)}</span>
             </div>
             <div class="stat">

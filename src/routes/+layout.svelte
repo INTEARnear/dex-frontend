@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import WalletButton from "../lib/WalletButton.svelte";
-  import { BookOpen, Moon, Sun, Monitor } from "lucide-svelte";
+  import { BookOpen, Moon, Sun, Monitor, ExternalLink } from "lucide-svelte";
   import { siX, siTelegram, siGithub } from "simple-icons";
   import { page } from "$app/state";
   import { tokenHubStore } from "../lib/tokenHubStore";
@@ -34,9 +34,12 @@
       page.url.pathname === "/stats" ||
       page.url.pathname === "/launch",
   );
-  const productLabel = $derived(
-    page.url.pathname === "/launch" ? "Launch" : "DEX",
-  );
+  const productLabel = $derived.by(() => {
+    if (page.url.pathname === "/") return "DEX Aggregator";
+    if (page.url.pathname === "/launch") return "Launch";
+    if (page.url.pathname === "/pools") return "Plach";
+    return "DEX";
+  });
 
   let themePreference = $state<ThemePreference>("system");
   let resolvedTheme = $state<ResolvedTheme>("dark");
@@ -107,6 +110,13 @@
       aria-current={page.url.pathname === "/launch" ? "page" : undefined}
       >Launch</a
     >
+    <a
+      href="https://app.shitzuapes.xyz/bridge"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="nav-external-link"
+      >Bridge <ExternalLink size={12} aria-hidden="true" /></a
+    >
   </nav>
   <div class="top-bar-controls">
     <button
@@ -136,29 +146,40 @@
   </header>
 
   <nav class="mobile-nav">
-    <a
-      href="/"
-      class:active={page.url.pathname === "/"}
-      aria-current={page.url.pathname === "/" ? "page" : undefined}>Swap</a
-    >
-    <a
-      href="/pools"
-      class:active={page.url.pathname === "/pools"}
-      aria-current={page.url.pathname === "/pools" ? "page" : undefined}
-      >Pools</a
-    >
-    <a
-      href="/stats"
-      class:active={page.url.pathname === "/stats"}
-      aria-current={page.url.pathname === "/stats" ? "page" : undefined}
-      >Stats</a
-    >
-    <a
-      href="/launch"
-      class:active={page.url.pathname === "/launch"}
-      aria-current={page.url.pathname === "/launch" ? "page" : undefined}
-      >Launch</a
-    >
+    <div class="mobile-nav-row">
+      <a
+        href="/"
+        class:active={page.url.pathname === "/"}
+        aria-current={page.url.pathname === "/" ? "page" : undefined}>Swap</a
+      >
+      <a
+        href="/pools"
+        class:active={page.url.pathname === "/pools"}
+        aria-current={page.url.pathname === "/pools" ? "page" : undefined}
+        >Pools</a
+      >
+      <a
+        href="/stats"
+        class:active={page.url.pathname === "/stats"}
+        aria-current={page.url.pathname === "/stats" ? "page" : undefined}
+        >Stats</a
+      >
+    </div>
+    <div class="mobile-nav-row">
+      <a
+        href="/launch"
+        class:active={page.url.pathname === "/launch"}
+        aria-current={page.url.pathname === "/launch" ? "page" : undefined}
+        >Launch</a
+      >
+      <a
+        href="https://app.shitzuapes.xyz/bridge"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="nav-external-link"
+        >Bridge <ExternalLink size={12} aria-hidden="true" /></a
+      >
+    </div>
   </nav>
 
   {@render children()}
@@ -299,7 +320,6 @@
   @media (--tablet) {
     .top-bar {
       max-width: 480px;
-      justify-content: flex-end;
     }
 
     .top-bar-controls {
@@ -344,13 +364,30 @@
     display: none;
   }
 
-  @media (max-width: 860px) {
+  @media (max-width: 960px) {
     .mobile-nav {
       display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
     }
+
+    .mobile-nav-row {
+      display: contents;
+    }
+
     .desktop-nav {
       display: none;
     }
+
+    .top-bar {
+      justify-content: flex-end;
+    }
+  }
+
+  .mobile-nav-row {
+    display: flex;
+    gap: 0.5rem;
   }
 
   @media (--tablet) {
@@ -376,6 +413,12 @@
   nav a.active {
     background: var(--bg-tertiary);
     color: var(--text-primary);
+  }
+
+  .nav-external-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
   }
 
   footer {
@@ -407,6 +450,17 @@
   }
 
   @media (--mobile) {
+    .mobile-nav {
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .mobile-nav-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
     main {
       gap: 0.75rem;
     }
@@ -432,19 +486,6 @@
     .theme-toggle {
       width: 2rem;
       height: 2rem;
-    }
-  }
-
-  @media (--small-mobile) {
-    .theme-toggle {
-      width: 1.875rem;
-      height: 1.875rem;
-    }
-
-    nav a {
-      padding: 0.375rem 0.75rem;
-      font-size: 0.8125rem;
-      font-size: 0.75rem;
     }
   }
 

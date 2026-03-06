@@ -10,11 +10,7 @@
     DEX_CONTRACT_ID,
     DEX_ID,
   } from "./pool/shared";
-  import {
-    DEX_BACKEND_API,
-    formatAmount,
-    formatUsdValue,
-  } from "./utils";
+  import { DEX_BACKEND_API, formatAmount, formatUsdValue } from "./utils";
   import type { TokenInfo } from "./types";
   import Spinner from "./Spinner.svelte";
   import ErrorModal from "./ErrorModal.svelte";
@@ -56,7 +52,10 @@
     return `${source}:${assetId}`;
   }
 
-  function isWithdrawalPending(source: WalletDataSource, assetId: string): boolean {
+  function isWithdrawalPending(
+    source: WalletDataSource,
+    assetId: string,
+  ): boolean {
     return activeWithdrawalKeys.has(getWithdrawalKey(source, assetId));
   }
 
@@ -115,7 +114,7 @@
   }
 
   function hasIncomingTransferForAsset(
-    outcomes: unknown,
+    outcomes: object[],
     accountId: string,
     assetId: string,
   ): boolean {
@@ -126,13 +125,9 @@
       outcomes,
       accountId,
     );
-    const acceptableTokenIds =
-      expectedTokenId === "near"
-        ? new Set(["near", "wrap.near"])
-        : new Set([expectedTokenId]);
 
-    return incomingTransfers.some((transfer) =>
-      acceptableTokenIds.has(transfer.tokenId),
+    return incomingTransfers.some(
+      (transfer) => transfer.tokenId === expectedTokenId,
     );
   }
 
@@ -151,7 +146,7 @@
 
     setWithdrawalPending(source, row.assetId, true);
     try {
-      let outcomes: unknown;
+      let outcomes: object[];
 
       if (source === "balances") {
         const transactions = [
@@ -216,7 +211,11 @@
       }
 
       assertOutcomesSucceeded(outcomes);
-      if (!hasIncomingTransferForAsset(outcomes, accountId, row.assetId)) {
+      if (
+        source === "balances" &&
+        !hasIncomingTransferForAsset(outcomes, accountId, row.assetId)
+      ) {
+        console.error(outcomes);
         throw new Error(
           `Transaction went through but no ${row.symbol} received, something went wrong. Please try again or contact support.`,
         );
@@ -224,6 +223,11 @@
 
       removeRowFromWalletData(source, row.assetId);
       tokenHubStore.refreshBalances();
+      fetchWalletInternalBalances();
+      setTimeout(() => {
+        tokenHubStore.refreshBalances();
+        fetchWalletInternalBalances();
+      }, 2000);
     } catch (error) {
       console.error("Withdrawal failed:", error);
       withdrawalError =
@@ -530,7 +534,10 @@
                 {:else}
                   <ul>
                     {#each collectedFeeRows as row (row.assetId)}
-                      {@const isPending = isWithdrawalPending("pending_fees", row.assetId)}
+                      {@const isPending = isWithdrawalPending(
+                        "pending_fees",
+                        row.assetId,
+                      )}
                       <li>
                         <div class="token-row-main">
                           {#if row.token}
@@ -553,12 +560,11 @@
                           >
                             {#if isPending}
                               <Spinner size={12} tone="light" />
-                              Withdrawing...
+                              Transferring...
                             {:else}
-                              Withdraw
+                              To Internal
                             {/if}
-                          </button
-                          >
+                          </button>
                         </div>
                       </li>
                     {/each}
@@ -572,7 +578,10 @@
                 {:else}
                   <ul>
                     {#each internalBalanceRows as row (row.assetId)}
-                      {@const isPending = isWithdrawalPending("balances", row.assetId)}
+                      {@const isPending = isWithdrawalPending(
+                        "balances",
+                        row.assetId,
+                      )}
                       <li>
                         <div class="token-row-main">
                           {#if row.token}
@@ -599,8 +608,7 @@
                             {:else}
                               Withdraw
                             {/if}
-                          </button
-                          >
+                          </button>
                         </div>
                       </li>
                     {/each}
@@ -618,7 +626,10 @@
               {:else}
                 <ul>
                   {#each collectedFeeRows as row (row.assetId)}
-                    {@const isPending = isWithdrawalPending("pending_fees", row.assetId)}
+                    {@const isPending = isWithdrawalPending(
+                      "pending_fees",
+                      row.assetId,
+                    )}
                     <li>
                       <div class="token-row-main">
                         {#if row.token}
@@ -641,12 +652,11 @@
                         >
                           {#if isPending}
                             <Spinner size={12} tone="light" />
-                            Withdrawing...
+                            Transferring...
                           {:else}
-                            Withdraw
+                            To Internal
                           {/if}
-                        </button
-                        >
+                        </button>
                       </div>
                     </li>
                   {/each}
@@ -660,7 +670,10 @@
               {:else}
                 <ul>
                   {#each internalBalanceRows as row (row.assetId)}
-                    {@const isPending = isWithdrawalPending("balances", row.assetId)}
+                    {@const isPending = isWithdrawalPending(
+                      "balances",
+                      row.assetId,
+                    )}
                     <li>
                       <div class="token-row-main">
                         {#if row.token}
@@ -687,8 +700,7 @@
                           {:else}
                             Withdraw
                           {/if}
-                        </button
-                        >
+                        </button>
                       </div>
                     </li>
                   {/each}
@@ -850,6 +862,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    max-height: 13rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.125rem;
   }
 
   .wallet-popover-section li {
@@ -959,6 +975,10 @@
 
   .mobile-tooltip-sheet .wallet-popover-section li {
     min-height: 2.75rem;
+  }
+
+  .mobile-tooltip-sheet .wallet-popover-section ul {
+    max-height: 10.5rem;
   }
 
   .mobile-tooltip-sheet .token-usd {
@@ -1139,5 +1159,4 @@
       font-size: 0.75rem;
     }
   }
-
 </style>

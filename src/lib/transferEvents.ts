@@ -150,12 +150,9 @@ export function extractTransfersFromOutcome(
 }
 
 export function extractIncomingTransfersFromOutcomes(
-  outcomes: unknown,
+  outcomes: object[],
   accountId: string,
 ): ParsedTransferEvent[] {
-  if (!Array.isArray(outcomes)) {
-    return [];
-  }
   return outcomes
     .flatMap((outcome) => extractTransfersFromOutcome(outcome, accountId))
     .filter((transfer) => transfer.direction === "in");

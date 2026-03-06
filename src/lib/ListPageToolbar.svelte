@@ -80,23 +80,6 @@
 </script>
 
 <div class="header-actions" class:mobile-config-open={isMobileSortOpen}>
-  {#if search !== undefined}
-    <label class="search-control">
-      <input
-        type="search"
-        class="search-input"
-        value={search.value}
-        placeholder={search.placeholder}
-        aria-label={search.ariaLabel}
-        spellcheck={false}
-        autocapitalize="off"
-        autocomplete="off"
-        autocorrect="off"
-        oninput={(event) => search.onValueChange(event.currentTarget.value)}
-      />
-    </label>
-  {/if}
-
   <div class="sort-settings" role="group" aria-label={sortGroupAriaLabel}>
     <div class="sort-by-control">
       <span class="sort-by-label">Sort by</span>
@@ -178,6 +161,23 @@
     </button>
   {/if}
 
+  {#if search !== undefined}
+    <label class="search-control">
+      <input
+        type="search"
+        class="search-input"
+        value={search.value}
+        placeholder={search.placeholder}
+        aria-label={search.ariaLabel}
+        spellcheck={false}
+        autocapitalize="off"
+        autocomplete="off"
+        autocorrect="off"
+        oninput={(event) => search.onValueChange(event.currentTarget.value)}
+      />
+    </label>
+  {/if}
+
   <div class="mobile-sort-controls">
     <div class="mobile-sort-row">
       <button
@@ -236,9 +236,9 @@
   }
 
   .search-control {
-    flex: 1 1 16rem;
-    min-width: 12rem;
-    max-width: 22rem;
+    flex: 1 1 8rem;
+    min-width: 8rem;
+    max-width: 12rem;
   }
 
   .search-input {
