@@ -155,7 +155,7 @@
     };
     window.addEventListener("resize", handleResize, { passive: true });
 
-    relativeTickerTimer = window.setInterval(() => {
+    relativeTickerTimer = setInterval(() => {
       relativeTimeTick += 1;
     }, 1_000);
 
@@ -163,10 +163,9 @@
       window.removeEventListener("resize", handleResize);
       activeTokenAccountId = null;
       disconnectTradeSocket();
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      if (copyResetTimer !== null) window.clearTimeout(copyResetTimer);
-      if (relativeTickerTimer !== null)
-        window.clearInterval(relativeTickerTimer);
+      if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+      if (copyResetTimer !== null) clearTimeout(copyResetTimer);
+      if (relativeTickerTimer !== null) clearInterval(relativeTickerTimer);
       activeResizeCleanup?.();
       activeResizeCleanup = null;
     };
@@ -252,7 +251,7 @@
   function disconnectTradeSocket() {
     activeSocketEpoch += 1;
     if (reconnectTimer !== null) {
-      window.clearTimeout(reconnectTimer);
+      clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
     if (currentSocket) {
@@ -313,7 +312,7 @@
         ) {
           return;
         }
-        reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
           connect();
         }, reconnectDelayMs);
@@ -521,9 +520,7 @@
       : `https://pikespeak.ai/transaction-viewer/${transactionId}`;
   }
 
-  function updateAndPersistSettings(
-    nextSettings: LaunchTradesViewerConfig,
-  ) {
+  function updateAndPersistSettings(nextSettings: LaunchTradesViewerConfig) {
     settings = nextSettings;
     if (hasRestoredSettings) {
       saveLaunchTradesViewerConfig(nextSettings);
@@ -733,8 +730,8 @@
   ): Promise<void> {
     await navigator.clipboard.writeText(accountId);
     copiedTradeKey = tradeKey;
-    if (copyResetTimer !== null) window.clearTimeout(copyResetTimer);
-    copyResetTimer = window.setTimeout(() => {
+    if (copyResetTimer !== null) clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => {
       copiedTradeKey = null;
       copyResetTimer = null;
     }, 2_000);

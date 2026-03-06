@@ -42,7 +42,7 @@
 
   onDestroy(() => {
     if (longPressTimer) {
-      window.clearTimeout(longPressTimer);
+      clearTimeout(longPressTimer);
       longPressTimer = null;
     }
     if (get(activeFloatingTooltipId) === tooltipId) {
@@ -180,7 +180,7 @@
     const touch = event.touches[0];
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
-    if (longPressTimer) window.clearTimeout(longPressTimer);
+    if (longPressTimer) clearTimeout(longPressTimer);
     longPressTimer = setTimeout(() => {
       hovered = false;
       activeFloatingTooltipId.set(null);
@@ -200,14 +200,14 @@
     const deltaX = Math.abs(touch.clientX - touchStartX);
     const deltaY = Math.abs(touch.clientY - touchStartY);
     if (deltaX > 10 || deltaY > 10) {
-      window.clearTimeout(longPressTimer);
+      clearTimeout(longPressTimer);
       longPressTimer = null;
     }
   }
 
   function handleTouchEnd() {
     if (!isMobile || !supportsTouch) return;
-    if (longPressTimer) window.clearTimeout(longPressTimer);
+    if (longPressTimer) clearTimeout(longPressTimer);
     longPressTimer = null;
   }
 

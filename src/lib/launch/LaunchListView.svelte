@@ -54,7 +54,6 @@
   <div class="page-header">
     <div class="page-heading">
       <h2>Launchpad</h2>
-      <p>Anyone can launch their token here. DYOR before buying.</p>
     </div>
     <ListPageToolbar
       sortByLabel={sortByLabel}
@@ -225,12 +224,6 @@
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--text-primary);
-  }
-
-  .page-heading p {
-    margin: 0.4rem 0 0;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
   }
 
   .token-list {

@@ -184,6 +184,7 @@
     count: filteredTokens.length,
     getScrollElement: () => scrollContainerRef,
     estimateSize: () => 80,
+    measureElement: (element) => element.getBoundingClientRect().height,
     overscan: 50,
   }));
 
@@ -239,6 +240,22 @@
           observer.unobserve(node);
         }
         pendingObserveNodes = pendingObserveNodes.filter((n) => n !== node);
+      },
+    };
+  }
+
+  function measureTokenRow(node: HTMLElement) {
+    const virtualizer = virtual.virtualizer;
+    virtualizer.measureElement(node);
+
+    const resizeObserver = new ResizeObserver(() => {
+      virtualizer.measureElement(node);
+    });
+    resizeObserver.observe(node);
+
+    return {
+      destroy() {
+        resizeObserver.disconnect();
       },
     };
   }
@@ -365,7 +382,7 @@
     const touch = event.touches[0];
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
-    if (longPressTimer) window.clearTimeout(longPressTimer);
+    if (longPressTimer) clearTimeout(longPressTimer);
     longPressTimer = setTimeout(() => {
       hoveredToken = null;
       mobileTooltipToken = token;
@@ -384,14 +401,14 @@
     const deltaX = Math.abs(touch.clientX - touchStartX);
     const deltaY = Math.abs(touch.clientY - touchStartY);
     if (deltaX > 10 || deltaY > 10) {
-      window.clearTimeout(longPressTimer);
+      clearTimeout(longPressTimer);
       longPressTimer = null;
     }
   }
 
   function handleTokenTouchEnd() {
     if (!isMobile || !supportsTouch) return;
-    if (longPressTimer) window.clearTimeout(longPressTimer);
+    if (longPressTimer) clearTimeout(longPressTimer);
     longPressTimer = null;
   }
 
@@ -497,6 +514,7 @@
                   data-token-id={token.account_id}
                   data-index={virtualItem.index}
                   use:observeToken
+                  use:measureTokenRow
                   onclick={() => handleTokenClick(token)}
                   onmouseenter={(event) => handleTooltipMove(event, token)}
                   onmousemove={(event) => handleTooltipMove(event, token)}
@@ -506,7 +524,7 @@
                   ontouchend={handleTokenTouchEnd}
                   ontouchcancel={handleTokenTouchEnd}
                   oncontextmenu={(event) => event.preventDefault()}
-                  style="position: absolute; top: 0; left: 0; width: 100%; height: {virtualItem.size}px; transform: translateY({virtualItem.start}px);"
+                  style="position: absolute; top: 0; left: 0; width: 100%; transform: translateY({virtualItem.start}px);"
                 >
                   <div class="token-left">
                     <TokenIcon token={token} size={40} showBadge />
@@ -514,6 +532,9 @@
                       <div class="token-symbol">{token.metadata.symbol}</div>
                       <div class="token-price-secondary">
                         {formatPrice(token)}
+                      </div>
+                      <div class="token-contract-address" title={token.account_id}>
+                        {token.account_id}
                       </div>
                     </div>
                   </div>
@@ -866,6 +887,18 @@
     font-size: 0.875rem;
     color: var(--text-secondary);
     font-family: "JetBrains Mono", monospace;
+  }
+
+  .token-contract-address {
+    margin-top: 0.2rem;
+    width: 100%;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    font-family: "JetBrains Mono", monospace;
+    white-space: normal;
+    word-break: break-all;
+    text-align: left;
+    align-self: stretch;
   }
 
   .token-stats {

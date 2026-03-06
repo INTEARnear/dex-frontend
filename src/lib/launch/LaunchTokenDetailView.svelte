@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { Globe } from "lucide-svelte";
+  import { onDestroy, onMount } from "svelte";
+  import { Check, Copy, Globe } from "lucide-svelte";
   import { siTelegram, siX } from "simple-icons";
   import LaunchRecentTradesGrid from "./LaunchRecentTradesGrid.svelte";
   import PoolFeeBreakdown from "$lib/pool/PoolFeeBreakdown.svelte";
@@ -24,6 +24,8 @@
   let oldestLaunchPoolFeeConfiguration = $state<XykFeeConfiguration | null>(null);
   let contentPanelElement = $state<HTMLElement | null>(null);
   let snappedChartPanelHeight = $state<number | null>(null);
+  let copiedContractAddress = $state(false);
+  let copyResetTimer: number | null = null;
 
   interface OldestLaunchPoolFeeInfo {
     poolId: number;
@@ -163,6 +165,25 @@
       desktopMediaQuery.removeEventListener("change", onDesktopMediaQueryChange);
     };
   });
+
+  onDestroy(() => {
+    if (copyResetTimer !== null) {
+      clearTimeout(copyResetTimer);
+      copyResetTimer = null;
+    }
+  });
+
+  async function copyContractAddress(): Promise<void> {
+    await navigator.clipboard.writeText(token.account_id);
+    copiedContractAddress = true;
+    if (copyResetTimer !== null) {
+      clearTimeout(copyResetTimer);
+    }
+    copyResetTimer = setTimeout(() => {
+      copiedContractAddress = false;
+      copyResetTimer = null;
+    }, 2_000);
+  }
 </script>
 
 <div class="detail-view">
@@ -216,6 +237,24 @@
               <PoolFeeBreakdown configuration={oldestLaunchPoolFeeConfiguration} label="Main Pool Fee" />
             {/if}
           </aside>
+        </div>
+        <div class="token-contract-row">
+          <span class="token-contract-label">CA</span>
+          <code class="token-contract-value">{token.account_id}</code>
+          <button
+            type="button"
+            class="token-contract-copy-btn"
+            class:copied={copiedContractAddress}
+            onclick={copyContractAddress}
+            aria-label={`Copy contract address ${token.account_id}`}
+            title={copiedContractAddress ? "Copied" : "Copy contract address"}
+          >
+            {#if copiedContractAddress}
+              <Check size={14} strokeWidth={2.2} />
+            {:else}
+              <Copy size={14} strokeWidth={2} />
+            {/if}
+          </button>
         </div>
 
         <div class="token-footer">
@@ -453,6 +492,56 @@
     font-family: "JetBrains Mono", monospace;
     text-transform: uppercase;
     word-break: break-word;
+  }
+
+  .token-contract-row {
+    margin-top: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .token-contract-label {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-family: "JetBrains Mono", monospace;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .token-contract-value {
+    margin: 0;
+    min-width: 0;
+    flex: 1;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-family: "JetBrains Mono", monospace;
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  .token-contract-copy-btn {
+    border: none;
+    border-radius: 0.4rem;
+    width: 1.45rem;
+    height: 1.45rem;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+
+  .token-contract-copy-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .token-contract-copy-btn.copied {
+    color: var(--status-success-text);
   }
 
   .token-description {
