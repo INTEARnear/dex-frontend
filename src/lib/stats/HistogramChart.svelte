@@ -791,7 +791,6 @@
   .y-axis-rail {
     position: sticky;
     left: 0;
-    z-index: 6;
     height: var(--chart-height);
     border-right: 1px solid
       color-mix(in srgb, var(--border-color) 70%, transparent);
@@ -848,7 +847,7 @@
     width: 72px;
     pointer-events: none;
     opacity: 0;
-    z-index: 5;
+    z-index: 3;
     transition: opacity 320ms ease-out;
     background: linear-gradient(
       90deg,
@@ -870,7 +869,7 @@
     width: 72px;
     pointer-events: none;
     opacity: 0;
-    z-index: 5;
+    z-index: 3;
     transition: opacity 320ms ease-out;
     background: linear-gradient(
       270deg,

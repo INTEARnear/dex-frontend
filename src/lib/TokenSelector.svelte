@@ -819,6 +819,7 @@
     -webkit-user-select: none;
     touch-action: manipulation;
     box-sizing: border-box;
+    gap: 0.5rem;
   }
 
   .token-item:hover {
