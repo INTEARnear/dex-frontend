@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { ChevronDown, Plus } from "lucide-svelte";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
   import {
@@ -19,6 +18,11 @@
   } from "../../lib/types";
   import CreatePoolModal from "../../lib/CreatePoolModal.svelte";
   import Spinner from "../../lib/Spinner.svelte";
+  import ListPageToolbar from "$lib/ListPageToolbar.svelte";
+  import {
+    POOL_QUERY_SPLIT_REGEX,
+    scorePoolSearchTerms,
+  } from "../../lib/tokenSearch";
   import TokenIcon from "../../lib/TokenIcon.svelte";
 
   interface PoolDisplay {
@@ -49,34 +53,21 @@
 
   const POOLS_SORT_STORAGE_KEY = "dex-pools-sort-settings";
 
-  function loadSortSettings(): Partial<{
+  interface PoolsSortSettings {
     sortBy: SortByMetric;
     ownedFirst: boolean;
     hideSuspicious: boolean;
-  }> {
+  }
+
+  function loadSortSettings(): PoolsSortSettings {
     try {
       const raw = localStorage.getItem(POOLS_SORT_STORAGE_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const out: Partial<{
-        sortBy: SortByMetric;
-        ownedFirst: boolean;
-        hideSuspicious: boolean;
-      }> = {};
-      if (
-        parsed.sortBy === "liquidity" ||
-        parsed.sortBy === "volume" ||
-        parsed.sortBy === "apy"
-      ) {
-        out.sortBy = parsed.sortBy as SortByMetric;
-      }
-      if (typeof parsed.ownedFirst === "boolean")
-        out.ownedFirst = parsed.ownedFirst;
-      if (typeof parsed.hideSuspicious === "boolean")
-        out.hideSuspicious = parsed.hideSuspicious;
-      return out;
+      if (!raw)
+        return { sortBy: "liquidity", ownedFirst: true, hideSuspicious: true };
+      const parsed = JSON.parse(raw) as PoolsSortSettings;
+      return parsed;
     } catch {
-      return {};
+      return { sortBy: "liquidity", ownedFirst: true, hideSuspicious: true };
     }
   }
 
@@ -104,22 +95,39 @@
   let sortBy = $state<SortByMetric>("liquidity");
   let ownedFirst = $state(true);
   let hideSuspicious = $state(true);
-  let isMobileSortOpen = $state(false);
+  let searchQuery = $state("");
 
   const accountId = $derived($walletStore.accountId);
-  let isConnecting = $state(false);
+  const walletConnected = $derived($walletStore.isConnected);
   let fetchId = 0;
 
-  async function handleConnectWallet() {
-    isConnecting = true;
-    try {
-      await walletStore.connect();
-    } catch (e) {
-      console.error("Connection failed:", e);
-    } finally {
-      isConnecting = false;
-    }
+  function setOwnedFirst(next: boolean) {
+    ownedFirst = next;
   }
+
+  function setHideSuspicious(next: boolean) {
+    hideSuspicious = next;
+  }
+
+  function setSearchQuery(next: string) {
+    searchQuery = next;
+  }
+
+  const sortFilterToggles = $derived.by(() => [
+    {
+      id: "owned-first-toggle",
+      label: "Owned First",
+      checked: ownedFirst,
+      hidden: !walletConnected,
+      onChange: setOwnedFirst,
+    },
+    {
+      id: "hide-suspicious-toggle",
+      label: "Hide Suspicious",
+      checked: hideSuspicious,
+      onChange: setHideSuspicious,
+    },
+  ]);
 
   function buildPoolsWithCachedTokens(poolList: PoolDisplay[]): PoolDisplay[] {
     return poolList.map((pool) => ({
@@ -171,10 +179,6 @@
     sortBy = NEXT_SORT_BY[sortBy];
   }
 
-  function toggleMobileSort() {
-    isMobileSortOpen = !isMobileSortOpen;
-  }
-
   function getSortMetric(pool: PoolDisplay, liquidityUsd: number): number {
     if (sortBy === "volume") {
       return toSortableNumber(pool.volume7dUsd);
@@ -188,46 +192,94 @@
     throw new Error(`Unsupported sort by: ${sortBy}`);
   }
 
+  interface ScoredPoolEntry {
+    pool: PoolDisplay;
+    liquidityUsd: number;
+    searchScore: number;
+  }
+
+  function comparePoolEntries(a: ScoredPoolEntry, b: ScoredPoolEntry): number {
+    if (ownedFirst) {
+      const aOwnedLiquidity = toSortableNumber(a.pool.ownedLiquidityUsd);
+      const bOwnedLiquidity = toSortableNumber(b.pool.ownedLiquidityUsd);
+      const aHasOwnedLiquidity = hasOwnedLiquidity(a.pool);
+      const bHasOwnedLiquidity = hasOwnedLiquidity(b.pool);
+
+      if (aHasOwnedLiquidity !== bHasOwnedLiquidity) {
+        return aHasOwnedLiquidity ? -1 : 1;
+      }
+
+      if (
+        aHasOwnedLiquidity &&
+        bHasOwnedLiquidity &&
+        aOwnedLiquidity !== bOwnedLiquidity
+      ) {
+        return bOwnedLiquidity - aOwnedLiquidity;
+      }
+    }
+
+    const metricDiff =
+      getSortMetric(b.pool, b.liquidityUsd) -
+      getSortMetric(a.pool, a.liquidityUsd);
+    if (metricDiff !== 0) return metricDiff;
+
+    if (a.liquidityUsd !== b.liquidityUsd) {
+      return b.liquidityUsd - a.liquidityUsd;
+    }
+
+    return a.pool.id - b.pool.id;
+  }
+
   const visiblePools = $derived.by(() => {
-    const list = pools.map((pool) => ({
+    const list: ScoredPoolEntry[] = pools.map((pool) => ({
       pool,
       liquidityUsd: pool.liquidityUsd,
+      searchScore: 0,
     }));
 
-    const filtered = hideSuspicious
+    const filteredByFlags = hideSuspicious
       ? list.filter((entry) => !isSuspiciousPool(entry.pool))
       : list;
+    const searchTerms = searchQuery.trim().split(POOL_QUERY_SPLIT_REGEX);
+    const filtered =
+      searchTerms.length === 0
+        ? filteredByFlags
+        : filteredByFlags
+            .map((entry) => {
+              if (
+                entry.pool.tokens[0] !== null &&
+                entry.pool.tokens[1] !== null
+              ) {
+                const tokenSearch = [
+                  {
+                    name: entry.pool.tokens[0].metadata.name,
+                    symbol: entry.pool.tokens[0].metadata.symbol,
+                  },
+                  {
+                    name: entry.pool.tokens[1].metadata.name,
+                    symbol: entry.pool.tokens[1].metadata.symbol,
+                  },
+                ] as [
+                  { name: string; symbol: string },
+                  { name: string; symbol: string },
+                ];
+                const searchScore = scorePoolSearchTerms(
+                  searchTerms,
+                  tokenSearch,
+                );
+                if (searchScore === null) return null;
+                return { ...entry, searchScore };
+              } else {
+                return null;
+              }
+            })
+            .filter((entry): entry is ScoredPoolEntry => entry !== null);
 
     filtered.sort((a, b) => {
-      if (ownedFirst) {
-        const aOwnedLiquidity = toSortableNumber(a.pool.ownedLiquidityUsd);
-        const bOwnedLiquidity = toSortableNumber(b.pool.ownedLiquidityUsd);
-        const aHasOwnedLiquidity = hasOwnedLiquidity(a.pool);
-        const bHasOwnedLiquidity = hasOwnedLiquidity(b.pool);
-
-        if (aHasOwnedLiquidity !== bHasOwnedLiquidity) {
-          return aHasOwnedLiquidity ? -1 : 1;
-        }
-
-        if (
-          aHasOwnedLiquidity &&
-          bHasOwnedLiquidity &&
-          aOwnedLiquidity !== bOwnedLiquidity
-        ) {
-          return bOwnedLiquidity - aOwnedLiquidity;
-        }
+      if (searchTerms.length > 0 && a.searchScore !== b.searchScore) {
+        return b.searchScore - a.searchScore;
       }
-
-      const metricDiff =
-        getSortMetric(b.pool, b.liquidityUsd) -
-        getSortMetric(a.pool, a.liquidityUsd);
-      if (metricDiff !== 0) return metricDiff;
-
-      if (a.liquidityUsd !== b.liquidityUsd) {
-        return b.liquidityUsd - a.liquidityUsd;
-      }
-
-      return a.pool.id - b.pool.id;
+      return comparePoolEntries(a, b);
     });
 
     return filtered;
@@ -345,10 +397,9 @@
 
   onMount(() => {
     const loaded = loadSortSettings();
-    if (loaded.sortBy !== undefined) sortBy = loaded.sortBy;
-    if (loaded.ownedFirst !== undefined) ownedFirst = loaded.ownedFirst;
-    if (loaded.hideSuspicious !== undefined)
-      hideSuspicious = loaded.hideSuspicious;
+    sortBy = loaded.sortBy;
+    ownedFirst = loaded.ownedFirst;
+    hideSuspicious = loaded.hideSuspicious;
     hasRestoredSortSettings = true;
 
     tokenHubStore.updatePricesEvery(10_000);
@@ -374,134 +425,24 @@
 <div class="liquidity-page">
   <div class="page-header">
     <h2>Plach Liquidity Pools</h2>
-    <div class="header-actions" class:mobile-config-open={isMobileSortOpen}>
-      <div
-        class="sort-settings"
-        role="group"
-        aria-label="Pool sorting settings"
-      >
-        <div class="sort-by-control">
-          <span class="sort-by-label">Sort by</span>
-          <button
-            type="button"
-            class="sort-cycle-btn"
-            onclick={cycleSortBy}
-            aria-label={`Sort by ${SORT_BY_LABELS[sortBy]}. Activate to cycle sort mode.`}
-          >
-            {SORT_BY_LABELS[sortBy]}
-          </button>
-        </div>
-        {#if $walletStore.isConnected}
-          <label class="filter-toggle" for="owned-first-toggle">
-            <input
-              id="owned-first-toggle"
-              type="checkbox"
-              bind:checked={ownedFirst}
-            />
-            <span>Owned First</span>
-          </label>
-        {/if}
-        <label class="filter-toggle" for="hide-suspicious-toggle">
-          <input
-            id="hide-suspicious-toggle"
-            type="checkbox"
-            bind:checked={hideSuspicious}
-          />
-          <span>Hide Suspicious</span>
-        </label>
-      </div>
-      {#if $walletStore.isConnected}
-        <button
-          class="create-pool-btn"
-          onclick={() => (showCreatePoolModal = true)}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-          <span>Create Pool</span>
-        </button>
-      {:else}
-        <button
-          class="create-pool-btn"
-          onclick={handleConnectWallet}
-          disabled={isConnecting}
-        >
-          <span>{isConnecting ? "Connecting..." : "Connect Wallet"}</span>
-        </button>
-      {/if}
-      <button
-        class="refresh-btn"
-        onclick={fetchPools}
-        disabled={isLoading}
-        aria-label="Refresh pools"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class:spinning={isLoading}
-        >
-          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-          <path d="M3 3v5h5" />
-          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-          <path d="M16 21h5v-5" />
-        </svg>
-      </button>
-
-      <div class="mobile-sort-controls">
-        <div class="mobile-sort-row">
-          <button
-            type="button"
-            class="mobile-sort-toggle"
-            aria-expanded={isMobileSortOpen}
-            onclick={toggleMobileSort}
-          >
-            <span>Sort By</span>
-            <span class="mobile-sort-chevron" class:open={isMobileSortOpen}>
-              <ChevronDown size={16} />
-            </span>
-          </button>
-
-          {#if $walletStore.isConnected}
-            <button
-              type="button"
-              class="mobile-create-pool-btn"
-              onclick={() => (showCreatePoolModal = true)}
-              aria-label="Create Pool"
-              title="Create Pool"
-            >
-              <Plus size={16} />
-            </button>
-          {:else}
-            <button
-              type="button"
-              class="mobile-create-pool-btn"
-              onclick={handleConnectWallet}
-              disabled={isConnecting}
-              aria-label="Connect Wallet"
-              title={isConnecting ? "Connecting..." : "Connect Wallet"}
-            >
-              <Plus size={16} />
-            </button>
-          {/if}
-        </div>
-      </div>
-    </div>
+    <ListPageToolbar
+      sortByLabel={SORT_BY_LABELS[sortBy]}
+      sortGroupAriaLabel="Pool sorting settings"
+      onCycleSortBy={cycleSortBy}
+      onPrimaryActionClick={() => (showCreatePoolModal = true)}
+      primaryActionLabel="Create Pool"
+      search={{
+        value: searchQuery,
+        onValueChange: setSearchQuery,
+        placeholder: "Search pools",
+        ariaLabel: "Search pools by tokens",
+      }}
+      refresh={{
+        onClick: fetchPools,
+        isRefreshing: isLoading,
+      }}
+      filterToggles={sortFilterToggles}
+    />
   </div>
 
   {#if isLoading}
@@ -520,7 +461,11 @@
     </div>
   {:else if visiblePools.length === 0}
     <div class="empty">
-      <p>No pools match current filters</p>
+      <p>
+        {searchQuery.trim()
+          ? "No pools match current filters or search."
+          : "No pools match current filters."}
+      </p>
     </div>
   {:else}
     <div class="pools-grid">
@@ -632,192 +577,6 @@
     color: var(--text-primary);
   }
 
-  .header-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .sort-settings {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    padding: 0.45rem 0.65rem;
-  }
-
-  .sort-by-control {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
-  .sort-by-label {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
-  .sort-cycle-btn {
-    width: 7rem;
-    min-width: 7rem;
-    padding: 0.35rem 0.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.4rem;
-    background: var(--bg-card);
-    color: var(--text-primary);
-    font-size: 0.9rem;
-    font-weight: 500;
-    margin-left: 0.25rem;
-    cursor: pointer;
-    text-align: center;
-    transition:
-      background 0.2s ease,
-      border-color 0.2s ease,
-      filter 0.2s ease;
-  }
-
-  .sort-cycle-btn:hover {
-    border-color: var(--border-color);
-    filter: brightness(1.25);
-  }
-
-  .sort-cycle-btn:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 1px;
-  }
-
-  .filter-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
-  }
-
-  .filter-toggle input {
-    margin: 0;
-    accent-color: var(--accent-primary);
-  }
-
-  .create-pool-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.52rem 1rem;
-    background: var(--accent-button-small);
-    border: none;
-    border-radius: 0.5rem;
-    color: var(--text-on-accent);
-    font-weight: 600;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .create-pool-btn:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  .create-pool-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-
-  .create-pool-btn svg {
-    flex-shrink: 0;
-  }
-
-  .mobile-sort-controls {
-    display: none;
-    width: 100%;
-  }
-
-  .mobile-sort-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.45rem;
-    width: 100%;
-  }
-
-  .mobile-sort-toggle {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0.4rem;
-    padding: 0.45rem 0;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    color: var(--text-primary);
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .mobile-sort-chevron {
-    color: var(--text-secondary);
-    transition: transform 0.2s ease;
-  }
-
-  .mobile-sort-chevron.open {
-    transform: rotate(180deg);
-  }
-
-  .mobile-create-pool-btn {
-    width: 2.25rem;
-    height: 2.25rem;
-    border: none;
-    border-radius: 0.5rem;
-    background: var(--accent-button-small);
-    color: var(--text-on-accent);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-  }
-
-  .mobile-create-pool-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-
-  .refresh-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .refresh-btn:hover:not(:disabled) {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border-color: var(--accent-primary);
-  }
-
-  .refresh-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .refresh-btn svg.spinning {
-    animation: spin 1s linear infinite;
-  }
-
   .pools-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
@@ -834,11 +593,6 @@
   @media (max-width: 1024px) {
     .page-header {
       align-items: flex-start;
-    }
-
-    .header-actions {
-      width: 100%;
-      justify-content: flex-start;
     }
 
     .pools-grid {
@@ -859,94 +613,6 @@
 
     .page-header h2 {
       font-size: 1.25rem;
-    }
-
-    .sort-settings {
-      width: 100%;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.5rem;
-    }
-
-    .sort-by-control {
-      justify-content: space-between;
-    }
-
-    .sort-cycle-btn {
-      min-width: 0;
-      width: 7rem;
-    }
-  }
-
-  @media (max-width: 360px) {
-    .sort-by-control {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.25rem;
-    }
-
-    .sort-cycle-btn {
-      margin-left: 0;
-    }
-  }
-
-  @media (--mobile) {
-    .header-actions {
-      width: 100%;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.35rem;
-    }
-
-    .sort-settings {
-      display: none;
-      order: 2;
-      width: 100%;
-      padding: 0;
-      gap: 0.55rem;
-      background: transparent;
-    }
-
-    .header-actions.mobile-config-open .sort-settings {
-      display: flex;
-      align-items: stretch;
-      flex-wrap: wrap;
-      width: 100%;
-      flex-direction: column;
-    }
-
-    .header-actions.mobile-config-open .sort-by-control {
-      width: 100%;
-      justify-content: space-between;
-    }
-
-    .header-actions.mobile-config-open .sort-cycle-btn {
-      width: 100%;
-      min-width: 0;
-      margin-left: 0;
-    }
-
-    .header-actions.mobile-config-open .filter-toggle {
-      width: auto;
-      justify-content: flex-start;
-      align-self: flex-start;
-    }
-
-    .create-pool-btn,
-    .refresh-btn {
-      display: none;
-    }
-
-    .mobile-sort-controls {
-      display: block;
-      order: 1;
-      width: 100%;
-    }
-  }
-
-  @media (max-width: 400px) {
-    .create-pool-btn span {
-      display: none;
     }
   }
 
@@ -983,8 +649,7 @@
 
   .pool-card.no-deposit {
     border-color: var(--status-error-solid);
-    box-shadow:
-      inset 0 0 0 1px
+    box-shadow: inset 0 0 0 1px
       color-mix(in oklab, var(--status-error-solid), transparent 55%);
   }
 
@@ -992,21 +657,20 @@
     border-color: var(--status-error-solid-hover);
     box-shadow:
       inset 0 0 0 1px
-      color-mix(in oklab, var(--status-error-solid), transparent 45%),
+        color-mix(in oklab, var(--status-error-solid), transparent 45%),
       0 8px 20px color-mix(in oklab, var(--status-error-solid), transparent 75%);
   }
 
   .pool-card.no-deposit:active {
     box-shadow:
       inset 0 0 0 1px
-      color-mix(in oklab, var(--status-error-solid), transparent 45%),
+        color-mix(in oklab, var(--status-error-solid), transparent 45%),
       0 4px 12px color-mix(in oklab, var(--status-error-solid), transparent 80%);
   }
 
   .pool-card.owned {
     border-color: var(--status-success-solid);
-    box-shadow:
-      inset 0 0 0 1px
+    box-shadow: inset 0 0 0 1px
       color-mix(in oklab, var(--status-success-solid), transparent 55%);
   }
 
@@ -1014,17 +678,17 @@
     border-color: var(--status-success-solid-hover);
     box-shadow:
       inset 0 0 0 1px
-      color-mix(in oklab, var(--status-success-solid), transparent 45%),
+        color-mix(in oklab, var(--status-success-solid), transparent 45%),
       0 8px 20px
-      color-mix(in oklab, var(--status-success-solid), transparent 75%);
+        color-mix(in oklab, var(--status-success-solid), transparent 75%);
   }
 
   .pool-card.owned:active {
     box-shadow:
       inset 0 0 0 1px
-      color-mix(in oklab, var(--status-success-solid), transparent 45%),
+        color-mix(in oklab, var(--status-success-solid), transparent 45%),
       0 4px 12px
-      color-mix(in oklab, var(--status-success-solid), transparent 80%);
+        color-mix(in oklab, var(--status-success-solid), transparent 80%);
   }
 
   .pool-header {

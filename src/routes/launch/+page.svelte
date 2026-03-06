@@ -17,6 +17,7 @@
     LaunchToken,
   } from "$lib/launch/types";
   import CreateTokenModal from "$lib/launch/CreateTokenModal.svelte";
+  import { scoreTermAgainstToken } from "$lib/tokenSearch";
 
   const LAUNCH_SORT_STORAGE_KEY = "dex-launch-sort-settings";
 
@@ -34,6 +35,10 @@
   interface StoredLaunchSortSettings {
     sortBy: LaunchSortBy;
     ownedFirst: boolean;
+  }
+
+  interface ScoredLaunchToken extends LaunchToken {
+    searchScore: number;
   }
 
   function loadSortSettings(): StoredLaunchSortSettings {
@@ -62,9 +67,8 @@
 
   let sortBy = $state<LaunchSortBy>("volume");
   let ownedFirst = $state(true);
-  let isMobileSortOpen = $state(false);
+  let searchQuery = $state("");
   let showCreateTokenModal = $state(false);
-  let isConnecting = $state(false);
   let hasRestoredSortSettings = $state(false);
 
   const launchTokens = $derived.by(() =>
@@ -78,47 +82,8 @@
   );
   const isInitialLoading = $derived(!hasTokenApiReturned || isLaunchApiLoading);
 
-  const visibleLaunchTokens = $derived.by(() =>
-    launchTokens
-      .slice()
-      .sort((left, right) => {
-        const leftLaunch = launchDataByTokenId[left.account_id] ?? null;
-        const rightLaunch = launchDataByTokenId[right.account_id] ?? null;
-        const leftLaunchedAtNs = leftLaunch?.launched_at_ns ?? 0;
-        const rightLaunchedAtNs = rightLaunch?.launched_at_ns ?? 0;
-
-        if (ownedFirst && $walletStore.isConnected) {
-          const leftOwned = hasOwnedBalance(left);
-          const rightOwned = hasOwnedBalance(right);
-          if (leftOwned !== rightOwned) return rightOwned ? 1 : -1;
-          if (leftOwned && rightOwned) {
-            const balanceDiff =
-              (right.balanceUsd ?? 0) - (left.balanceUsd ?? 0);
-            if (Math.abs(balanceDiff) > 0.000001) return balanceDiff;
-          }
-        }
-
-        if (sortBy === "newest") {
-          if (leftLaunchedAtNs !== rightLaunchedAtNs)
-            return rightLaunchedAtNs - leftLaunchedAtNs;
-        } else if (sortBy === "marketCap") {
-          const mcapDiff =
-            (getMarketCap(right) ?? -1) - (getMarketCap(left) ?? -1);
-          if (Math.abs(mcapDiff) > 0.000001) return mcapDiff;
-        } else {
-          const volumeDiff = right.volume_usd_24h - left.volume_usd_24h;
-          if (Math.abs(volumeDiff) > 0.000001) return volumeDiff;
-        }
-
-        const mcapDiff =
-          (getMarketCap(right) ?? -1) - (getMarketCap(left) ?? -1);
-        if (Math.abs(mcapDiff) > 0.000001) return mcapDiff;
-        const volumeDiff = right.volume_usd_24h - left.volume_usd_24h;
-        if (Math.abs(volumeDiff) > 0.000001) return volumeDiff;
-        if (leftLaunchedAtNs !== rightLaunchedAtNs)
-          return rightLaunchedAtNs - leftLaunchedAtNs;
-        return left.metadata.name.localeCompare(right.metadata.name);
-      })
+  const visibleLaunchTokens = $derived.by(() => {
+    const launchEntries = launchTokens
       .map((token) => ({
         token,
         launchData: launchDataByTokenId[token.account_id] ?? null,
@@ -126,8 +91,37 @@
       .filter(
         (launchToken): launchToken is LaunchToken =>
           launchToken.launchData !== null,
-      ),
-  );
+      );
+
+    const scoredEntries: ScoredLaunchToken[] =
+      searchQuery.trim().length === 0
+        ? launchEntries.map((entry) => ({ ...entry, searchScore: 0 }))
+        : launchEntries
+            .map((entry) => {
+              const searchScore = scoreTermAgainstToken(searchQuery, {
+                name: entry.token.metadata.name,
+                symbol: entry.token.metadata.symbol,
+              });
+              if (searchScore === null) return null;
+              return { ...entry, searchScore };
+            })
+            .filter((entry): entry is ScoredLaunchToken => entry !== null && entry.searchScore > 0);
+
+    scoredEntries.sort((left, right) => {
+      if (
+        searchQuery.trim().length > 0 &&
+        left.searchScore !== right.searchScore
+      ) {
+        return right.searchScore - left.searchScore;
+      }
+      return compareLaunchTokensForSort(left.token, right.token);
+    });
+
+    return scoredEntries.map(({ token, launchData }) => ({
+      token,
+      launchData,
+    }));
+  });
 
   const selectedToken = $derived.by(() => {
     if (!selectedTokenId) return null;
@@ -202,12 +196,51 @@
     }
   }
 
+  function compareLaunchTokensForSort(
+    left: TokenInfo,
+    right: TokenInfo,
+  ): number {
+    const leftLaunch = launchDataByTokenId[left.account_id] ?? null;
+    const rightLaunch = launchDataByTokenId[right.account_id] ?? null;
+    const leftLaunchedAtNs = leftLaunch?.launched_at_ns ?? 0;
+    const rightLaunchedAtNs = rightLaunch?.launched_at_ns ?? 0;
+
+    if (ownedFirst && $walletStore.isConnected) {
+      const leftOwned = hasOwnedBalance(left);
+      const rightOwned = hasOwnedBalance(right);
+      if (leftOwned !== rightOwned) return rightOwned ? 1 : -1;
+      if (leftOwned && rightOwned) {
+        const balanceDiff = (right.balanceUsd ?? 0) - (left.balanceUsd ?? 0);
+        if (Math.abs(balanceDiff) > 0.000001) return balanceDiff;
+      }
+    }
+
+    if (sortBy === "newest") {
+      if (leftLaunchedAtNs !== rightLaunchedAtNs)
+        return rightLaunchedAtNs - leftLaunchedAtNs;
+    } else if (sortBy === "marketCap") {
+      const mcapDiff = (getMarketCap(right) ?? -1) - (getMarketCap(left) ?? -1);
+      if (Math.abs(mcapDiff) > 0.000001) return mcapDiff;
+    } else {
+      const volumeDiff = right.volume_usd_24h - left.volume_usd_24h;
+      if (Math.abs(volumeDiff) > 0.000001) return volumeDiff;
+    }
+
+    const mcapDiff = (getMarketCap(right) ?? -1) - (getMarketCap(left) ?? -1);
+    if (Math.abs(mcapDiff) > 0.000001) return mcapDiff;
+    const volumeDiff = right.volume_usd_24h - left.volume_usd_24h;
+    if (Math.abs(volumeDiff) > 0.000001) return volumeDiff;
+    if (leftLaunchedAtNs !== rightLaunchedAtNs)
+      return rightLaunchedAtNs - leftLaunchedAtNs;
+    return left.metadata.name.localeCompare(right.metadata.name);
+  }
+
   function cycleSortBy(): void {
     sortBy = NEXT_SORT_BY[sortBy];
   }
 
-  function toggleMobileSort(): void {
-    isMobileSortOpen = !isMobileSortOpen;
+  function setSearchQuery(next: string): void {
+    searchQuery = next;
   }
 
   function setOwnedFirst(next: boolean): void {
@@ -216,18 +249,6 @@
 
   function openCreateTokenModal(): void {
     showCreateTokenModal = true;
-    isMobileSortOpen = false;
-  }
-
-  async function handleConnectWallet(): Promise<void> {
-    isConnecting = true;
-    try {
-      await walletStore.connect();
-    } catch (error) {
-      console.error("Connection failed:", error);
-    } finally {
-      isConnecting = false;
-    }
   }
 
   async function fetchLaunchData(options?: {
@@ -251,7 +272,9 @@
     } catch (error) {
       if (!background) {
         launchApiError =
-          error instanceof Error ? error.message : "Failed to fetch launch data";
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch launch data";
         launchDataByTokenId = {};
       }
     } finally {
@@ -261,9 +284,7 @@
     }
   }
 
-  async function hydrateUnknownLaunchTokens(
-    launchData: LaunchApiResponse,
-  ) {
+  async function hydrateUnknownLaunchTokens(launchData: LaunchApiResponse) {
     const tokensById = get(tokenHubStore).tokensById;
     const unknownTokenIds = Object.keys(launchData).filter(
       (tokenId) => tokensById[tokenId] === undefined,
@@ -371,21 +392,22 @@
     </div>
   {:else if visibleLaunchTokens.length === 0}
     <div class="state-panel empty">
-      <p>No launch tokens found.</p>
+      <p>
+        {searchQuery.trim()
+          ? "No launch tokens match your search."
+          : "No launch tokens found."}
+      </p>
     </div>
   {:else}
     <LaunchListView
       {visibleLaunchTokens}
       {selectedTokenId}
       sortByLabel={SORT_BY_LABELS[sortBy]}
-      {isMobileSortOpen}
+      {searchQuery}
       {ownedFirst}
-      walletConnected={$walletStore.isConnected}
-      isConnectingWallet={isConnecting}
       onCreateTokenClick={openCreateTokenModal}
-      onConnectWalletClick={handleConnectWallet}
       onCycleSortBy={cycleSortBy}
-      onToggleMobileSort={toggleMobileSort}
+      onSearchQueryChange={setSearchQuery}
       onOwnedFirstChange={setOwnedFirst}
       {formatMarketCap}
     />

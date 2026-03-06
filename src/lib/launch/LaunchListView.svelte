@@ -1,22 +1,21 @@
 <script lang="ts">
-  import { ChevronDown, Globe, Plus } from "lucide-svelte";
+  import { Globe } from "lucide-svelte";
   import { siTelegram, siX } from "simple-icons";
+  import ListPageToolbar from "$lib/ListPageToolbar.svelte";
   import type { TokenInfo } from "$lib/types";
   import { getTokenIcon } from "$lib/utils";
+  import { walletStore } from "$lib/walletStore";
   import type { LaunchToken } from "./types";
 
   interface Props {
     visibleLaunchTokens: LaunchToken[];
     selectedTokenId: string | null;
     sortByLabel: string;
-    isMobileSortOpen: boolean;
+    searchQuery: string;
     ownedFirst: boolean;
-    walletConnected: boolean;
-    isConnectingWallet: boolean;
     onCreateTokenClick: () => void;
-    onConnectWalletClick: () => void;
     onCycleSortBy: () => void;
-    onToggleMobileSort: () => void;
+    onSearchQueryChange: (next: string) => void;
     onOwnedFirstChange: (next: boolean) => void;
     formatMarketCap: (token: TokenInfo) => string;
   }
@@ -25,21 +24,30 @@
     visibleLaunchTokens,
     selectedTokenId,
     sortByLabel,
-    isMobileSortOpen,
+    searchQuery,
     ownedFirst,
-    walletConnected,
-    isConnectingWallet,
     onCreateTokenClick,
-    onConnectWalletClick,
     onCycleSortBy,
-    onToggleMobileSort,
+    onSearchQueryChange,
     onOwnedFirstChange,
     formatMarketCap,
   }: Props = $props();
 
+  const walletConnected = $derived($walletStore.isConnected);
+
   function hasAnySocialLinks(data: LaunchToken["launchData"]): boolean {
     return Boolean(data.x || data.telegram || data.website);
   }
+
+  const sortFilterToggles = $derived.by(() => [
+    {
+      id: "launch-owned-first-toggle",
+      label: "Owned First",
+      checked: ownedFirst,
+      disabled: !walletConnected,
+      onChange: onOwnedFirstChange,
+    },
+  ]);
 </script>
 
 <div class="list-view">
@@ -48,111 +56,20 @@
       <h2>Launchpad</h2>
       <p>Anyone can launch their token here. DYOR before buying.</p>
     </div>
-    <div class="header-actions" class:mobile-config-open={isMobileSortOpen}>
-      <div
-        class="sort-settings"
-        role="group"
-        aria-label="Launch sorting settings"
-      >
-        <div class="sort-by-control">
-          <span class="sort-by-label">Sort by</span>
-          <button
-            type="button"
-            class="sort-cycle-btn"
-            onclick={onCycleSortBy}
-            aria-label={`Sort by ${sortByLabel}. Activate to cycle sort mode.`}
-          >
-            {sortByLabel}
-          </button>
-        </div>
-        <label
-          class="filter-toggle"
-          class:disabled={!walletConnected}
-          for="launch-owned-first-toggle"
-        >
-          <input
-            id="launch-owned-first-toggle"
-            type="checkbox"
-            checked={ownedFirst}
-            disabled={!walletConnected}
-            onchange={(event) =>
-              onOwnedFirstChange(
-                (event.currentTarget as HTMLInputElement).checked,
-              )}
-          />
-          <span>Owned First</span>
-        </label>
-      </div>
-      {#if walletConnected}
-        <button
-          type="button"
-          class="create-token-btn"
-          onclick={onCreateTokenClick}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-          <span>Create Token</span>
-        </button>
-      {:else}
-        <button
-          type="button"
-          class="create-token-btn"
-          onclick={onConnectWalletClick}
-          disabled={isConnectingWallet}
-        >
-          <span>{isConnectingWallet ? "Connecting..." : "Connect Wallet"}</span>
-        </button>
-      {/if}
-
-      <div class="mobile-sort-controls">
-        <div class="mobile-sort-row">
-          <button
-            type="button"
-            class="mobile-sort-toggle"
-            aria-expanded={isMobileSortOpen}
-            onclick={onToggleMobileSort}
-          >
-            <span>Sort By</span>
-            <span class="mobile-sort-chevron" class:open={isMobileSortOpen}>
-              <ChevronDown size={16} />
-            </span>
-          </button>
-          {#if walletConnected}
-            <button
-              type="button"
-              class="mobile-create-token-btn"
-              onclick={onCreateTokenClick}
-              aria-label="Create Token"
-              title="Create Token"
-            >
-              <Plus size={16} />
-            </button>
-          {:else}
-            <button
-              type="button"
-              class="mobile-create-token-btn"
-              onclick={onConnectWalletClick}
-              disabled={isConnectingWallet}
-              aria-label="Connect Wallet"
-              title={isConnectingWallet ? "Connecting..." : "Connect Wallet"}
-            >
-              <Plus size={16} />
-            </button>
-          {/if}
-        </div>
-      </div>
-    </div>
+    <ListPageToolbar
+      sortByLabel={sortByLabel}
+      sortGroupAriaLabel="Launch sorting settings"
+      onCycleSortBy={onCycleSortBy}
+      onPrimaryActionClick={onCreateTokenClick}
+      primaryActionLabel="Create Token"
+      search={{
+        value: searchQuery,
+        onValueChange: onSearchQueryChange,
+        placeholder: "Search tokens",
+        ariaLabel: "Search launched tokens by ticker",
+      }}
+      filterToggles={sortFilterToggles}
+    />
   </div>
 
   <div class="token-list">
@@ -314,164 +231,6 @@
     margin: 0.4rem 0 0;
     color: var(--text-secondary);
     font-size: 0.9rem;
-  }
-
-  .header-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .sort-settings {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    padding: 0.45rem 0.65rem;
-  }
-
-  .sort-by-control {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
-  .sort-by-label {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
-  .sort-cycle-btn {
-    width: 7rem;
-    min-width: 7rem;
-    padding: 0.35rem 0.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.4rem;
-    background: var(--bg-card);
-    color: var(--text-primary);
-    font-size: 0.9rem;
-    font-weight: 500;
-    margin-left: 0.25rem;
-    cursor: pointer;
-    text-align: center;
-    transition:
-      background 0.2s ease,
-      border-color 0.2s ease,
-      filter 0.2s ease;
-  }
-
-  .sort-cycle-btn:hover {
-    border-color: var(--border-color);
-    filter: brightness(1.25);
-  }
-
-  .sort-cycle-btn:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 1px;
-  }
-
-  .filter-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
-  }
-
-  .filter-toggle.disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .filter-toggle input {
-    margin: 0;
-    accent-color: var(--accent-primary);
-  }
-
-  .create-token-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.52rem 1rem;
-    background: var(--accent-button-small);
-    border: none;
-    border-radius: 0.5rem;
-    color: var(--text-on-accent);
-    font-weight: 600;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .create-token-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-
-  .create-token-btn svg {
-    flex-shrink: 0;
-  }
-
-  .mobile-sort-controls {
-    display: none;
-    width: 100%;
-  }
-
-  .mobile-sort-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.45rem;
-    width: 100%;
-  }
-
-  .mobile-sort-toggle {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0.4rem;
-    padding: 0.45rem 0;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    color: var(--text-primary);
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .mobile-sort-chevron {
-    color: var(--text-secondary);
-    transition: transform 0.2s ease;
-  }
-
-  .mobile-sort-chevron.open {
-    transform: rotate(180deg);
-  }
-
-  .mobile-create-token-btn {
-    width: 2.25rem;
-    height: 2.25rem;
-    border: none;
-    border-radius: 0.5rem;
-    background: var(--accent-button-small);
-    color: var(--text-on-accent);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-  }
-
-  .mobile-create-token-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
   }
 
   .token-list {
@@ -750,47 +509,6 @@
     .page-header {
       align-items: flex-start;
     }
-
-    .header-actions {
-      width: 100%;
-      justify-content: flex-start;
-    }
-  }
-
-  @media (max-width: 460px) {
-    .sort-settings {
-      width: 100%;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.5rem;
-    }
-
-    .sort-by-control {
-      justify-content: space-between;
-    }
-
-    .sort-cycle-btn {
-      min-width: 0;
-      width: 7rem;
-    }
-  }
-
-  @media (max-width: 400px) {
-    .create-token-btn span {
-      display: none;
-    }
-  }
-
-  @media (max-width: 360px) {
-    .sort-by-control {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.25rem;
-    }
-
-    .sort-cycle-btn {
-      margin-left: 0;
-    }
   }
 
   @media (--mobile) {
@@ -889,55 +607,5 @@
       margin-top: 0.2rem;
     }
 
-    .header-actions {
-      width: 100%;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.35rem;
-    }
-
-    .sort-settings {
-      display: none;
-      order: 2;
-      width: 100%;
-      padding: 0;
-      gap: 0.55rem;
-      background: transparent;
-    }
-
-    .header-actions.mobile-config-open .sort-settings {
-      display: flex;
-      align-items: stretch;
-      flex-wrap: wrap;
-      width: 100%;
-      flex-direction: column;
-    }
-
-    .header-actions.mobile-config-open .sort-by-control {
-      width: 100%;
-      justify-content: space-between;
-    }
-
-    .header-actions.mobile-config-open .sort-cycle-btn {
-      width: 100%;
-      min-width: 0;
-      margin-left: 0;
-    }
-
-    .header-actions.mobile-config-open .filter-toggle {
-      width: auto;
-      justify-content: flex-start;
-      align-self: flex-start;
-    }
-
-    .create-token-btn {
-      display: none;
-    }
-
-    .mobile-sort-controls {
-      display: block;
-      order: 1;
-      width: 100%;
-    }
   }
 </style>
