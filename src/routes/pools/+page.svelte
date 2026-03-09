@@ -218,7 +218,7 @@
       return toSortableNumber(pool.volume7dUsd);
     }
     if (sortBy === "apy") {
-      return toSortableNumber(pool.apyPercent);
+      return toSortableNumber(pool.apyPercent + pool.farmApyPercent);
     }
     if (sortBy === "liquidity") {
       return toSortableNumber(liquidityUsd);
