@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
+  import { calculateFarmApyPercent } from "../../lib/farmUtils";
   import {
     DEX_BACKEND_API,
     formatAmount,
@@ -15,6 +16,7 @@
     type AssetWithBalance,
     type XykPool,
     normalizePool,
+    type XykFarm,
   } from "../../lib/types";
   import CreatePoolModal from "../../lib/CreatePoolModal.svelte";
   import Spinner from "../../lib/Spinner.svelte";
@@ -31,11 +33,13 @@
     locked: boolean;
     assets: [AssetWithBalance, AssetWithBalance];
     totalFeePercent: number;
+    farms: XykFarm[];
     tokens: [TokenInfo | null, TokenInfo | null];
     liquidityUsd: number;
     ownedLiquidityUsd?: number;
     volume7dUsd: number;
     apyPercent: number;
+    farmApyPercent: number;
   }
 
   type SortByMetric = "liquidity" | "volume" | "apy";
@@ -161,6 +165,11 @@
         tokenHubStore.selectToken(pool.assets[0].asset_id),
         tokenHubStore.selectToken(pool.assets[1].asset_id),
       ] as [TokenInfo | null, TokenInfo | null],
+      farmApyPercent: calculateFarmApyPercent(
+        pool.farms,
+        pool.liquidityUsd,
+        (assetId) => tokenHubStore.selectToken(assetId),
+      ),
     }));
   }
 
@@ -366,11 +375,17 @@
           locked: normalizedPool.locked,
           assets: normalizedPool.assets,
           totalFeePercent,
+          farms: pool.farms ?? [],
           tokens: [null, null],
           liquidityUsd: liquidityUsd,
           ownedLiquidityUsd: Number.isFinite(ownedUsd) ? ownedUsd : undefined,
           volume7dUsd: pool.volume_7d_usd,
           apyPercent: pool.apy * 100,
+          farmApyPercent: calculateFarmApyPercent(
+            pool.farms,
+            liquidityUsd,
+            (assetId) => tokenHubStore.selectToken(assetId),
+          ),
         });
       }
 
@@ -406,7 +421,12 @@
 
   async function loadAllPoolTokens(poolList: PoolDisplay[], requestId: number) {
     const uniqueAssetIds = Array.from(
-      new Set(poolList.flatMap((pool) => pool.assets.map((a) => a.asset_id))),
+      new Set(
+        poolList.flatMap((pool) => [
+          ...pool.assets.map((a) => a.asset_id),
+          ...(pool.farms?.map((farm) => farm.asset_id) ?? []),
+        ]),
+      ),
     );
 
     await tokenHubStore.refreshTokens();
@@ -559,8 +579,15 @@
               >
             </div>
             <div class="stat">
-              <span class="stat-label">7d Avg APY</span>
-              <span class="stat-value">{formatApy(pool.apyPercent)}</span>
+              <span class="stat-label">APY%</span>
+              <span class="stat-value-stack">
+                <span class="stat-value">{formatApy(pool.apyPercent)}</span>
+                {#if pool.farms.length > 0}
+                  <span class="farm-apy-value">
+                    + {formatApy(pool.farmApyPercent)} 🌱
+                  </span>
+                {/if}
+              </span>
             </div>
             <div class="stat">
               <span class="stat-label">7d Volume</span>
@@ -822,6 +849,20 @@
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-primary);
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  .stat-value-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.125rem;
+  }
+
+  .farm-apy-value {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--status-success-text);
     font-family: "JetBrains Mono", monospace;
   }
 

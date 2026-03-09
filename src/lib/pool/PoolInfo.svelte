@@ -23,6 +23,7 @@
     liquidityUsd: number;
     volume7dUsd: number;
     apyPercent: number;
+    farmApyPercent: number | null;
     token0: Token | null;
     token1: Token | null;
     poolId: number | null;
@@ -37,6 +38,7 @@
     liquidityUsd,
     volume7dUsd,
     apyPercent,
+    farmApyPercent,
     token0,
     token1,
     poolId,
@@ -203,8 +205,13 @@
       {/if}
     {/if}
     <div class="stat-row">
-      <span class="stat-label">APY</span>
-      <span class="stat-value">{formatApy(apyPercent)}</span>
+      <span class="stat-label">APY%</span>
+      <span class="apy-value-stack">
+        <span class="stat-value">{formatApy(apyPercent)}</span>
+        {#if farmApyPercent !== null}
+          <span class="farm-apy-value">+ {formatApy(farmApyPercent)} 🌱</span>
+        {/if}
+      </span>
     </div>
     <div class="stat-row">
       <span class="stat-label">7d Volume</span>
@@ -390,6 +397,20 @@
     font-weight: 600;
     font-family: "JetBrains Mono", monospace;
     text-align: right;
+  }
+
+  .apy-value-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.125rem;
+  }
+
+  .farm-apy-value {
+    color: var(--status-success-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: "JetBrains Mono", monospace;
   }
 
   .owner-id {

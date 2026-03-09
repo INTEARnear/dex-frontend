@@ -92,6 +92,22 @@ export interface XykPool {
   liquidity_usd: string;
   owned_liquidity_usd?: string;
   apy: number;
+  farms?: XykFarm[];
+}
+
+export interface XykFarm {
+  farm_id: number;
+  asset_id: string;
+  reward_per_block: string;
+}
+
+export interface XykFarmReward {
+  farm_id: number;
+  asset_id: string;
+  your_reward_per_block: string;
+  accrued_reward: string;
+  accrued_reward_calculated_at: string;
+  claimed: string;
 }
 
 export interface NormalizedPool {

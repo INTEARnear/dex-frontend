@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import PoolInfo from "../../lib/pool/PoolInfo.svelte";
   import LiquidityInfo from "../../lib/pool/LiquidityInfo.svelte";
+  import FarmRewardsSection from "../../lib/pool/FarmRewardsSection.svelte";
   import PositionsSection, {
     type ClosedPosition,
   } from "../../lib/pool/PositionsSection.svelte";
@@ -17,12 +18,16 @@
   } from "../../lib/pool/liquidityEvents";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import { walletStore } from "../../lib/walletStore";
-  import { normalizePool, type NormalizedPool, type XykPoolData } from "../../lib/types";
-  import { DEX_BACKEND_API } from "../../lib/utils";
+  import { calculateFarmApyPercent } from "../../lib/farmUtils";
   import {
-    assetIdToTokenId,
-    parsePoolId,
-  } from "../../lib/pool/shared";
+    normalizePool,
+    type NormalizedPool,
+    type XykFarm,
+    type XykFarmReward,
+    type XykPoolData,
+  } from "../../lib/types";
+  import { DEX_BACKEND_API } from "../../lib/utils";
+  import { assetIdToTokenId, parsePoolId } from "../../lib/pool/shared";
   import Spinner from "../../lib/Spinner.svelte";
 
   interface UntrackedPosition {
@@ -47,8 +52,10 @@
     liquidity_usd: string;
     volume_7d_usd: number;
     apy: number;
+    farms?: XykFarm[];
     open?: OpenPosition[];
     closed?: ClosedPosition[];
+    farm_rewards?: XykFarmReward[];
     untracked?: UntrackedPosition;
     pool_needs_upgrade: boolean;
   }
@@ -63,6 +70,8 @@
   let liquidityUsd = $state(0);
   let volume7dUsd = $state(0);
   let apyPercent = $state(0);
+  let farms = $state<XykFarm[]>([]);
+  let farmRewards = $state<XykFarmReward[]>([]);
   let userSharesRaw = $state<string | null>(null);
   let openPositions = $state<OpenPosition[]>([]);
   let closedPositions = $state<ClosedPosition[]>([]);
@@ -120,9 +129,19 @@
 
       const asset0Id = normalized.assets[0].asset_id;
       const asset1Id = normalized.assets[1].asset_id;
+      const farmAssetIds = new Set<string>();
+      for (const farm of data.farms ?? []) {
+        farmAssetIds.add(farm.asset_id);
+      }
+      for (const reward of data.farm_rewards ?? []) {
+        farmAssetIds.add(reward.asset_id);
+      }
       await Promise.all([
         tokenHubStore.ensureTokenByAssetId(asset0Id),
         tokenHubStore.ensureTokenByAssetId(asset1Id),
+        ...Array.from(farmAssetIds).map((assetId) =>
+          tokenHubStore.ensureTokenByAssetId(assetId),
+        ),
       ]);
 
       if (requestId !== activePoolRequestId) return;
@@ -134,6 +153,8 @@
       liquidityUsd = parseFloat(data.liquidity_usd);
       volume7dUsd = data.volume_7d_usd;
       apyPercent = data.apy * 100;
+      farms = data.farms ?? [];
+      farmRewards = data.farm_rewards ?? [];
       const openSum = (data.open ?? []).reduce(
         (acc, p) => acc + BigInt(p.shares),
         0n,
@@ -156,6 +177,8 @@
         liquidityUsd = 0;
         volume7dUsd = 0;
         apyPercent = 0;
+        farms = [];
+        farmRewards = [];
         userSharesRaw = null;
         openPositions = [];
         closedPositions = [];
@@ -255,6 +278,8 @@
       liquidityUsd = 0;
       volume7dUsd = 0;
       apyPercent = 0;
+      farms = [];
+      farmRewards = [];
       userSharesRaw = null;
       openPositions = [];
       closedPositions = [];
@@ -303,6 +328,11 @@
           {liquidityUsd}
           {volume7dUsd}
           {apyPercent}
+          farmApyPercent={farms.length > 0
+            ? calculateFarmApyPercent(farms, liquidityUsd, (assetId) =>
+                tokenHubStore.selectToken(assetId),
+              )
+            : null}
           {token0}
           {token1}
           poolId={parsedPoolId}
@@ -312,10 +342,15 @@
             showEditFeesModal = true;
           }}
           onLocked={() => {
-            fetchPoolData(parsedPoolId, $walletStore.accountId, isCreateRedirect);
+            fetchPoolData(
+              parsedPoolId,
+              $walletStore.accountId,
+              isCreateRedirect,
+            );
           }}
         />
         <LiquidityInfo {poolData} {token0} {token1} {userSharesRaw} />
+        <FarmRewardsSection rewards={farmRewards} />
         <PositionsSection
           {poolData}
           {token0}
