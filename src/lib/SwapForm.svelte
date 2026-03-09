@@ -858,6 +858,14 @@
 
   const priceImpactSevere = $derived(priceImpact !== null && priceImpact > 5);
 
+  const XAUT_ACCOUNT_ID =
+    "68749665ff8d2d112fa859aa293f07a622782f38.factory.bridge.near";
+  const showBridgeSuggestion = $derived(
+    showPriceImpactWarning &&
+      (inputToken?.account_id === XAUT_ACCOUNT_ID ||
+        outputToken?.account_id === XAUT_ACCOUNT_ID),
+  );
+
   // Calculate net amounts per token (e.g. exact-out refunds leftover attached input)
   function consolidateTransfers(
     transfers: SwapResultModalInfoTransfer[],
@@ -1858,27 +1866,21 @@
       role="alert"
       aria-live="polite"
     >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path
-          d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-        />
-        <line x1="12" y1="9" x2="12" y2="13" />
-        <line x1="12" y1="17" x2="12.01" y2="17" />
-      </svg>
       <span
         >Price impact is high: you will receive <strong
           >{priceImpact?.toFixed(2)}%</strong
         > less than you pay. This can happen if you swap large amounts of tokens, or if the token has a high trading fee.</span
       >
+      {#if showBridgeSuggestion}
+        <span class="bridge-suggestion">
+          Consider <a
+            href="https://app.shitzuapes.xyz/bridge"
+            target="_blank"
+            rel="noopener noreferrer"
+          >bridging XAUt to Ethereum instead</a
+          > for better rates on Ethereum DEXes.
+        </span>
+      {/if}
     </div>
   {/if}
 
@@ -2855,6 +2857,7 @@
 
   .price-impact-warning {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
@@ -2864,11 +2867,6 @@
     color: var(--status-warning-text);
     font-size: 0.8125rem;
     font-weight: 500;
-  }
-
-  .price-impact-warning svg {
-    flex-shrink: 0;
-    color: var(--status-warning-text);
   }
 
   .price-impact-warning strong {
@@ -2882,8 +2880,20 @@
     color: var(--status-error-text);
   }
 
-  .price-impact-warning.severe svg {
-    color: var(--status-error-text);
+  .price-impact-warning .bridge-suggestion {
+    flex-basis: 100%;
+    margin-top: 0.25rem;
+  }
+
+  .price-impact-warning .bridge-suggestion a {
+    color: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .price-impact-warning .bridge-suggestion a:hover {
+    opacity: 0.9;
   }
 
   .dex-badge {
