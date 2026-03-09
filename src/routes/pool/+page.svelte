@@ -350,7 +350,9 @@
           }}
         />
         <LiquidityInfo {poolData} {token0} {token1} {userSharesRaw} />
-        <FarmRewardsSection rewards={farmRewards} />
+        {#if farmRewards.length > 0}
+          <FarmRewardsSection rewards={farmRewards} />
+        {/if}
         <PositionsSection
           {poolData}
           {token0}
