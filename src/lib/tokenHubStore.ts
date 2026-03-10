@@ -80,9 +80,7 @@ function computeBalanceUsd(
   const price = parseFloat(token.price_usd || "0");
   const decimals = token.metadata.decimals;
   const amount = Number(balanceRaw) / Math.pow(10, decimals);
-  const usd = amount * (Number.isFinite(price) ? price : 0);
-  if (!Number.isFinite(usd) || usd < 0) return undefined;
-  return usd;
+  return amount * price;
 }
 
 function scoreToken(token: TokenInfo): number {
@@ -409,7 +407,7 @@ function createTokenHubStore() {
     setStatus("prices", true);
     setError("prices", null);
     try {
-      const response = await fetch(`${PRICES_API}/prices`);
+      const response = await fetch(`${PRICES_API}/super-precise`);
       if (!response.ok) {
         throw new Error(`Failed to fetch prices: HTTP ${response.status}`);
       }

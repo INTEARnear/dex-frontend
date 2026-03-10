@@ -161,16 +161,6 @@
     const circulatingSupply = circulatingRaw / decimalsFactor;
     const price = Number(token.price_usd);
     const marketCap = circulatingSupply * price;
-
-    if (
-      !Number.isFinite(circulatingSupply) ||
-      !Number.isFinite(price) ||
-      !Number.isFinite(marketCap) ||
-      marketCap < 0
-    ) {
-      return null;
-    }
-
     return marketCap;
   }
 

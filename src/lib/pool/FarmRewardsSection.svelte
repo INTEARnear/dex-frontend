@@ -100,7 +100,7 @@
       const differenceUsd = amountDifference * priceUsd;
 
       const shouldReplaceAccrued =
-        priceUsd <= 0 || differenceUsd > REWARD_SYNC_THRESHOLD_USD;
+        priceUsd === 0 || differenceUsd > REWARD_SYNC_THRESHOLD_USD;
 
       nextStates.push({
         farmId: reward.farm_id,

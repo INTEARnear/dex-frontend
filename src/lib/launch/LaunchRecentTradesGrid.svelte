@@ -92,7 +92,7 @@
   $effect(() => {
     if (!shouldCapDefaultColumns) return;
     const gridWidthPx = gridRef?.getBoundingClientRect().width;
-    if (!gridWidthPx || !Number.isFinite(gridWidthPx) || gridWidthPx <= 0)
+    if (!gridWidthPx)
       return;
 
     shouldCapDefaultColumns = false;
@@ -388,7 +388,6 @@
           typeof payload.price_usd === "number"
             ? payload.price_usd
             : Number(payload.price_usd);
-        if (!Number.isFinite(rawPrice) || rawPrice < 0) return null;
         return rawPrice;
       } catch {
         return null;
@@ -435,17 +434,12 @@
 
     const counterAmountHuman =
       absoluteCounterAmount / Math.pow(10, counterTokenDecimals);
-    if (!Number.isFinite(counterAmountHuman)) return null;
 
     const humanReadablePriceUsd =
       (rawPriceUsd * Math.pow(10, counterTokenDecimals)) /
       Math.pow(10, usdtDecimals);
-    if (!Number.isFinite(humanReadablePriceUsd) || humanReadablePriceUsd < 0) {
-      return null;
-    }
 
     const usdValue = counterAmountHuman * humanReadablePriceUsd;
-    if (!Number.isFinite(usdValue) || usdValue < 0) return null;
     return usdValue;
   }
 
@@ -555,7 +549,7 @@
   ): LaunchTradesColumnWidths {
     const total =
       widths.time + widths.type + widths.amount + widths.trader + widths.txn;
-    if (!Number.isFinite(total) || total <= 0) return settings.columnWidths;
+    if (total === 0) return settings.columnWidths;
     return {
       time: (widths.time / total) * 100,
       type: (widths.type / total) * 100,
@@ -671,7 +665,7 @@
     if (!leftKey || !rightKey) return;
 
     const gridWidthPx = gridRef.getBoundingClientRect().width;
-    if (!Number.isFinite(gridWidthPx) || gridWidthPx <= 0) return;
+    if (gridWidthPx === 0) return;
 
     const startX = event.clientX;
     const startWidths = { ...settings.columnWidths };

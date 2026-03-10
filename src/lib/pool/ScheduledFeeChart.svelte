@@ -91,10 +91,6 @@
     rawPoints: ScheduledFeeChartPoint[],
   ): ScheduledFeeChartPoint[] {
     const sorted = rawPoints
-      .filter(
-        (point) =>
-          Number.isFinite(point.timestampNanos) && Number.isFinite(point.feePercent),
-      )
       .map((point) => ({
         timestampNanos: point.timestampNanos,
         feePercent: point.feePercent,

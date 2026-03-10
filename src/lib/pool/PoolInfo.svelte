@@ -205,7 +205,7 @@
       {/if}
     {/if}
     <div class="stat-row">
-      <span class="stat-label">APY%</span>
+      <span class="stat-label">7d Avg APY</span>
       <span class="apy-value-stack">
         <span class="stat-value">{formatApy(apyPercent)}</span>
         {#if farmApyPercent !== null}

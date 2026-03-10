@@ -105,14 +105,7 @@
     const entryRatio = amount0OpenNum / amount1OpenNum;
     const exitRatio = amount0ClosedNum / amount1ClosedNum;
 
-    if (
-      !Number.isFinite(entryRatio) ||
-      !Number.isFinite(exitRatio) ||
-      entryRatio <= 0 ||
-      exitRatio <= 0 ||
-      !Number.isFinite(price0NowUsd) ||
-      !Number.isFinite(price1NowUsd)
-    ) {
+    if (entryRatio <= 0 || exitRatio <= 0) {
       return {
         openUsd,
         valueIfHeldNowUsd,
@@ -435,6 +428,14 @@
           amount0ClosedNum: amount0Num,
           amount1ClosedNum: amount1Num,
         });
+        const impermanentLossUsd =
+          Math.max(breakdown.impermanentLossUsd, -1e-6) > -1e-6
+            ? 0
+            : breakdown.impermanentLossUsd;
+        const feesRevenueUsd =
+          Math.min(breakdown.feesRevenueUsd, 1e-6) < 1e-6
+            ? 0
+            : breakdown.feesRevenueUsd;
         const pnl = breakdown.totalPnlUsd;
 
         const openedAt = new Date(pos.opened_at);
@@ -458,8 +459,8 @@
             amount1OpenNum,
             openUsd: breakdown.openUsd,
             valueIfHeld: breakdown.valueIfHeldNowUsd,
-            impermanentLossUsd: breakdown.impermanentLossUsd,
-            feesRevenueUsd: breakdown.feesRevenueUsd,
+            impermanentLossUsd,
+            feesRevenueUsd,
             feesApyPercent,
             priceGainUsd: breakdown.priceGainUsd,
             pnl,
@@ -509,6 +510,14 @@
           price0NowUsd: pos.closed_asset0_price_usd,
           price1NowUsd: pos.closed_asset1_price_usd,
         });
+        const impermanentLossUsd =
+          Math.max(breakdown.impermanentLossUsd, -1e-6) > -1e-6
+            ? 0
+            : breakdown.impermanentLossUsd;
+        const feesRevenueUsd =
+          Math.min(breakdown.feesRevenueUsd, 1e-6) < 1e-6
+            ? 0
+            : breakdown.feesRevenueUsd;
 
         const durationMs = closedAt.getTime() - openedAt.getTime();
         const durationYears = durationMs / (1000 * 60 * 60 * 24 * 365.25);
@@ -529,8 +538,8 @@
           openUsd: breakdown.openUsd,
           closedUsd,
           valueIfHeldClosed: breakdown.valueIfHeldNowUsd,
-          impermanentLossUsd: breakdown.impermanentLossUsd,
-          feesRevenueUsd: breakdown.feesRevenueUsd,
+          impermanentLossUsd,
+          feesRevenueUsd,
           feesApyPercent,
           priceGainUsd: breakdown.priceGainUsd,
         };
@@ -849,7 +858,7 @@
                             : pos.feesRevenueUsd < 0
                               ? "-"
                               : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
-                          {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
+                          {#if pos.feesApyPercent !== null}
                             <span class="apy-badge">
                               ({formatApy(pos.feesApyPercent)} APY)
                             </span>
@@ -880,7 +889,7 @@
                               Math.abs(pos.feesRevenueUsd),
                             )}
                           </span>
-                          {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
+                          {#if pos.feesApyPercent !== null}
                             , which annualizes to
                             <span class="detail-tooltip-inline-value">
                               {formatApy(pos.feesApyPercent)} APY
@@ -1352,7 +1361,7 @@
                             : pos.feesRevenueUsd < 0
                               ? "-"
                               : ""}${formatAmount(Math.abs(pos.feesRevenueUsd))}
-                          {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
+                          {#if pos.feesApyPercent !== null}
                             <span class="apy-badge">
                               ({formatApy(pos.feesApyPercent)} APY)
                             </span>
@@ -1383,7 +1392,7 @@
                               Math.abs(pos.feesRevenueUsd),
                             )}
                           </span>
-                          {#if pos.feesApyPercent !== null && Number.isFinite(pos.feesApyPercent)}
+                          {#if pos.feesApyPercent !== null}
                             , which annualized to
                             <span class="detail-tooltip-inline-value">
                               {formatApy(pos.feesApyPercent)} APY
@@ -1666,7 +1675,11 @@
 
   .close-position-btn:hover:not(:disabled) {
     background: color-mix(in oklab, var(--status-error-soft-bg), black 10%);
-    border-color: color-mix(in oklab, var(--status-error-soft-border), black 10%);
+    border-color: color-mix(
+      in oklab,
+      var(--status-error-soft-border),
+      black 10%
+    );
   }
 
   .close-position-btn:disabled {

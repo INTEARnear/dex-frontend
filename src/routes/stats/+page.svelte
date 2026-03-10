@@ -111,8 +111,7 @@
 
   function handlePoolSelect(poolIdRaw: string) {
     if (!/^\d+$/.test(poolIdRaw)) return;
-    const poolId = Number.parseInt(poolIdRaw, 10);
-    if (!Number.isFinite(poolId) || poolId < 0) return;
+    const poolId = parseInt(poolIdRaw, 10);
     if (routeState.selection.kind === "pool" && routeState.selection.poolId === poolId) {
       setRouteState(withPoolSelection(routeState, null));
       return;

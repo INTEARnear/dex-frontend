@@ -86,7 +86,7 @@
       amount1Open * positionData.data.asset1_open_price_usd;
 
     const pnl = currentValue - openValue;
-    return Number.isFinite(pnl) ? pnl : null;
+    return pnl;
   });
 </script>
 

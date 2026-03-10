@@ -31,11 +31,7 @@ function isValidSlippageMode(value: unknown): value is SlippageMode {
 function isValidPreset(value: unknown): value is AmountPreset {
   if (!value || typeof value !== "object") return false;
   const preset = value as { type?: unknown; value?: unknown };
-  return (
-    (preset.type === "percent" || preset.type === "dollar") &&
-    typeof preset.value === "number" &&
-    Number.isFinite(preset.value)
-  );
+  return preset.type === "percent" || preset.type === "dollar";
 }
 
 export function loadSwapSettingsConfig(): {
@@ -48,8 +44,7 @@ export function loadSwapSettingsConfig(): {
       const parsed = JSON.parse(saved) as { mode?: unknown; value?: unknown };
       if (
         isValidSlippageMode(parsed.mode) &&
-        typeof parsed.value === "number" &&
-        Number.isFinite(parsed.value)
+        typeof parsed.value === "number"
       ) {
         return { mode: parsed.mode, value: parsed.value };
       }

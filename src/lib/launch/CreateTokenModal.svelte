@@ -143,7 +143,7 @@
     if (!input) return 0n;
     if (input.startsWith("-")) return null;
     if (!/^\d*\.?\d*$/.test(input) || input === ".") return null;
-    const parsed = Number.parseFloat(input);
+    const parsed = parseFloat(input);
     if (!Number.isFinite(parsed) || parsed < 0) return null;
     return BigInt(humanReadableToRawAmount(input, NEAR_DECIMALS));
   }
@@ -160,7 +160,9 @@
   const firstBuyYocto = $derived.by(() => parseOptionalNearToYocto(firstBuy));
   const isFirstBuyValid = $derived(firstBuyYocto !== null);
 
-  const totalSupplyUnits = $derived.by(() => parseTotalSupplyUnits(totalSupplyInput));
+  const totalSupplyUnits = $derived.by(() =>
+    parseTotalSupplyUnits(totalSupplyInput),
+  );
   const isTotalSupplyValid = $derived.by(
     () =>
       totalSupplyUnits !== null &&
@@ -180,11 +182,28 @@
   const storageCostYocto = $derived(BigInt(bytesNeeded) * COST_PER_BYTE_YOCTO);
   const shortCaCostYocto = $derived(shortId ? ONE_NEAR_YOCTO : 0n);
   const creationCostYocto = $derived(storageCostYocto + shortCaCostYocto);
+  const symbolForCa = $derived.by(() => symbol.toLowerCase());
+  const shortCa = $derived.by(() =>
+    symbolForCa.length > 0 ? `${symbolForCa}.${LAUNCH_CONTRACT_ID}` : "",
+  );
+  const longCa = $derived.by(() => {
+    if (symbolForCa.length === 0) return "";
+    let suffix = 1;
+    let potentialTokenId = `${symbolForCa}-${suffix}.${LAUNCH_CONTRACT_ID}`;
+    while ($tokenHubStore.tokensById[potentialTokenId]) {
+      suffix += 1;
+      potentialTokenId = `${symbolForCa}-${suffix}.${LAUNCH_CONTRACT_ID}`;
+    }
+    return potentialTokenId;
+  });
+  const caPreviewTokenId = $derived(shortId ? shortCa : longCa);
   const totalDepositYocto = $derived.by(() => {
     const firstBuyPart = firstBuyYocto ?? 0n;
     return creationCostYocto + firstBuyPart;
   });
-  const requiredNearWithGasYocto = $derived(totalDepositYocto + GAS_RESERVE_NEAR);
+  const requiredNearWithGasYocto = $derived(
+    totalDepositYocto + GAS_RESERVE_NEAR,
+  );
   const nearBalanceYocto = $derived.by(() => {
     const raw = $tokenHubStore.tokensById["near"]?.balance;
     if (!raw) return 0n;
@@ -199,8 +218,8 @@
   );
 
   const shortCaTokenExists = $derived.by(() => {
-    const id = `${symbol.toLowerCase()}.launch.intear.near`;
-    return tokenHubStore.selectToken(id) !== null;
+    if (!shortCa) return false;
+    return tokenHubStore.selectToken(shortCa) !== null;
   });
 
   const validationErrors = $derived.by(() => {
@@ -213,27 +232,36 @@
         "Total supply must be an integer between 1,000 and 1,000,000,000,000,000,000",
       );
     }
-    if (!isDescriptionValid) errors.push("Description must be 200 characters or fewer");
+    if (!isDescriptionValid)
+      errors.push("Description must be 200 characters or fewer");
     if (!isTelegramValid) {
-      errors.push("Telegram must start with https://t.me/ and be a valid link to a chat");
+      errors.push(
+        "Telegram must start with https://t.me/ and be a valid link to a chat",
+      );
     }
     if (!isXValid) {
-      errors.push("X must start with https://x.com/ and be a valid link to a profile");
+      errors.push(
+        "X must start with https://x.com/ and be a valid link to a profile",
+      );
     }
     if (!isWebsiteValid) errors.push("Website must start with https://");
     if (!isFirstBuyValid) errors.push("First buy must be a number");
     if (hasInsufficientNearBalance) {
-      errors.push("Insufficient NEAR balance for total + 0.03 NEAR gas reserve");
+      errors.push(
+        "Insufficient NEAR balance for total + 0.03 NEAR gas reserve",
+      );
     }
     if (!isFeeValid) errors.push("Total fee must be less than 50%");
-    if (hasDuplicateReceivers) errors.push("Duplicate fee receivers are not allowed");
+    if (hasDuplicateReceivers)
+      errors.push("Duplicate fee receivers are not allowed");
     if (!areAllReceiversValid) errors.push("Invalid fee receiver");
-    if (hasScheduledDurationError) errors.push("Scheduled fee duration must be set");
+    if (hasScheduledDurationError)
+      errors.push("Scheduled fee duration must be set");
     if (hasScheduledFeeDirectionError) {
       errors.push("Scheduled fee end must be lower than start");
     }
     if (shortId && shortCaTokenExists) {
-      errors.push(`Token ${symbol.toLowerCase()}.launch.intear.near already exists`);
+      errors.push(`Token ${shortCa} already exists`);
     }
     return errors;
   });
@@ -305,7 +333,9 @@
     } catch (error) {
       iconDataUrl = null;
       iconError =
-        error instanceof Error ? error.message : "Failed to process selected icon";
+        error instanceof Error
+          ? error.message
+          : "Failed to process selected icon";
     } finally {
       input.value = "";
     }
@@ -381,13 +411,17 @@
     }
   }
 
-  function extractLaunchedTokenId(outcomes: FinalExecutionOutcome[]): string | null {
+  function extractLaunchedTokenId(
+    outcomes: FinalExecutionOutcome[],
+  ): string | null {
     const firstOutcome = outcomes[0];
     const receipts = firstOutcome.receipts_outcome;
     const firstReceipt = receipts[0];
     const status = firstReceipt.outcome.status;
     const successValue = getSuccessValue(status);
-    return successValue !== null ? parseTokenIdFromSuccessValue(successValue) : null;
+    return successValue !== null
+      ? parseTokenIdFromSuccessValue(successValue)
+      : null;
   }
 
   function normalizeOptional(value: string): string | null {
@@ -418,7 +452,11 @@
       showErrorModal = true;
       return;
     }
-    if (firstBuyYocto === null || totalSupplyRaw === null || iconDataUrl === null) {
+    if (
+      firstBuyYocto === null ||
+      totalSupplyRaw === null ||
+      iconDataUrl === null
+    ) {
       submitError = "Invalid launch payload";
       return;
     }
@@ -475,7 +513,8 @@
       onSuccess(tokenId);
       onClose();
     } catch (error) {
-      txError = error instanceof Error ? error.message : "Failed to launch token";
+      txError =
+        error instanceof Error ? error.message : "Failed to launch token";
       showErrorModal = true;
     } finally {
       isSubmitting = false;
@@ -555,7 +594,12 @@
     >
       <div class="modal-header">
         <h2 id="create-token-title">Create Token</h2>
-        <button class="close-btn" onclick={onClose} aria-label="Close" disabled={isSubmitting}>
+        <button
+          class="close-btn"
+          onclick={onClose}
+          aria-label="Close"
+          disabled={isSubmitting}
+        >
           <X size={20} />
         </button>
       </div>
@@ -590,17 +634,27 @@
           </div>
           <div class="icon-row">
             {#if iconDataUrl}
-              <img src={iconDataUrl} alt="Token icon preview" class="icon-preview" />
+              <img
+                src={iconDataUrl}
+                alt="Token icon preview"
+                class="icon-preview"
+              />
             {:else}
               <div class="icon-placeholder">Icon</div>
             {/if}
             <label class="icon-upload-btn">
               <Upload size={14} />
               <span>Upload image</span>
-              <input type="file" accept="image/*" onchange={handleIconFileChange} />
+              <input
+                type="file"
+                accept="image/*"
+                onchange={handleIconFileChange}
+              />
             </label>
             {#if iconDataUrl}
-              <button type="button" class="icon-remove-btn" onclick={clearIcon}>Remove</button>
+              <button type="button" class="icon-remove-btn" onclick={clearIcon}
+                >Remove</button
+              >
             {/if}
           </div>
           {#if iconError}
@@ -611,8 +665,14 @@
         <div class="section">
           <label class="switch-row">
             <input type="checkbox" bind:checked={shortId} />
-            <span>Short CA without numbers</span>
+            <span>Short CA</span>
           </label>
+          {#if caPreviewTokenId}
+            <p class="ca-preview">
+              <span class="field-label">Preview</span>
+              <code>{caPreviewTokenId}</code>
+            </p>
+          {/if}
         </div>
 
         <div class="section">
@@ -661,7 +721,11 @@
           </div>
           <div class="cost-row">
             <span>First buy</span>
-            <strong>{firstBuyYocto !== null ? formatOptionalNearCost(firstBuyYocto) : "Invalid Number"}</strong>
+            <strong
+              >{firstBuyYocto !== null
+                ? formatOptionalNearCost(firstBuyYocto)
+                : "Invalid Number"}</strong
+            >
           </div>
           <div class="cost-row total">
             <span>Total</span>
@@ -688,7 +752,9 @@
       {/if}
 
       <div class="modal-footer">
-        <button class="cancel-btn" onclick={onClose} disabled={isSubmitting}>Cancel</button>
+        <button class="cancel-btn" onclick={onClose} disabled={isSubmitting}
+          >Cancel</button
+        >
         <button
           class="launch-btn"
           onclick={handleLaunch}
@@ -911,6 +977,20 @@
   .switch-row input {
     margin: 0;
     accent-color: var(--accent-primary);
+  }
+
+  .ca-preview {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .ca-preview code {
+    color: var(--text-primary);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.78rem;
+    word-break: break-all;
   }
 
   .cost-box {

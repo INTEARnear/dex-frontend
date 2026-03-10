@@ -38,12 +38,6 @@ export function calculatePoolFeesApyPercent(
   poolFeeFractionDecimal: number,
   liquidityUsd: number,
 ): number {
-  if (!Number.isFinite(volume24hUsd) || volume24hUsd <= 0) return 0;
-  if (!Number.isFinite(poolFeeFractionDecimal) || poolFeeFractionDecimal <= 0) {
-    return 0;
-  }
-  if (!Number.isFinite(liquidityUsd) || liquidityUsd <= 0) return 0;
-
   const annualizedFeesUsd =
     volume24hUsd * poolFeeFractionDecimal * DAYS_PER_YEAR;
   return (annualizedFeesUsd / liquidityUsd) * 100;
@@ -63,7 +57,7 @@ export function parsePoolId(raw: string | null): number | null {
   if (!raw) return null;
   const normalized = raw.startsWith("PLACH-") ? raw.slice(6) : raw;
   if (!/^\d+$/.test(normalized)) return null;
-  const parsed = Number.parseInt(normalized, 10);
+  const parsed = parseInt(normalized, 10);
   if (!Number.isFinite(parsed) || parsed < 0) return null;
   return parsed;
 }

@@ -272,15 +272,13 @@
     const decimals = token.metadata.decimals;
     const amount = Number(rawBalance) / Math.pow(10, decimals);
     const price = parseFloat(getTokenPrice(token));
-    const usdValue = amount * (Number.isFinite(price) ? price : 0);
+    const usdValue = amount * price;
 
-    if (!Number.isFinite(usdValue) || usdValue <= 0) return "$0.00";
+    if (usdValue === 0) return "$0.00";
     return `$${formatAmount(usdValue)}`;
   }
 
   function formatUsdCompact(value: number): string {
-    if (!Number.isFinite(value)) return "N/A";
-    if (value < 0) return "$0.00";
     if (value < 1000) return `$${formatCompact(value)}`;
     if (value < 1e6) return `$${formatCompact(value / 1e3)}K`;
     if (value < 1e9) return `$${formatCompact(value / 1e6)}M`;
@@ -290,13 +288,11 @@
 
   function getCirculatingSupply(token: TokenInfo): number {
     const supply = parseFloat(token.circulating_supply);
-    if (!Number.isFinite(supply)) return 0;
     return supply / Math.pow(10, token.metadata.decimals);
   }
 
   function getTotalSupply(token: TokenInfo): number {
     const supply = parseFloat(token.total_supply);
-    if (!Number.isFinite(supply)) return 0;
     return supply / Math.pow(10, token.metadata.decimals);
   }
 
@@ -314,11 +310,7 @@
   function formatPriceChange24h(token: TokenInfo): string {
     const current = parseFloat(token.price_usd_raw);
     const previous = parseFloat(token.price_usd_raw_24h_ago ?? "0");
-    if (
-      !Number.isFinite(current) ||
-      !Number.isFinite(previous) ||
-      previous <= 0
-    ) {
+    if (previous === 0) {
       return "N/A";
     }
     const diff = current - previous;
@@ -330,11 +322,7 @@
   function getPriceChange24hDirection(token: TokenInfo): "up" | "down" | "flat" {
     const current = parseFloat(token.price_usd_raw);
     const previous = parseFloat(token.price_usd_raw_24h_ago ?? "0");
-    if (
-      !Number.isFinite(current) ||
-      !Number.isFinite(previous) ||
-      previous <= 0
-    ) {
+    if (previous === 0) {
       return "flat";
     }
     if (current > previous) return "up";
@@ -344,7 +332,6 @@
 
   function getLiquiditySeverity(token: TokenInfo): "low" | "medium" | "normal" {
     const liquidity = token.liquidity_usd;
-    if (!Number.isFinite(liquidity)) return "normal";
     if (liquidity < 500) return "low";
     if (liquidity < 5000) return "medium";
     return "normal";
@@ -352,7 +339,6 @@
 
   function getVolumeSeverity(token: TokenInfo): "low" | "normal" {
     const volume = token.volume_usd_24h;
-    if (!Number.isFinite(volume)) return "normal";
     return volume < 500 ? "low" : "normal";
   }
 

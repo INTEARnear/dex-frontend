@@ -378,7 +378,7 @@
           farms: pool.farms ?? [],
           tokens: [null, null],
           liquidityUsd: liquidityUsd,
-          ownedLiquidityUsd: Number.isFinite(ownedUsd) ? ownedUsd : undefined,
+          ownedLiquidityUsd: ownedUsd,
           volume7dUsd: pool.volume_7d_usd,
           apyPercent: pool.apy * 100,
           farmApyPercent: calculateFarmApyPercent(
@@ -579,7 +579,7 @@
               >
             </div>
             <div class="stat">
-              <span class="stat-label">APY%</span>
+              <span class="stat-label">7d Avg APY</span>
               <span class="stat-value-stack">
                 <span class="stat-value">{formatApy(pool.apyPercent)}</span>
                 {#if pool.farms.length > 0}
@@ -602,6 +602,8 @@
               <span class="your-liquidity-value">
                 {"$" + formatAmount(pool.ownedLiquidityUsd)}
               </span>
+            {:else}
+              <span class="your-liquidity-value no-liquidity">$0</span>
             {/if}
           </div>
         </a>
@@ -877,6 +879,12 @@
     border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 600;
+  }
+
+  .your-liquidity-value.no-liquidity {
+    color: transparent;
+    user-select: none;
+    background: transparent;
   }
 
   .pool-footer {

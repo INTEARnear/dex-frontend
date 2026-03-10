@@ -63,7 +63,7 @@
   let {
     points,
     metricLabel = "USD",
-    emptyMessage = "No chart data available",
+    emptyMessage = "No data available",
     summaryMode = "latest",
     timeframe,
   }: Props = $props();
@@ -91,7 +91,6 @@
 
   function formatPointTimestamp(timestamp: string): string {
     const date = new Date(timestamp);
-    if (!Number.isFinite(date.getTime())) return timestamp;
     if (isDailyCandles) {
       return date.toLocaleString(undefined, {
         month: "short",
@@ -112,7 +111,6 @@
 
   function formatExactTimestamp(timestamp: string): string {
     const date = new Date(timestamp);
-    if (!Number.isFinite(date.getTime())) return timestamp;
     if (isDailyCandles) {
       return date.toLocaleString(undefined, {
         year: "numeric",
@@ -187,9 +185,7 @@
 
     return points.map((point, index) => {
       const scaledHeight = (point.valueUsd / maxValue) * innerHeight;
-      const boundedHeight = Number.isFinite(scaledHeight)
-        ? Math.max(0, scaledHeight)
-        : 0;
+      const boundedHeight = Math.max(0, scaledHeight);
       const x = PADDING_LEFT + index * (barWidth + BAR_GAP);
       const y = PADDING_TOP + (innerHeight - boundedHeight);
 

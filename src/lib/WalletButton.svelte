@@ -7,8 +7,10 @@
   import {
     assetIdToTokenId,
     assertOutcomesSucceeded,
+    checkAreAssetsRegistered,
     DEX_CONTRACT_ID,
     DEX_ID,
+    STORAGE_DEPOSIT_NEAR,
   } from "./pool/shared";
   import { DEX_BACKEND_API, formatAmount, formatUsdValue } from "./utils";
   import type { TokenInfo } from "./types";
@@ -174,6 +176,10 @@
         ];
         outcomes = await wallet.signAndSendTransactions({ transactions });
       } else {
+        const isAssetRegisteredForAccount = await checkAreAssetsRegistered(
+          { Account: accountId },
+          [row.assetId],
+        );
         const withdrawFeesArgs: ArgsXykGetPendingFees = {
           asset_ids: [toSchemaAssetId(row.assetId)],
         };
@@ -191,10 +197,34 @@
           },
         ];
 
+        const registrationActions = isAssetRegisteredForAccount
+          ? []
+          : [
+              {
+                type: "FunctionCall" as const,
+                params: {
+                  methodName: "storage_deposit",
+                  args: {},
+                  gas: "10" + "0".repeat(12),
+                  deposit: STORAGE_DEPOSIT_NEAR.toString(),
+                },
+              },
+              {
+                type: "FunctionCall" as const,
+                params: {
+                  methodName: "register_assets",
+                  args: { asset_ids: [row.assetId] },
+                  gas: "10" + "0".repeat(12),
+                  deposit: "1",
+                },
+              },
+            ];
+
         const transactions = [
           {
             receiverId: DEX_CONTRACT_ID,
             actions: [
+              ...registrationActions,
               {
                 type: "FunctionCall" as const,
                 params: {

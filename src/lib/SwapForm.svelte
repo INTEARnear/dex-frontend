@@ -717,7 +717,7 @@
   });
 
   function formatPenaltyPercent(percent: number): string {
-    if (!Number.isFinite(percent) || percent <= 0) return "0.00";
+    if (percent <= 0) return "0.00";
     const fixed = percent >= 10 ? percent.toFixed(1) : percent.toFixed(2);
     return fixed.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
   }
@@ -765,8 +765,6 @@
 
     const humanReadable = rawAmountToHumanReadable(rawAmount, decimals);
     const numeric = parseFloat(humanReadable);
-    if (!Number.isFinite(numeric)) return "\u2014";
-
     return `${formatAmount(numeric)} ${symbol}`;
   }
 
@@ -775,7 +773,7 @@
     if (!outputAmountHumanReadable) return "";
     if (swapMode === "exactOut") return outputAmountHumanReadable; // User-entered, show as-is
     const num = parseFloat(outputAmountHumanReadable);
-    if (isNaN(num) || num === 0) return "0";
+    if (isNaN(num)) return "0";
     return formatAmount(num);
   }
 
@@ -784,7 +782,7 @@
     if (!inputAmountHumanReadable) return "";
     if (swapMode === "exactIn") return inputAmountHumanReadable; // User-entered, show as-is
     const num = parseFloat(inputAmountHumanReadable);
-    if (isNaN(num) || num === 0) return "0";
+    if (isNaN(num)) return "0";
     return formatAmount(num);
   }
 
@@ -837,12 +835,10 @@
     if (
       isNaN(inNum) ||
       isNaN(outNum) ||
-      isNaN(inPrice) ||
-      isNaN(outPrice) ||
       inNum <= 0 ||
       outNum <= 0 ||
-      inPrice <= 0 ||
-      outPrice <= 0
+      inPrice === 0 ||
+      outPrice === 0
     ) {
       priceImpact = null;
       return;
@@ -925,7 +921,6 @@
     if (decimals === null) return null;
     const humanAmount = rawAmountToHumanReadable(amountRaw, decimals);
     const num = parseFloat(humanAmount);
-    if (isNaN(num)) return null;
     return formatAmount(num);
   }
 
@@ -1402,7 +1397,7 @@
       );
     } else {
       const price = parseFloat(inputToken.price_usd);
-      if (!price || price <= 0) return null;
+      if (price === 0) return null;
       const tokenAmount = preset.value / price;
       const rawAmount = humanReadableToRawAmount(
         tokenAmount.toFixed(inputToken.metadata.decimals),
@@ -1438,7 +1433,7 @@
     );
     const price = parseFloat(inputToken.price_usd);
     const usd = parseFloat(human) * price;
-    return Number.isFinite(usd) ? usd : 0;
+    return usd;
   });
 
   function truncateSymbol(symbol: string): string {

@@ -22,9 +22,7 @@ function parsePoolId(rawValue: string | null): number | null {
   if (!rawValue) return null;
   if (rawValue === "None") return null;
   if (!/^\d+$/.test(rawValue)) return null;
-  const parsed = Number.parseInt(rawValue, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return parsed;
+  return parseInt(rawValue, 10);
 }
 
 function parseAssetId(rawValue: string | null): string | null {

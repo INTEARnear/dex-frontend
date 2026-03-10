@@ -59,7 +59,6 @@
 
   const launchTimestamp = $derived.by(() => {
     const nanos = launchData.launched_at_ns;
-    if (!Number.isFinite(nanos) || nanos <= 0) return "Unknown";
     const asMs = Math.floor(nanos / 1_000_000);
     return new Date(asMs).toLocaleString();
   });

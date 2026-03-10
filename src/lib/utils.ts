@@ -66,10 +66,7 @@ export function humanReadableToRawAmount(
   let str = String(amountHumanReadable).trim();
 
   // Reject negative values
-  if (str.startsWith("-")) return "0";
-
-  // Strip leading plus if present
-  if (str.startsWith("+")) str = str.slice(1);
+  if (str.startsWith("-")) throw new Error("Negative values are not allowed");
 
   // Validate: only digits and at most one decimal point
   if (!/^\d*\.?\d*$/.test(str) || str === "" || str === ".") return "0";
@@ -170,7 +167,7 @@ export function formatUsdTokenValue(
   if (!tokenAmountHumanReadable) return null;
   const num = parseFloat(tokenAmountHumanReadable);
   const price = parseFloat(tokenPriceUsd);
-  if (isNaN(num) || isNaN(price) || num === 0) return null;
+  if (num === 0) return null;
   const value = num * price;
   return formatUsdValue(value);
 }
@@ -186,7 +183,7 @@ export function formatUsdValue(value: number): string | null {
  * Format liquidity USD for pool display (e.g. "$1.5K", "<$1").
  */
 export function formatLiquidity(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "$0";
+  if (value <= 0) return "$0";
   if (value < 1) return "<$1";
   if (value < 1000) return `$${formatCompact(value)}`;
   if (value < 1e6) return `$${formatCompact(value / 1e3)}K`;

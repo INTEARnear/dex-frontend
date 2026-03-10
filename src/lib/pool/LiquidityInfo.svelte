@@ -40,20 +40,20 @@
       token1.metadata.decimals,
     );
 
-    const amount0Num = parseFloat(amount0Human);
-    const amount1Num = parseFloat(amount1Human);
+    const amount0 = parseFloat(amount0Human);
+    const amount1 = parseFloat(amount1Human);
     const price0 = parseFloat(token0.price_usd || "0");
     const price1 = parseFloat(token1.price_usd || "0");
-    const usd0 = amount0Num * price0;
-    const usd1 = amount1Num * price1;
+    const usd0 = amount0 * price0;
+    const usd1 = amount1 * price1;
     const totalUsd = usd0 + usd1;
 
     return {
-      amount0: Number.isFinite(amount0Num) ? amount0Num : 0,
-      amount1: Number.isFinite(amount1Num) ? amount1Num : 0,
-      usd0: Number.isFinite(usd0) && usd0 > 0 ? usd0 : 0,
-      usd1: Number.isFinite(usd1) && usd1 > 0 ? usd1 : 0,
-      totalUsd: Number.isFinite(totalUsd) && totalUsd > 0 ? totalUsd : 0,
+      amount0,
+      amount1,
+      usd0,
+      usd1,
+      totalUsd,
     };
   });
 </script>

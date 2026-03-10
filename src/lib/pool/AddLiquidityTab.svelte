@@ -52,10 +52,62 @@
     return false;
   }
 
+  function pow10(decimals: number): bigint {
+    return 10n ** BigInt(Math.max(0, decimals));
+  }
+
+  const FIXED_POINT_PRECISION = 24;
+  const FIXED_POINT_BASE = pow10(FIXED_POINT_PRECISION);
+
+  function parseDecimalStringToFixed(value: string): bigint | null {
+    let text = value.trim();
+    if (!text || text === ".") return null;
+    if (text.startsWith("-")) return null;
+
+    // Accept scientific notation or other numeric formats by normalizing.
+    if (!/^\d*\.?\d*$/.test(text)) {
+      const asNumber = Number(text);
+      if (asNumber < 0) return null;
+      text = asNumber.toFixed(FIXED_POINT_PRECISION);
+    }
+
+    const [intPartRaw, fracPartRaw = ""] = text.split(".");
+    const intPart = intPartRaw === "" ? "0" : intPartRaw;
+    const fracPart = fracPartRaw
+      .slice(0, FIXED_POINT_PRECISION)
+      .padEnd(FIXED_POINT_PRECISION, "0");
+    const normalized = `${intPart}${fracPart}`.replace(/^0+/, "") || "0";
+    return BigInt(normalized);
+  }
+
+  function estimateAmount1Raw(
+    amount0Raw: bigint,
+    ratioScaled: bigint,
+    decimals0: number,
+    decimals1: number,
+  ): bigint {
+    if (amount0Raw <= 0n || ratioScaled <= 0n) return 0n;
+    const numerator = amount0Raw * ratioScaled * pow10(decimals1);
+    const denominator = FIXED_POINT_BASE * pow10(decimals0);
+    return (numerator + denominator / 2n) / denominator;
+  }
+
+  function estimateAmount0Raw(
+    amount1Raw: bigint,
+    ratioScaled: bigint,
+    decimals0: number,
+    decimals1: number,
+  ): bigint {
+    if (amount1Raw <= 0n || ratioScaled <= 0n) return 0n;
+    const numerator = amount1Raw * FIXED_POINT_BASE * pow10(decimals0);
+    const denominator = ratioScaled * pow10(decimals1);
+    return (numerator + denominator / 2n) / denominator;
+  }
+
   function formatShares(raw: bigint): string {
     const human = rawAmountToHumanReadable(raw.toString(), 18);
     const num = parseFloat(human);
-    return Number.isFinite(num) ? formatAmount(num) : "0";
+    return formatAmount(num);
   }
 
   function sanitizeAmountInput(value: string): string {
@@ -70,7 +122,7 @@
   }
 
   function formatByDecimals(value: number, decimals: number): string {
-    if (!Number.isFinite(value) || value <= 0) return "";
+    if (value === 0) return "";
     const precision = Math.min(Math.max(decimals, 0), 12);
     const fixed = value.toFixed(precision);
     return fixed.replace(/\.?0+$/, "");
@@ -176,8 +228,7 @@
     return (accountFees / totalRevenueFee) * 100;
   });
   const revenueSharingPercentText = $derived.by(() => {
-    const formatted = formatByDecimals(revenueSharingPercent, 4);
-    return formatted || "0";
+    return formatByDecimals(revenueSharingPercent, 4) || "0";
   });
 
   function getUserBalanceRaw(tokenId: string | null): string {
@@ -185,23 +236,29 @@
     return $tokenHubStore.tokensById[tokenId]?.balance ?? "0";
   }
 
-  const poolRatio = $derived.by(() => {
+  const poolRatioScaled = $derived.by(() => {
     if (!poolData || !token0 || !token1) return null;
-    const amount0 =
-      parseFloat(poolData.assets[0].balance) /
-      Math.pow(10, token0.metadata.decimals);
-    const amount1 =
-      parseFloat(poolData.assets[1].balance) /
-      Math.pow(10, token1.metadata.decimals);
-    if (!Number.isFinite(amount0) || amount0 <= 0) return null;
-    if (!Number.isFinite(amount1) || amount1 <= 0) return null;
-    return amount1 / amount0;
+    const poolBalance0Raw = BigInt(poolData.assets[0].balance);
+    const poolBalance1Raw = BigInt(poolData.assets[1].balance);
+    if (poolBalance0Raw <= 0n || poolBalance1Raw <= 0n) return null;
+    const numerator =
+      poolBalance1Raw * pow10(token0.metadata.decimals) * FIXED_POINT_BASE;
+    const denominator = poolBalance0Raw * pow10(token1.metadata.decimals);
+    const ratio = (numerator + denominator / 2n) / denominator;
+    return ratio > 0n ? ratio : null;
   });
 
   const displayedPoolRatio = $derived.by(() => {
-    if (!poolRatio) return null;
-    if (!isRatioInverted) return poolRatio;
-    return poolRatio > 0 ? 1 / poolRatio : null;
+    if (!poolRatioScaled) return null;
+    const ratioForDisplay = !isRatioInverted
+      ? poolRatioScaled
+      : (FIXED_POINT_BASE * FIXED_POINT_BASE + poolRatioScaled / 2n) /
+        poolRatioScaled;
+    const human = rawAmountToHumanReadable(
+      ratioForDisplay.toString(),
+      FIXED_POINT_PRECISION,
+    );
+    return parseFloat(human)
   });
 
   const ratioBaseSymbol = $derived(
@@ -293,8 +350,9 @@
     if (!token0 || !token0Id) return null;
     let balanceRaw = BigInt(getUserBalanceRaw(token0Id));
     if (token0Id === "near") {
-      balanceRaw =
-        balanceRaw > GAS_RESERVE_NEAR ? balanceRaw - GAS_RESERVE_NEAR : 0n;
+      const reserve =
+        GAS_RESERVE_NEAR + (!isPrivate ? STORAGE_DEPOSIT_NEAR : 0n);
+      balanceRaw = balanceRaw > reserve ? balanceRaw - reserve : 0n;
     }
     return balanceRaw;
   }
@@ -303,19 +361,21 @@
     if (!token1 || !token1Id) return null;
     let balanceRaw = BigInt(getUserBalanceRaw(token1Id));
     if (token1Id === "near") {
-      balanceRaw =
-        balanceRaw > GAS_RESERVE_NEAR ? balanceRaw - GAS_RESERVE_NEAR : 0n;
+      const reserve =
+        GAS_RESERVE_NEAR + (!isPrivate ? STORAGE_DEPOSIT_NEAR : 0n);
+      balanceRaw = balanceRaw > reserve ? balanceRaw - reserve : 0n;
     }
     return balanceRaw;
   }
 
-  function getPriceRatioFallback(): number | null {
+  function getPriceRatioFallbackScaled(): bigint | null {
     if (!token0 || !token1) return null;
-    const price0 = parseFloat(token0.price_usd);
-    const price1 = parseFloat(token1.price_usd);
-    if (!Number.isFinite(price0) || !Number.isFinite(price1)) return null;
-    if (price0 <= 0 || price1 <= 0) return null;
-    return price0 / price1;
+    const price0 = parseDecimalStringToFixed(token0.price_usd);
+    const price1 = parseDecimalStringToFixed(token1.price_usd);
+    if (price0 === null || price1 === null) return null;
+    if (price0 === 0n || price1 === 0n) return null;
+    const ratio = (price0 * FIXED_POINT_BASE + price1 / 2n) / price1;
+    return ratio > 0n ? ratio : null;
   }
 
   function getMaxAddableAmount0Raw(): bigint | null {
@@ -328,19 +388,20 @@
     const dec0 = token0.metadata.decimals;
     const dec1 = token1.metadata.decimals;
 
-    if (poolRatio !== null && poolRatio > 0) {
+    if (poolRatioScaled !== null && poolRatioScaled > 0n) {
       const maxFrom1 =
-        (balance1 * BigInt(10 ** dec0)) /
-        BigInt(Math.max(1, Math.round(poolRatio * 10 ** dec1)));
+        (balance1 * FIXED_POINT_BASE * pow10(dec0)) /
+        (poolRatioScaled * pow10(dec1));
       const max0 = balance0 < maxFrom1 ? balance0 : maxFrom1;
       return max0;
     }
 
-    const fallbackRatio = getPriceRatioFallback();
-    if (fallbackRatio === null || fallbackRatio <= 0) return balance0;
+    const fallbackRatioScaled = getPriceRatioFallbackScaled();
+    if (fallbackRatioScaled === null || fallbackRatioScaled <= 0n)
+      return balance0;
     const maxFrom1 =
-      (balance1 * BigInt(10 ** dec0)) /
-      BigInt(Math.max(1, Math.round(fallbackRatio * 10 ** dec1)));
+      (balance1 * FIXED_POINT_BASE * pow10(dec0)) /
+      (fallbackRatioScaled * pow10(dec1));
     const max0 = balance0 < maxFrom1 ? balance0 : maxFrom1;
     return max0;
   }
@@ -357,21 +418,18 @@
         token0.metadata.decimals,
       );
     }
-    const tokenPrice = parseFloat(token0.price_usd);
-    if (!Number.isFinite(tokenPrice) || tokenPrice <= 0) return null;
-    const tokenAmount = preset.value / tokenPrice;
-    const raw = BigInt(
-      humanReadableToRawAmount(
-        tokenAmount.toFixed(token0.metadata.decimals),
-        token0.metadata.decimals,
-      ),
+    const tokenPrice = parseDecimalStringToFixed(token0.price_usd);
+    if (tokenPrice === null || tokenPrice === 0n) return null;
+    const presetUsd = parseDecimalStringToFixed(
+      preset.value.toFixed(FIXED_POINT_PRECISION),
     );
-    const halfRaw = raw / 2n;
-    if (halfRaw <= 0n) return null;
-    return rawAmountToHumanReadable(
-      halfRaw.toString(),
-      token0.metadata.decimals,
-    );
+    if (presetUsd === null || presetUsd <= 0n) return null;
+    const denominator = tokenPrice * 2n;
+    const raw =
+      (presetUsd * pow10(token0.metadata.decimals) + denominator / 2n) /
+      denominator;
+    if (raw <= 0n) return null;
+    return rawAmountToHumanReadable(raw.toString(), token0.metadata.decimals);
   }
 
   const activePresetIndex = $derived.by(() => {
@@ -399,11 +457,7 @@
     const price1 = parseFloat(token1.price_usd);
     const usd0 = parseFloat(human0) * price0;
     const usd1 = parseFloat(human1) * price1;
-    const minUsd = Math.min(
-      Number.isFinite(usd0) ? usd0 : 0,
-      Number.isFinite(usd1) ? usd1 : 0,
-    );
-    return minUsd;
+    return Math.min(usd0, usd1);
   });
 
   const requiredNearRaw = $derived.by(() => {
@@ -472,16 +526,27 @@
 
   function setAmount0AndRecalculate(nextAmount0: string) {
     amount0HumanReadable = sanitizeAmountInput(nextAmount0);
-    if (!poolRatio || !token1) return;
-    const amountNum = parseFloat(amount0HumanReadable);
-    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+    if (!poolRatioScaled || !token0 || !token1) return;
+    const amount0RawInput = BigInt(
+      humanReadableToRawAmount(amount0HumanReadable, token0.metadata.decimals),
+    );
+    if (amount0RawInput <= 0n) {
       amount1HumanReadable = "";
       return;
     }
-    amount1HumanReadable = formatByDecimals(
-      amountNum * poolRatio,
+    const estimatedAmount1Raw = estimateAmount1Raw(
+      amount0RawInput,
+      poolRatioScaled,
+      token0.metadata.decimals,
       token1.metadata.decimals,
     );
+    amount1HumanReadable =
+      estimatedAmount1Raw > 0n
+        ? rawAmountToHumanReadable(
+            estimatedAmount1Raw.toString(),
+            token1.metadata.decimals,
+          )
+        : "";
   }
 
   function onAmount0Input(value: string) {
@@ -490,33 +555,58 @@
 
   function onAmount1Input(value: string) {
     amount1HumanReadable = sanitizeAmountInput(value);
-    if (!poolRatio || !token0) return;
-    const amountNum = parseFloat(amount1HumanReadable);
-    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+    if (!poolRatioScaled || !token0 || !token1) return;
+    const amount1RawInput = BigInt(
+      humanReadableToRawAmount(amount1HumanReadable, token1.metadata.decimals),
+    );
+    if (amount1RawInput <= 0n) {
       amount0HumanReadable = "";
       return;
     }
-    amount0HumanReadable = formatByDecimals(
-      amountNum / poolRatio,
+    const estimatedAmount0Raw = estimateAmount0Raw(
+      amount1RawInput,
+      poolRatioScaled,
       token0.metadata.decimals,
+      token1.metadata.decimals,
     );
+    amount0HumanReadable =
+      estimatedAmount0Raw > 0n
+        ? rawAmountToHumanReadable(
+            estimatedAmount0Raw.toString(),
+            token0.metadata.decimals,
+          )
+        : "";
   }
 
   function applyPreset(preset: AmountPreset) {
     const amount = computePresetAmount(preset);
     if (amount === null) return;
-    const fallbackRatio = getPriceRatioFallback();
-    if (!poolRatio && fallbackRatio && token1) {
+    const fallbackRatioScaled = getPriceRatioFallbackScaled();
+    if (!poolRatioScaled && fallbackRatioScaled && token0 && token1) {
       amount0HumanReadable = sanitizeAmountInput(amount);
-      const amountNum = parseFloat(amount0HumanReadable);
-      if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      const amount0RawInput = BigInt(
+        humanReadableToRawAmount(
+          amount0HumanReadable,
+          token0.metadata.decimals,
+        ),
+      );
+      if (amount0RawInput <= 0n) {
         amount1HumanReadable = "";
         return;
       }
-      amount1HumanReadable = formatByDecimals(
-        amountNum * fallbackRatio,
+      const estimatedAmount1Raw = estimateAmount1Raw(
+        amount0RawInput,
+        fallbackRatioScaled,
+        token0.metadata.decimals,
         token1.metadata.decimals,
       );
+      amount1HumanReadable =
+        estimatedAmount1Raw > 0n
+          ? rawAmountToHumanReadable(
+              estimatedAmount1Raw.toString(),
+              token1.metadata.decimals,
+            )
+          : "";
       return;
     }
     setAmount0AndRecalculate(amount);
@@ -760,10 +850,13 @@
 >
   {#snippet presets()}
     {#if presetsVisible && $walletStore.isConnected && token0 && token0Id}
-      {@const token0Price = parseFloat(token0.price_usd)}
+      {@const token0Price = parseDecimalStringToFixed(token0.price_usd)}
       <DexPresetButtons
         items={amountPresets.reduce((buttons, preset, i) => {
-          if (preset.type === "percent" || token0Price > 0) {
+          if (
+            preset.type === "percent" ||
+            (token0Price !== null && token0Price > 0n)
+          ) {
             const insufficientDollar =
               preset.type === "dollar" &&
               (maxAddableUsd <= 0 || preset.value > maxAddableUsd);
@@ -801,7 +894,7 @@
     This pool contains unsupported assets for this form.
   </div>
 {:else}
-  {#if poolRatio}
+  {#if poolRatioScaled}
     <div class="warning-box ratio-box">
       <span class="ratio-text">
         1 {ratioBaseSymbol} = {formatAmount(displayedPoolRatio ?? 0)}{" "}

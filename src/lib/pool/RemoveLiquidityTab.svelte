@@ -39,7 +39,7 @@
   function formatShares(raw: bigint): string {
     const human = rawAmountToHumanReadable(raw.toString(), 18);
     const num = parseFloat(human);
-    return Number.isFinite(num) ? formatAmount(num) : "0";
+    return formatAmount(num);
   }
 
   interface Props {
@@ -116,7 +116,7 @@
     const price0 = parseFloat(token0.price_usd || "0");
     const price1 = parseFloat(token1.price_usd || "0");
     const usdValue = userAmount0 * price0 + userAmount1 * price1;
-    return Number.isFinite(usdValue) && usdValue > 0 ? usdValue : 0;
+    return Math.max(0, usdValue);
   });
 
   const removeQuickPresets = $derived.by(() => {
@@ -205,7 +205,7 @@
       amount0Raw,
       amount1Raw,
       sharesToRemove,
-      usdValue: Number.isFinite(usdValue) ? usdValue : 0,
+      usdValue,
     };
   });
 

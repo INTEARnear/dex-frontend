@@ -35,7 +35,7 @@ function padDatePart(value: number): string {
 }
 
 function parseDurationInput(value: string): number | null {
-  const parsed = Number.parseInt(value, 10);
+  const parsed = parseInt(value, 10);
   return Number.isInteger(parsed) ? parsed : null;
 }
 
@@ -106,7 +106,7 @@ export function scheduledDurationFromPoints(
 }
 
 export function percentageToFeeFraction(percentage: string): number {
-  return Math.round((Number.parseFloat(percentage) || 0) * FEE_FRACTION_SCALE);
+  return Math.round((parseFloat(percentage) || 0) * FEE_FRACTION_SCALE);
 }
 
 export function feeFractionToPercentage(feeFraction: number): string {
