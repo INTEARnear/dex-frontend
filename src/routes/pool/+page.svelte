@@ -351,7 +351,17 @@
         />
         <LiquidityInfo {poolData} {token0} {token1} {userSharesRaw} />
         {#if farmRewards.length > 0}
-          <FarmRewardsSection rewards={farmRewards} />
+          <FarmRewardsSection
+            rewards={farmRewards}
+            onClaimSuccess={async () => {
+              await fetchPoolData(
+                parsedPoolId,
+                $walletStore.accountId,
+                isCreateRedirect,
+                true,
+              );
+            }}
+          />
         {/if}
         <PositionsSection
           {poolData}

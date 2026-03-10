@@ -1,14 +1,21 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import Spinner from "../Spinner.svelte";
   import TokenIcon from "../TokenIcon.svelte";
   import { FARM_BLOCK_TIME_MS } from "../farmUtils";
   import { tokenHubStore } from "../tokenHubStore";
   import type { XykFarmReward } from "../types";
-  import { rawAmountToHumanReadable } from "../utils";
+  import { DEX_BACKEND_API, rawAmountToHumanReadable } from "../utils";
+  import {
+    getOrCreateSignatureAuthPayload,
+    getStoredSignatureAuthPayload,
+    walletStore,
+  } from "../walletStore";
   import { assetIdToTokenId } from "./shared";
 
   interface Props {
     rewards: XykFarmReward[];
+    onClaimSuccess: () => Promise<void>;
   }
 
   interface RewardState {
@@ -16,15 +23,20 @@
     assetId: string;
     accruedAmount: number;
     rewardPerBlock: number;
+    accruedReward: bigint;
   }
 
-  const REWARD_SYNC_THRESHOLD_USD = 0.01;
+  const REWARD_SYNC_THRESHOLD_USD = 0.001;
+  const MIN_UNCLAIMED_RAW_FOR_CLAIM = 1000n;
 
-  let { rewards }: Props = $props();
+  let { rewards, onClaimSuccess }: Props = $props();
   let rewardStates = $state<RewardState[]>([]);
   let nowMs = $state(Date.now());
   let rewardsSnapshotTimestampMs = $state(Date.now());
-  let showBetaModal = $state(false);
+  let claimingFarmId = $state<number | null>(null);
+  let claimPhase = $state<"signing" | "claiming" | null>(null);
+  let claimError = $state<string | null>(null);
+  let claimSuccess = $state<string | null>(null);
 
   function rewardKey(reward: { farmId: number; assetId: string }): string {
     return `${reward.farmId}-${reward.assetId}`;
@@ -88,6 +100,7 @@
           assetId: reward.asset_id,
           accruedAmount: incomingAccruedAmount,
           rewardPerBlock: incomingRewardPerBlock,
+          accruedReward: BigInt(reward.accrued_reward),
         });
         continue;
       }
@@ -109,6 +122,7 @@
           ? incomingAccruedAmount
           : currentAccruedAmount,
         rewardPerBlock: incomingRewardPerBlock,
+        accruedReward: BigInt(reward.accrued_reward),
       });
     }
 
@@ -137,24 +151,63 @@
 
       return {
         key: rewardKey(reward),
+        farmId: reward.farmId,
         token,
         symbol: token?.metadata.symbol ?? reward.assetId,
         amountLabel: amount.toFixed(4),
+        canClaim: reward.accruedReward >= MIN_UNCLAIMED_RAW_FOR_CLAIM,
       };
     });
   });
 
-  function handleWithdrawClick() {
-    showBetaModal = true;
-  }
+  async function handleClaimClick(farmId: number, canClaim: boolean) {
+    if (claimingFarmId !== null) return;
+    if (!canClaim) return;
+    const accountId = $walletStore.accountId;
+    const wallet = $walletStore.wallet;
+    if (!accountId || !wallet) {
+      claimError = "Connect wallet first";
+      return;
+    }
 
-  function closeBetaModal() {
-    showBetaModal = false;
-  }
+    claimError = null;
+    claimSuccess = null;
+    claimingFarmId = farmId;
+    try {
+      const hasStoredPayload =
+        getStoredSignatureAuthPayload(accountId) !== null;
+      claimPhase = hasStoredPayload ? "claiming" : "signing";
+      const { payload } = await getOrCreateSignatureAuthPayload(
+        accountId,
+        wallet,
+      );
 
-  function handleModalBackdropKeyDown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      closeBetaModal();
+      claimPhase = "claiming";
+      const response = await fetch(`${DEX_BACKEND_API}/farms/claim`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${JSON.stringify(payload)}`,
+        },
+        body: JSON.stringify({
+          farmId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(errBody || `HTTP ${response.status}`);
+      }
+
+      await onClaimSuccess();
+      claimSuccess = "Claimed";
+    } catch (error) {
+      console.error("Farm claim failed:", error);
+      claimError =
+        error instanceof Error ? error.message : "Failed to claim farm rewards";
+    } finally {
+      claimPhase = null;
+      claimingFarmId = null;
     }
   }
 </script>
@@ -179,9 +232,18 @@
                 <button
                   type="button"
                   class="withdraw-btn"
-                  onclick={handleWithdrawClick}
+                  onclick={() => handleClaimClick(row.farmId, row.canClaim)}
+                  disabled={claimingFarmId !== null ||
+                    !$walletStore.isConnected ||
+                    !row.canClaim}
+                  aria-busy={claimingFarmId === row.farmId}
                 >
-                  Withdraw
+                  {#if claimingFarmId === row.farmId}
+                    <Spinner tone="light" />
+                    {claimPhase === "signing" ? "Signing..." : "Claiming..."}
+                  {:else}
+                    Claim
+                  {/if}
                 </button>
               </td>
             </tr>
@@ -189,42 +251,14 @@
         </tbody>
       </table>
     </div>
+    {#if claimError}
+      <p class="farm-rewards-error">{claimError}</p>
+    {/if}
+    {#if claimSuccess}
+      <p class="farm-rewards-success">{claimSuccess}</p>
+    {/if}
   {/if}
 </aside>
-
-{#if showBetaModal}
-  <div
-    class="modal-backdrop"
-    role="presentation"
-    tabindex="-1"
-    onclick={closeBetaModal}
-    onkeydown={handleModalBackdropKeyDown}
-  >
-    <div
-      class="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="farm-rewards-beta-title"
-      tabindex="-1"
-      onclick={(event) => event.stopPropagation()}
-      onkeydown={(event) => event.stopPropagation()}
-    >
-      <div class="modal-header">
-        <h2 id="farm-rewards-beta-title">Feature still in beta</h2>
-      </div>
-      <div class="modal-body">
-        <p class="beta-modal-message">
-          Withdrawal will become available in 1-2 days
-        </p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="submit-btn" onclick={closeBetaModal}>
-          Okay
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   .farm-rewards {
@@ -251,6 +285,20 @@
     margin: 0;
     color: var(--text-secondary);
     font-size: 0.8125rem;
+  }
+
+  .farm-rewards-error {
+    margin: 0.25rem 0 0;
+    color: #f87171;
+    font-size: 0.875rem;
+    line-height: 1.35;
+  }
+
+  .farm-rewards-success {
+    margin: 0.25rem 0 0;
+    color: #4ade80;
+    font-size: 0.875rem;
+    line-height: 1.35;
   }
 
   .farm-rewards-table-wrap {
@@ -320,98 +368,18 @@
     white-space: nowrap;
   }
 
-  .withdraw-btn:hover {
+  .withdraw-btn:hover:not(:disabled) {
     background: var(--accent-hover);
   }
 
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
-  .modal {
-    width: 100%;
-    max-width: 460px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 1.25rem;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-    overflow: hidden;
-  }
-
-  .modal-header {
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .modal-header h2 {
-    margin: 0;
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--text-primary);
-  }
-
-  .modal-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.875rem;
-    padding: 1.25rem 1.5rem;
-  }
-
-  .beta-modal-message {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 0.9375rem;
-    line-height: 1.5;
-  }
-
-  .modal-footer {
-    display: flex;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem 1.25rem;
-    border-top: 1px solid var(--border-color);
-  }
-
-  .submit-btn {
-    flex: 1;
-    padding: 0.875rem 1.5rem;
-    border-radius: 0.75rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background: var(--accent-button-small);
-    border: none;
-    color: var(--text-on-accent);
-  }
-
-  .submit-btn:hover {
-    background: var(--accent-hover);
+  .withdraw-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 
   @media (--small-mobile) {
     .farm-rewards {
       padding: 0.75rem;
-    }
-
-    .modal-backdrop {
-      align-items: flex-end;
-      padding: 0;
-    }
-
-    .modal {
-      max-width: 100%;
-      border-radius: 1.25rem 1.25rem 0 0;
-      border-bottom: none;
     }
 
     .withdraw-btn {

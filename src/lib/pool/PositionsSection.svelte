@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { CLOSE_POSITION_AUTH_STORAGE_KEY, walletStore } from "../walletStore";
+  import {
+    getOrCreateSignatureAuthPayload,
+    getStoredSignatureAuthPayload,
+    walletStore,
+  } from "../walletStore";
   import type { NormalizedPool, Token } from "../types";
   import {
     XykRemoveLiquidityArgsSchema,
@@ -26,43 +30,6 @@
     rawAmountToHumanReadable,
   } from "../utils";
   import { loadSwapSettingsConfig } from "../swapConfig";
-
-  const NEP413_MESSAGE = "Sign in to Intear DEX for LP position tracking";
-  const NEP413_RECIPIENT = "dex.intea.rs";
-
-  function uint8ArrayToBase64(bytes: Uint8Array): string {
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-  }
-
-  interface AuthPayload {
-    account_id: string;
-    signature: string;
-    public_key: string;
-    nonce: string;
-  }
-
-  function getStoredAuthPayload(accountId: string): AuthPayload | null {
-    try {
-      const stored = localStorage.getItem(CLOSE_POSITION_AUTH_STORAGE_KEY);
-      if (!stored) return null;
-      const parsed = JSON.parse(stored) as AuthPayload;
-      if (parsed.account_id !== accountId) return null;
-      return parsed;
-    } catch {
-      return null;
-    }
-  }
-
-  function saveAuthPayload(payload: AuthPayload) {
-    localStorage.setItem(
-      CLOSE_POSITION_AUTH_STORAGE_KEY,
-      JSON.stringify(payload),
-    );
-  }
 
   interface PositionBreakdownParams {
     amount0OpenNum: number;
@@ -216,7 +183,8 @@
 
   $effect(() => {
     const accountId = $walletStore.accountId;
-    hasStoredAuth = !!accountId && getStoredAuthPayload(accountId) !== null;
+    hasStoredAuth =
+      !!accountId && getStoredSignatureAuthPayload(accountId) !== null;
   });
 
   function toggleExpand(id: number) {
@@ -248,26 +216,12 @@
         price1Usd: parseFloat(token1.price_usd || "0"),
       };
 
-      let payload: AuthPayload;
-
-      const stored = getStoredAuthPayload(accountId);
-      if (stored) {
-        payload = stored;
-      } else {
-        const nonce = crypto.getRandomValues(new Uint8Array(32));
-        const signed = await wallet.signMessage({
-          message: NEP413_MESSAGE,
-          recipient: NEP413_RECIPIENT,
-          nonce,
-        });
-        payload = {
-          account_id: signed.accountId,
-          signature: signed.signature,
-          public_key: signed.publicKey,
-          nonce: uint8ArrayToBase64(nonce),
-        };
-        saveAuthPayload(payload);
-        hasStoredAuth = true;
+      const { payload, fromStorage } = await getOrCreateSignatureAuthPayload(
+        accountId,
+        wallet,
+      );
+      hasStoredAuth = true;
+      if (!fromStorage) {
         return;
       }
 

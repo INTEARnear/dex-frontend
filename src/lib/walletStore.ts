@@ -8,10 +8,71 @@ interface WalletState {
   wallet: NearWalletBase | null;
 }
 
-export const CLOSE_POSITION_AUTH_STORAGE_KEY = "intear_dex_close_position_auth";
+export const SIGNATURE_AUTH_STORAGE_KEY = "intear_dex_close_position_auth";
+
+const NEP413_MESSAGE = "Sign in to Intear DEX";
+const NEP413_RECIPIENT = "dex.intea.rs";
+
+export interface SignatureAuthPayload {
+  account_id: string;
+  signature: string;
+  public_key: string;
+  nonce: string;
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+export function getStoredSignatureAuthPayload(
+  accountId: string,
+): SignatureAuthPayload | null {
+  try {
+    const stored = localStorage.getItem(SIGNATURE_AUTH_STORAGE_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as SignatureAuthPayload;
+    if (parsed.account_id !== accountId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveSignatureAuthPayload(payload: SignatureAuthPayload): void {
+  localStorage.setItem(SIGNATURE_AUTH_STORAGE_KEY, JSON.stringify(payload));
+}
+
+export async function getOrCreateSignatureAuthPayload(
+  accountId: string,
+  wallet: NearWalletBase,
+): Promise<{ payload: SignatureAuthPayload; fromStorage: boolean }> {
+  const stored = getStoredSignatureAuthPayload(accountId);
+  if (stored) {
+    return { payload: stored, fromStorage: true };
+  }
+
+  const nonce = crypto.getRandomValues(new Uint8Array(32));
+  const signed = await wallet.signMessage({
+    message: NEP413_MESSAGE,
+    recipient: NEP413_RECIPIENT,
+    nonce,
+  });
+  const payload: SignatureAuthPayload = {
+    account_id: signed.accountId,
+    signature: signed.signature,
+    public_key: signed.publicKey,
+    nonce: uint8ArrayToBase64(nonce),
+  };
+  saveSignatureAuthPayload(payload);
+  return { payload, fromStorage: false };
+}
 
 function clearDisconnectedAccountStorage() {
-  localStorage.removeItem(CLOSE_POSITION_AUTH_STORAGE_KEY);
+  localStorage.removeItem(SIGNATURE_AUTH_STORAGE_KEY);
 }
 
 function createWalletStore() {
