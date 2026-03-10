@@ -530,6 +530,7 @@
         <a
           href="/pool?id=PLACH-{pool.id}"
           class="pool-card"
+          class:has-farm={pool.farms.length > 0}
           class:private={pool.ownerId !== null}
           class:owned={pool.ownerId !== null && pool.ownerId === accountId}
           class:no-deposit={pool.ownerId !== null &&
@@ -688,7 +689,7 @@
 
   .pool-card {
     background: var(--bg-card);
-    border: 1px solid var(--border-color);
+    border: 2px solid var(--border-color);
     border-radius: 1rem;
     padding: 1.5rem;
     display: flex;
@@ -702,7 +703,7 @@
   }
 
   .pool-card:hover {
-    border-color: var(--accent-primary);
+    border-color: #3b82f6;
     box-shadow: 0 8px 20px rgba(59, 130, 246, 0.2);
     background: var(--bg-secondary);
   }
@@ -712,47 +713,71 @@
   }
 
   .pool-card.no-deposit {
-    border-color: var(--status-error-solid);
+    border-color: #ef4444;
     box-shadow: inset 0 0 0 1px
-      color-mix(in oklab, var(--status-error-solid), transparent 55%);
+      color-mix(in oklab, #ef4444, transparent 55%);
   }
 
   .pool-card.no-deposit:hover {
-    border-color: var(--status-error-solid-hover);
+    border-color: #dc2626;
     box-shadow:
       inset 0 0 0 1px
-        color-mix(in oklab, var(--status-error-solid), transparent 45%),
-      0 8px 20px color-mix(in oklab, var(--status-error-solid), transparent 75%);
+        color-mix(in oklab, #ef4444, transparent 45%),
+      0 8px 20px color-mix(in oklab, #ef4444, transparent 75%);
   }
 
   .pool-card.no-deposit:active {
     box-shadow:
       inset 0 0 0 1px
-        color-mix(in oklab, var(--status-error-solid), transparent 45%),
-      0 4px 12px color-mix(in oklab, var(--status-error-solid), transparent 80%);
+        color-mix(in oklab, #ef4444, transparent 45%),
+      0 4px 12px color-mix(in oklab, #ef4444, transparent 80%);
   }
 
   .pool-card.owned {
-    border-color: var(--status-success-solid);
+    border-color: #22c55e;
     box-shadow: inset 0 0 0 1px
-      color-mix(in oklab, var(--status-success-solid), transparent 55%);
+      color-mix(in oklab, #22c55e, transparent 55%);
   }
 
   .pool-card.owned:hover {
-    border-color: var(--status-success-solid-hover);
+    border-color: #16a34a;
     box-shadow:
       inset 0 0 0 1px
-        color-mix(in oklab, var(--status-success-solid), transparent 45%),
+        color-mix(in oklab, #22c55e, transparent 45%),
       0 8px 20px
-        color-mix(in oklab, var(--status-success-solid), transparent 75%);
+        color-mix(in oklab, #22c55e, transparent 75%);
   }
 
   .pool-card.owned:active {
     box-shadow:
       inset 0 0 0 1px
-        color-mix(in oklab, var(--status-success-solid), transparent 45%),
+        color-mix(in oklab, #22c55e, transparent 45%),
       0 4px 12px
-        color-mix(in oklab, var(--status-success-solid), transparent 80%);
+        color-mix(in oklab, #22c55e, transparent 80%);
+  }
+
+  .pool-card.has-farm {
+    border-color: transparent;
+    background:
+      linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
+      linear-gradient(135deg, #eab308, #84cc16) border-box;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, #a3e635, transparent 55%);
+  }
+
+  .pool-card.has-farm:hover {
+    border-color: transparent;
+    background:
+      linear-gradient(var(--bg-secondary), var(--bg-secondary)) padding-box,
+      linear-gradient(135deg, #facc15, #65a30d) border-box;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #a3e635, transparent 45%),
+      0 8px 20px color-mix(in oklab, #84cc16, transparent 75%);
+  }
+
+  .pool-card.has-farm:active {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #a3e635, transparent 45%),
+      0 4px 12px color-mix(in oklab, #84cc16, transparent 80%);
   }
 
   .pool-header {
