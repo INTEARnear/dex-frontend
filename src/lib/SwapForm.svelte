@@ -204,9 +204,8 @@
   let successStepOneInputTransfer = $state<SwapResultModalInfoTransfer | null>(
     null,
   );
-  let successStepTwoIncomingTransfer = $state<SwapResultModalInfoTransfer | null>(
-    null,
-  );
+  let successStepTwoIncomingTransfer =
+    $state<SwapResultModalInfoTransfer | null>(null);
   let successStepTwoTargetTokenId = $state<string | null>(null);
   let successStepTwoRoute = $state<Route | null>(null);
   let isFetchingSuccessStepTwoRoute = $state(false);
@@ -854,6 +853,48 @@
 
   const priceImpactSevere = $derived(priceImpact !== null && priceImpact > 5);
 
+  type PriceImpactConfirmationTier =
+    | "none"
+    | "checkbox"
+    | "confirm"
+    | "extreme";
+
+  const priceImpactConfirmationTier = $derived.by(
+    (): PriceImpactConfirmationTier => {
+      if (priceImpact === null || priceImpact <= 10) return "none";
+      if (priceImpact <= 20) return "checkbox";
+      if (priceImpact <= 90) return "confirm";
+      return "extreme";
+    },
+  );
+
+  let hasCheckedHighImpactAcknowledgement = $state(false);
+  let highImpactConfirmInput = $state("");
+  let extremeImpactConfirmInput = $state("");
+  let lastPriceImpactConfirmationTier =
+    $state<PriceImpactConfirmationTier>("none");
+
+  $effect(() => {
+    if (priceImpactConfirmationTier === lastPriceImpactConfirmationTier) return;
+    hasCheckedHighImpactAcknowledgement = false;
+    highImpactConfirmInput = "";
+    extremeImpactConfirmInput = "";
+    lastPriceImpactConfirmationTier = priceImpactConfirmationTier;
+  });
+
+  const hasMetPriceImpactConfirmation = $derived.by(() => {
+    if (priceImpactConfirmationTier === "none") return true;
+    if (priceImpactConfirmationTier === "checkbox") {
+      return hasCheckedHighImpactAcknowledgement;
+    }
+    if (priceImpactConfirmationTier === "confirm") {
+      return highImpactConfirmInput.trim().toUpperCase() === "CONFIRM";
+    }
+    return (
+      extremeImpactConfirmInput.trim().toUpperCase() === "I WILL LOSE OVER 90%"
+    );
+  });
+
   const XAUT_ACCOUNT_ID =
     "68749665ff8d2d112fa859aa293f07a622782f38.factory.bridge.near";
   const showBridgeSuggestion = $derived(
@@ -924,7 +965,10 @@
     return formatAmount(num);
   }
 
-  function getConversionEstimatedOutputAmount(route: Route, tokenId: string): string {
+  function getConversionEstimatedOutputAmount(
+    route: Route,
+    tokenId: string,
+  ): string {
     const raw = route.estimated_amount.amount_out;
     if (!raw) return "?";
     return formatTransferAmount(raw, tokenId) ?? "?";
@@ -958,7 +1002,8 @@
         successStepTwoIncomingTransfer.amountRaw,
         successStepTwoIncomingTransfer.tokenId,
       ) ?? "?";
-    const fromSymbol = getTokenSymbol(successStepTwoIncomingTransfer.tokenId) ?? "?";
+    const fromSymbol =
+      getTokenSymbol(successStepTwoIncomingTransfer.tokenId) ?? "?";
     const toAmount = getConversionEstimatedOutputAmount(
       successStepTwoRoute,
       successStepTwoTargetTokenId,
@@ -974,7 +1019,8 @@
         successStepTwoIncomingTransfer.amountRaw,
         successStepTwoIncomingTransfer.tokenId,
       ) ?? "?";
-    const symbol = getTokenSymbol(successStepTwoIncomingTransfer.tokenId) ?? "?";
+    const symbol =
+      getTokenSymbol(successStepTwoIncomingTransfer.tokenId) ?? "?";
     return `Keep ${amount} ${symbol}`;
   }
 
@@ -1027,16 +1073,16 @@
     // Check all receipt outcomes for errors
     for (const outcome of outcomes) {
       if (!outcome) continue;
-      const receiptsOutcome = (
-        outcome as { receipts_outcome?: unknown[] }
-      ).receipts_outcome;
+      const receiptsOutcome = (outcome as { receipts_outcome?: unknown[] })
+        .receipts_outcome;
       if (!receiptsOutcome || !Array.isArray(receiptsOutcome)) continue;
       for (const receiptOutcome of receiptsOutcome) {
-        const status = (receiptOutcome as { outcome?: { status?: any } }).outcome
-          ?.status;
+        const status = (receiptOutcome as { outcome?: { status?: any } })
+          .outcome?.status;
         if (status?.Failure) {
           const executionError =
-            status.Failure?.ActionError?.kind?.FunctionCallError?.ExecutionError;
+            status.Failure?.ActionError?.kind?.FunctionCallError
+              ?.ExecutionError;
           if (
             [
               "Smart contract panicked: Output amount is less than constraint",
@@ -1150,13 +1196,18 @@
       if (Array.isArray(outcomes)) {
         for (const outcome of outcomes) {
           if (outcome) {
-            stepTwoTransfers.push(...extractTransfersFromOutcome(outcome, accountId));
+            stepTwoTransfers.push(
+              ...extractTransfersFromOutcome(outcome, accountId),
+            );
           }
         }
       }
 
-      const consolidatedStepTwoTransfers = consolidateTransfers(stepTwoTransfers);
-      const stepTwoDetectedOutputTokenId = assetIdToTokenId(stepTwoRoute.token_output);
+      const consolidatedStepTwoTransfers =
+        consolidateTransfers(stepTwoTransfers);
+      const stepTwoDetectedOutputTokenId = assetIdToTokenId(
+        stepTwoRoute.token_output,
+      );
       const stepTwoOutputTransfer =
         (stepTwoDetectedOutputTokenId
           ? (consolidatedStepTwoTransfers.find(
@@ -1165,9 +1216,10 @@
                 transfer.tokenId === stepTwoDetectedOutputTokenId,
             ) ?? null)
           : null) ??
-        (consolidatedStepTwoTransfers.find(
+        consolidatedStepTwoTransfers.find(
           (transfer) => transfer.direction === "in",
-        ) ?? null);
+        ) ??
+        null;
 
       if (stepOneInputTransfer && stepTwoOutputTransfer) {
         successTransfers = [stepOneInputTransfer, stepTwoOutputTransfer];
@@ -1276,7 +1328,8 @@
       const stepOneInputTransfer =
         consolidatedTransfers.find(
           (transfer) =>
-            transfer.direction === "out" && transfer.tokenId === inputToken.account_id,
+            transfer.direction === "out" &&
+            transfer.tokenId === inputToken.account_id,
         ) ?? null;
       const stepTwoIncomingTransfer =
         isTwoStepSwap && routeOutputTokenId
@@ -1864,18 +1917,67 @@
       <span
         >Price impact is high: you will receive <strong
           >{priceImpact?.toFixed(2)}%</strong
-        > less than you pay. This can happen if you swap large amounts of tokens, or if the token has a high trading fee.</span
+        > less than you pay. This can happen if you swap large amounts of tokens,
+        or if the token has a high trading fee.</span
       >
       {#if showBridgeSuggestion}
         <span class="bridge-suggestion">
           Consider <a
             href="https://app.shitzuapes.xyz/bridge"
             target="_blank"
-            rel="noopener noreferrer"
-          >bridging XAUt to Ethereum instead</a
+            rel="noopener noreferrer">bridging XAUt to Ethereum instead</a
           > for better rates on Ethereum DEXes.
         </span>
       {/if}
+    </div>
+  {/if}
+
+  {#if priceImpactConfirmationTier === "checkbox"}
+    <label class="price-impact-checkbox-label" for="swap-price-impact-checkbox">
+      <input
+        id="swap-price-impact-checkbox"
+        type="checkbox"
+        bind:checked={hasCheckedHighImpactAcknowledgement}
+      />
+      <span>I understand that I will lose over 10% of the swap amount</span>
+    </label>
+  {:else if priceImpactConfirmationTier === "confirm"}
+    <div class="price-impact-confirm-form" role="alert" aria-live="polite">
+      <label for="swap-price-impact-confirm-input">
+        Type <strong>CONFIRM</strong> to proceed despite very bad rates.
+      </label>
+      <input
+        id="swap-price-impact-confirm-input"
+        class="price-impact-confirm-input"
+        type="text"
+        bind:value={highImpactConfirmInput}
+        placeholder="Type here..."
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+      />
+    </div>
+  {:else if priceImpactConfirmationTier === "extreme"}
+    <div
+      class="price-impact-confirm-form extreme"
+      role="alert"
+      aria-live="assertive"
+    >
+      <label for="swap-price-impact-extreme-input">
+        Extreme risk of losing all your money due to low liquidity. Type <strong
+          >I WILL LOSE OVER 90%</strong
+        > to proceed anyway and almost certainly end up in tears after doing that.
+      </label>
+      <input
+        id="swap-price-impact-extreme-input"
+        class="price-impact-confirm-input extreme"
+        type="text"
+        bind:value={extremeImpactConfirmInput}
+        placeholder="Type here..."
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+      />
     </div>
   {/if}
 
@@ -1901,7 +2003,8 @@
         !outputToken ||
         !currentRoute ||
         isFetchingRoute ||
-        hasInsufficientBalance}
+        hasInsufficientBalance ||
+        !hasMetPriceImpactConfirmation}
     >
       {#if isSwapping}
         <Spinner tone="light" />
@@ -1911,6 +2014,12 @@
         Getting quote...
       {:else if hasInsufficientBalance}
         Insufficient balance
+      {:else if priceImpactConfirmationTier === "checkbox" && !hasMetPriceImpactConfirmation}
+        Acknowledge price impact
+      {:else if priceImpactConfirmationTier === "confirm" && !hasMetPriceImpactConfirmation}
+        Type CONFIRM to continue
+      {:else if priceImpactConfirmationTier === "extreme" && !hasMetPriceImpactConfirmation}
+        Type I WILL LOSE OVER 90% to continue
       {:else if !currentRoute && hasValidAmount}
         No route found
       {:else}
@@ -1987,11 +2096,9 @@
     <button
       class="modal-btn success-btn"
       onclick={handleConvertFromSuccessModal}
-      disabled={
-        isFetchingSuccessStepTwoRoute ||
+      disabled={isFetchingSuccessStepTwoRoute ||
         isExecutingSuccessStepTwoRoute ||
-        !successStepTwoRoute
-      }
+        !successStepTwoRoute}
     >
       {#if isExecutingSuccessStepTwoRoute}
         Converting...
@@ -2891,6 +2998,77 @@
     opacity: 0.9;
   }
 
+  .price-impact-checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem 0.5rem;
+    background: var(--status-warning-soft-bg);
+    border: 1px solid var(--status-warning-soft-border);
+    border-radius: 0.75rem;
+    color: var(--status-warning-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.35;
+  }
+
+  .price-impact-checkbox-label input {
+    width: 1rem;
+    flex-shrink: 0;
+    accent-color: var(--status-warning-text);
+  }
+
+  .price-impact-confirm-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 0.75rem;
+    border-radius: 0.75rem;
+    background: var(--status-error-soft-bg);
+    border: 1px solid var(--status-error-soft-border);
+    color: var(--status-error-text);
+  }
+
+  .price-impact-confirm-form.extreme {
+    border-color: var(--status-error-text);
+  }
+
+  .price-impact-confirm-form label {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .price-impact-confirm-form strong {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--text-primary);
+  }
+
+  .price-impact-confirm-input {
+    width: 100%;
+    border: 1px solid var(--status-error-soft-border);
+    border-radius: 0.625rem;
+    background: var(--bg-card);
+    color: var(--status-error-text);
+    padding: 0.625rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    font-family: "JetBrains Mono", monospace;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }
+
+  .price-impact-confirm-input::placeholder {
+    color: var(--status-error-text);
+    opacity: 0.72;
+  }
+
+  .price-impact-confirm-input:focus {
+    border-color: var(--status-error-text);
+    box-shadow: 0 0 0 3px var(--status-error-soft-bg);
+  }
+
   .dex-badge {
     background: linear-gradient(
       135deg,
@@ -3223,6 +3401,16 @@
     .price-impact-warning {
       padding: 0.5rem 0.75rem;
       font-size: 0.75rem;
+    }
+
+    .price-impact-checkbox-label,
+    .price-impact-confirm-form {
+      padding: 0.5rem 0.75rem;
+    }
+
+    .price-impact-confirm-input {
+      font-size: 0.75rem;
+      padding: 0.5rem 0.625rem;
     }
 
     .swap-btn {
