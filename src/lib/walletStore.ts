@@ -198,6 +198,33 @@ function createWalletStore() {
           }
         },
         {
+          "id": "ledger",
+          "name": "Ledger",
+          "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20768.91%20669.35%22%3E%3Cpath%20style%3D%22stroke%3A%23000%22%20d%3D%22M-2.876-2.76h774.662v674.871H-2.876z%22%2F%3E%3Cpath%20d%3D%22M150.057%20422.845v115.877h176.334v-25.698H175.749v-90.179zm443.103%200v90.179H442.519v25.692h176.334V422.845zM326.647%20246.504v176.334h115.872v-23.174H352.34v-153.16zm-176.59-115.877v115.877h25.692v-90.185h150.642v-25.692zm292.462%200v25.692H593.16v90.185h25.693V130.627z%22%20style%3D%22fill%3A%23fff%22%2F%3E%3C%2Fsvg%3E",
+          "description": "Sign transactions using hardware Ledger devices",
+          "version": "1.0.0",
+          "executor": "https://raw.githubusercontent.com/near/near-connect-ledger/refs/heads/main/ledger-executor.js",
+          "type": "sandbox",
+          "platform": {},
+          "features": {
+            "signMessage": true,
+            "signInWithoutAddKey": true,
+            "signInAndSignMessage": true,
+            "signInWithFunctionCallKey": true,
+            "signAndSendTransaction": true,
+            "signAndSendTransactions": true,
+            "signDelegateActions": true,
+            "mainnet": true,
+            "testnet": true
+          },
+          "permissions": {
+            "storage": true,
+            "usb": true,
+            "hid": true,
+            "bluetooth": true
+          }
+        },
+        {
           "id": "mynearwallet",
           "name": "MyNearWallet",
           "icon": "https://storage.herewallet.app/upload/d0544304123d10518af961a15d5722ff1cef7abf62155f830e6d733e41f7da4b.png",
