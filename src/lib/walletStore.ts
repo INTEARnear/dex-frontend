@@ -279,6 +279,24 @@ function createWalletStore() {
             "storage": true,
             "allowsOpen": ["https://nearmobile.app", "https://play.google.com", "https://apps.apple.com"]
           }
+        },{
+          "id": "trezu-wallet",
+          "name": "Trezu Wallet",
+          "icon": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20500%20500%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22a%22%20x1%3D%2244.13%22%20y1%3D%220%22%20x2%3D%2244.13%22%20y2%3D%2297.718%22%20gradientUnits%3D%22userSpaceOnUse%22%20gradientTransform%3D%22translate(144.076%20132.727)scale(2.40025)%22%3E%3Cstop%20stop-color%3D%22%23fff%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23c0d5ff%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Cpath%20style%3D%22fill%3A%231b66ff%22%20d%3D%22M-1.669-1.48h503.337v502.959H-1.669z%22%2F%3E%3Cpath%20d%3D%22M250.001%20367.274V253.783h105.923zm0-113.491H144.076l105.925-121.057h105.923z%22%20fill%3D%22url(%23a)%22%2F%3E%3C%2Fsvg%3E",
+          "description": "Trezu multichain multisig",
+          "version": "1.0.0",
+          "executor": "https://trezu.app/_next/static/near-connect/trezu-wallet.js",
+          "type": "sandbox",
+          "platform": {},
+          "features": {
+            "signInWithoutAddKey": true,
+            "signAndSendTransaction": true,
+            "signAndSendTransactions": true
+          },
+          "permissions": {
+            "storage": true,
+            "allowsOpen": ["https://trezu.app"]
+          }
         },
         {
           "id": "nightly-wallet",
