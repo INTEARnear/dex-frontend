@@ -383,7 +383,7 @@
   {:else if isSelectedTokenPending}
     <div class="state-panel loading">
       <Spinner size={30} borderWidth={3} />
-      <p>Loading selected token data (retrying every second)...</p>
+      <p>Loading selected token data...</p>
     </div>
   {:else if visibleLaunchTokens.length === 0}
     <div class="state-panel empty">

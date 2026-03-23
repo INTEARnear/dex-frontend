@@ -464,7 +464,7 @@
       const params = new URLSearchParams({
         token_in: tokenIn,
         token_out: tokenOut,
-        max_wait_ms: "1500",
+        max_wait_ms: "2500",
         dexes: "Rhea,RheaDcl,Aidols,Wrap,MetaPool,Linear,XRhea,RNear,Plach",
       });
 
