@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Globe } from "lucide-svelte";
-  import { siTelegram, siX } from "simple-icons";
+  import { siTelegram, siTwitch, siX } from "simple-icons";
   import ListPageToolbar from "$lib/ListPageToolbar.svelte";
   import type { TokenInfo } from "$lib/types";
   import { getTokenIcon } from "$lib/utils";
@@ -36,7 +36,7 @@
   const walletConnected = $derived($walletStore.isConnected);
 
   function hasAnySocialLinks(data: LaunchToken["launchData"]): boolean {
-    return Boolean(data.x || data.telegram || data.website);
+    return Boolean(data.x || data.telegram || data.twitch || data.website);
   }
 
   const sortFilterToggles = $derived.by(() => [
@@ -175,6 +175,25 @@
                         role="img"
                       >
                         <path d={siTelegram.path} />
+                      </svg>
+                    </a>
+                  {/if}
+                  {#if launchToken.launchData.twitch !== null}
+                    <a
+                      href={launchToken.launchData.twitch}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="token-link-btn"
+                      aria-label="Token Twitch"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        role="img"
+                      >
+                        <path d={siTwitch.path} />
                       </svg>
                     </a>
                   {/if}

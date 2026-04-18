@@ -5,6 +5,7 @@ export type LaunchSortBy = "newest" | "marketCap" | "volume";
 export interface LaunchDataArgs {
   telegram: string | null;
   x: string | null;
+  twitch: string | null;
   website: string | null;
   description: string | null;
 }

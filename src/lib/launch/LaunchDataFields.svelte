@@ -3,6 +3,7 @@
     description: string;
     telegram: string;
     x: string;
+    twitch: string;
     website: string;
   }
 
@@ -10,6 +11,7 @@
     description = $bindable(""),
     telegram = $bindable(""),
     x = $bindable(""),
+    twitch = $bindable(""),
     website = $bindable(""),
   }: Props = $props();
 </script>
@@ -45,6 +47,16 @@
         type="url"
         placeholder="https://x.com/yourtoken"
         bind:value={x}
+        maxlength={50}
+        spellcheck="false"
+      />
+    </label>
+    <label class="field">
+      <span class="field-label">Twitch</span>
+      <input
+        type="url"
+        placeholder="https://twitch.tv/yourchannel"
+        bind:value={twitch}
         maxlength={50}
         spellcheck="false"
       />

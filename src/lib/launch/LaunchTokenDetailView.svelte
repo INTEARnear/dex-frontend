@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { Check, Copy, Globe, Pencil } from "lucide-svelte";
-  import { siTelegram, siX } from "simple-icons";
+  import { siTelegram, siTwitch, siX } from "simple-icons";
   import LaunchRecentTradesGrid from "./LaunchRecentTradesGrid.svelte";
+  import TwitchLiveEmbed from "./TwitchLiveEmbed.svelte";
   import PoolFeeBreakdown from "$lib/pool/PoolFeeBreakdown.svelte";
   import { assetIdToTokenId } from "$lib/pool/shared";
   import SwapForm from "$lib/SwapForm.svelte";
@@ -127,7 +128,7 @@
   }
 
   function hasAnySocialLinks(data: LaunchApiTokenData): boolean {
-    return Boolean(data.x || data.telegram || data.website);
+    return Boolean(data.x || data.telegram || data.twitch || data.website);
   }
 
   let lastLoadedLaunchPoolFeeTokenId = $state<string | null>(null);
@@ -193,6 +194,11 @@
 </script>
 
 <div class="detail-view">
+  <TwitchLiveEmbed
+    twitchUrl={launchData.twitch}
+    tokenSymbol={token.metadata.symbol}
+  />
+
   <div class="detail-layout">
     <section
       class="chart-panel"
@@ -312,6 +318,25 @@
                     role="img"
                   >
                     <path d={siTelegram.path} />
+                  </svg>
+                </a>
+              {/if}
+              {#if launchData.twitch}
+                <a
+                  href={launchData.twitch}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="token-link-btn"
+                  aria-label="Token Twitch"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    role="img"
+                  >
+                    <path d={siTwitch.path} />
                   </svg>
                 </a>
               {/if}

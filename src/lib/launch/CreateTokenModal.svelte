@@ -91,6 +91,7 @@
   let description = $state("");
   let telegram = $state("");
   let x = $state("");
+  let twitch = $state("");
   let website = $state("");
   let firstBuy = $state("");
 
@@ -132,6 +133,11 @@
     if (x.length === 0) return true;
     if (x.length > 50) return false;
     return /^https:\/\/x\.com\/[^/]+$/.test(x);
+  });
+  const isTwitchValid = $derived.by(() => {
+    if (twitch.length === 0) return true;
+    if (twitch.length > 50) return false;
+    return /^https:\/\/twitch\.tv\/[^/]+$/.test(twitch);
   });
   const isWebsiteValid = $derived.by(() => {
     if (website.length === 0) return true;
@@ -242,6 +248,11 @@
     if (!isXValid) {
       errors.push(
         "X must start with https://x.com/ and be a valid link to a profile",
+      );
+    }
+    if (!isTwitchValid) {
+      errors.push(
+        "Twitch must start with https://twitch.tv/ and be a valid link to a channel",
       );
     }
     if (!isWebsiteValid) errors.push("Website must start with https://");
@@ -469,6 +480,7 @@
       const launchData: LaunchDataArgs = {
         telegram: normalizeOptional(telegram),
         x: normalizeOptional(x),
+        twitch: normalizeOptional(twitch),
         website: normalizeOptional(website),
         description: normalizeOptional(description),
       };
@@ -689,7 +701,7 @@
           </label>
         </div>
 
-        <LaunchDataFields bind:description bind:telegram bind:x bind:website />
+        <LaunchDataFields bind:description bind:telegram bind:x bind:twitch bind:website />
 
         <div class="section">
           <label class="field">
