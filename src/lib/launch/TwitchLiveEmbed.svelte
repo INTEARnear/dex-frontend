@@ -6,6 +6,7 @@
     tokenSymbol: string;
   }
 
+  type Theme = "dark" | "light";
   type TwitchLiveState = "offline" | "checking" | "live";
 
   interface TwitchPlayerOptions {
@@ -49,6 +50,7 @@
   let twitchParentHost = $state<string | null>(null);
   let playerContainerElement = $state<HTMLDivElement | null>(null);
   let liveState = $state<TwitchLiveState>("offline");
+  let resolvedTheme = $state<Theme>("dark");
   let currentChannelKey = $state<string | null>(null);
   let lastPreparedChannelKey = $state<string | null>(null);
   let activeInitializationId = 0;
@@ -61,7 +63,8 @@
   });
   const twitchChatEmbedSrc = $derived.by(() => {
     if (!twitchChannelHandle || !twitchParentHost) return null;
-    return `https://www.twitch.tv/embed/${encodeURIComponent(twitchChannelHandle)}/chat?parent=${encodeURIComponent(twitchParentHost)}`;
+    const darkThemeQuery = resolvedTheme === "dark" ? "darkpopout&" : "";
+    return `https://www.twitch.tv/embed/${encodeURIComponent(twitchChannelHandle)}/chat?${darkThemeQuery}parent=${encodeURIComponent(twitchParentHost)}`;
   });
 
   function parseTwitchChannelHandle(url: string | null): string | null {
@@ -85,6 +88,10 @@
 
   function getTwitchPlayerConstructor(): TwitchPlayerConstructor | null {
     return (window as TwitchWindow).Twitch?.Player ?? null;
+  }
+
+  function resolveTheme(): Theme {
+    return document.documentElement.dataset.theme === "light" ? "light" : "dark";
   }
 
   async function waitForTwitchPlayerConstructor(): Promise<TwitchPlayerConstructor> {
@@ -226,6 +233,19 @@
 
   onMount(() => {
     twitchParentHost = window.location.hostname;
+    resolvedTheme = resolveTheme();
+
+    const themeObserver = new MutationObserver(() => {
+      resolvedTheme = resolveTheme();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => {
+      themeObserver.disconnect();
+    };
   });
 
   onDestroy(() => {
@@ -262,7 +282,7 @@
   <section class="twitch-section" class:probing={liveState === "checking"}>
     {#if liveState === "live"}
       <div class="twitch-section-header">
-        <h3>Twitch</h3>
+        <h3>Live</h3>
         <a
           href={twitchUrl ?? `https://twitch.tv/${twitchChannelHandle}`}
           target="_blank"
@@ -363,24 +383,24 @@
 
   .twitch-player-card {
     position: relative;
-    min-height: 360px;
+    min-height: 392px;
   }
 
   .twitch-player-host {
     width: 100%;
     height: 100%;
-    min-height: 360px;
+    min-height: 392px;
     background: var(--bg-secondary);
   }
 
   .twitch-chat-card {
-    min-height: 360px;
+    min-height: 392px;
   }
 
   .twitch-chat-frame {
     width: 100%;
     height: 100%;
-    min-height: 360px;
+    min-height: 392px;
     border: 0;
     display: block;
   }
@@ -396,7 +416,7 @@
     .twitch-chat-card,
     .twitch-player-host,
     .twitch-chat-frame {
-      min-height: 320px;
+      min-height: 340px;
     }
   }
 </style>
