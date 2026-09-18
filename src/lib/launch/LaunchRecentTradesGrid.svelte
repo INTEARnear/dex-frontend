@@ -392,7 +392,7 @@
     return tokenHubStore.selectToken(tokenId)?.metadata.decimals ?? null;
   }
 
-  async function fetchHistoricalRawPrice(
+  async function fetchHistoricalPrice(
     tokenId: string,
     timestampNanosec: string,
   ): Promise<number | null> {
@@ -408,16 +408,13 @@
     const request = (async () => {
       try {
         const response = await fetch(
-          `${PRICE_AT_TIME_API}?token=${tokenId}&timestamp_millis=${Number(timestampNanosec) / 1000000}`,
+          `${PRICE_AT_TIME_API}?token=${tokenId}&timestamp_millis=${Math.floor(Number(timestampNanosec) / 1000000)}`,
         );
         if (!response.ok) return null;
         const payload = (await response.json()) as {
-          price_usd?: number | string;
+          price_usd: string;
         };
-        const rawPrice =
-          typeof payload.price_usd === "number"
-            ? payload.price_usd
-            : Number(payload.price_usd);
+        const rawPrice = Number(payload.price_usd);
         return rawPrice;
       } catch {
         return null;
@@ -446,18 +443,18 @@
     const priceTokenId =
       counterTokenId === "near" ? "wrap.near" : counterTokenId;
 
-    const [counterTokenDecimals, usdtDecimals, rawPriceUsd] = await Promise.all(
+    const [counterTokenDecimals, usdtDecimals, priceUsd] = await Promise.all(
       [
         getTokenDecimals(counterTokenId),
         getTokenDecimals("usdt.tether-token.near"),
-        fetchHistoricalRawPrice(priceTokenId, trade.block_timestamp_nanosec),
+        fetchHistoricalPrice(priceTokenId, trade.block_timestamp_nanosec),
       ],
     );
 
     if (
       counterTokenDecimals === null ||
       usdtDecimals === null ||
-      rawPriceUsd === null
+      priceUsd === null
     ) {
       return null;
     }
@@ -465,11 +462,7 @@
     const counterAmountHuman =
       absoluteCounterAmount / Math.pow(10, counterTokenDecimals);
 
-    const humanReadablePriceUsd =
-      (rawPriceUsd * Math.pow(10, counterTokenDecimals)) /
-      Math.pow(10, usdtDecimals);
-
-    const usdValue = counterAmountHuman * humanReadablePriceUsd;
+    const usdValue = counterAmountHuman * priceUsd;
     return usdValue;
   }
 
