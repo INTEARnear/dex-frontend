@@ -243,6 +243,8 @@ function createTokenHubStore() {
 
   const getState = () => get({ subscribe });
 
+  const notFound: { [tokenId: string]: true } = {};
+
   function setStatus<K extends keyof StatusState>(
     key: K,
     value: StatusState[K],
@@ -549,11 +551,18 @@ function createTokenHubStore() {
     const pending = inflightTokenById.get(tokenId);
     if (pending) return pending;
 
+    if (notFound[tokenId]) {
+      return null;
+    }
+
     const request = (async () => {
       try {
         const response = await fetch(
-          `${PRICES_API}/token?token_id=${encodeURIComponent(tokenId)}`,
+          `${PRICES_API}/token?token_id=${tokenId}`,
         );
+        if (response.status === 404) {
+          notFound[tokenId] = true;
+        }
         if (!response.ok) return null;
         const incoming: TokenResponseWithIcon = await response.json();
 

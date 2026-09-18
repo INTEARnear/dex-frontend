@@ -11,6 +11,8 @@
     saveLaunchTradesViewerConfig,
   } from "./launchTradesConfig";
   import type {
+    LaunchTradeHistoricalResponse,
+    LaunchTradeHistorical,
     LaunchTradeSwapEvent,
     LaunchTradesColumnKey,
     LaunchTradesColumnWidths,
@@ -19,10 +21,10 @@
   } from "./types";
 
   const TRADE_EVENTS_API =
-    "https://events-v3.intear.tech/v3/trade_swap/by_token_newest";
+    "https://prices.intear.tech/trades";
   const TRADE_EVENTS_WS = "wss://ws-events-v3.intear.tech/events/trade_swap";
   const PRICE_AT_TIME_API =
-    "https://events-v3.intear.tech/v3/price_token/price_at_time";
+    "https://prices.intear.tech/price_at_time";
 
   const COLUMN_ORDER: LaunchTradesColumnKey[] = [
     "time",
@@ -111,7 +113,7 @@
   $effect(() => {
     const accountId = tokenAccountId;
     if (!accountId) return;
-    if (accountId === activeTokenAccountId) return;
+    if (tokenAccountId === activeTokenAccountId) return;
     activeTokenAccountId = accountId;
 
     const requestId = ++activeRequestId;
@@ -218,13 +220,29 @@
     trades = Array.from(mergedByKey.values()).sort(compareTradesNewestFirst);
   }
 
+  function mapApiTradeToSwapEvent(
+    apiTrade: LaunchTradeHistorical,
+  ): LaunchTradeSwapEvent {
+    return {
+      balance_changes: {
+        [apiTrade.token_in]: `-${apiTrade.amount_in}`,
+        [apiTrade.token_out]: apiTrade.amount_out,
+      },
+      block_height: apiTrade.height,
+      block_timestamp_nanosec: String(apiTrade.timestamp_millis * 1_000_000),
+      receipt_id: apiTrade.receipt_id,
+      trader: apiTrade.trader,
+      transaction_id: apiTrade.transaction_id,
+    };
+  }
+
   async function fetchInitialTrades(
     accountId: string,
     requestId: number,
   ): Promise<void> {
     try {
       const response = await fetch(
-        `${TRADE_EVENTS_API}?account=${encodeURIComponent(accountId)}`,
+        `${TRADE_EVENTS_API}?token=${accountId}&order=newest&limit=50`,
       );
       if (!response.ok) {
         throw new Error(
@@ -232,9 +250,21 @@
         );
       }
 
-      const payload = (await response.json()) as LaunchTradeSwapEvent[];
-      if (requestId !== activeRequestId || accountId !== tokenAccountId) return;
-      mergeTrades(payload);
+      const payload = (await response.json()) as LaunchTradeHistoricalResponse;
+      if (requestId !== activeRequestId || activeTokenAccountId !== tokenAccountId)
+        return;
+      mergeTrades(payload.trades.map(mapApiTradeToSwapEvent));
+
+      const usdUpdates: Record<string, number | null> = {};
+      for (const historicalTrade of payload.trades) {
+        if (historicalTrade.usd_value !== undefined) {
+          usdUpdates[historicalTrade.transaction_id] = Number(historicalTrade.usd_value);
+        }
+      }
+      if (Object.keys(usdUpdates).length > 0) {
+        usdByTradeKey = { ...usdByTradeKey, ...usdUpdates };
+      }
+
       loadError = null;
     } catch (error) {
       if (requestId !== activeRequestId || accountId !== tokenAccountId) return;
@@ -378,7 +408,7 @@
     const request = (async () => {
       try {
         const response = await fetch(
-          `${PRICE_AT_TIME_API}?token=${encodeURIComponent(tokenId)}&timestamp_nanosec=${encodeURIComponent(timestampNanosec)}`,
+          `${PRICE_AT_TIME_API}?token=${tokenId}&timestamp_millis=${Number(timestampNanosec) / 1000000}`,
         );
         if (!response.ok) return null;
         const payload = (await response.json()) as {

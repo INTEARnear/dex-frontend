@@ -32,6 +32,29 @@ export interface LaunchTradeSwapEvent {
   transaction_id: string;
 }
 
+export interface LaunchTradeHistorical {
+  amount: string;
+  amount_in: string;
+  amount_out: string;
+  height: number;
+  id: number;
+  pool_id: string;
+  receipt_id: string;
+  side: "buy" | "sell";
+  timestamp_millis: number;
+  token: string;
+  token_in: string;
+  token_out: string;
+  trader: string;
+  transaction_id: string;
+  usd_value?: string;
+}
+
+export interface LaunchTradeHistoricalResponse {
+  next_cursor?: string;
+  trades: LaunchTradeHistorical[];
+}
+
 export type LaunchTradeType = "BUY" | "SELL";
 export type LaunchTradesTimeMode = "relative" | "absolute";
 export type LaunchTradesExplorer = "nearblocks" | "pikespeak";
