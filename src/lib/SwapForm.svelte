@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, untrack } from "svelte";
+  import { onDestroy, untrack, type Snippet } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { walletStore } from "./walletStore";
@@ -106,6 +106,10 @@
     hideSubtitle?: boolean;
     lockedPair?: LockedSwapPair | null;
     actionLabels?: ActionLabelsMode;
+    inputTokenId?: string | null;
+    outputTokenId?: string | null;
+    reserveRouteInfoSpace?: boolean;
+    sideControl?: Snippet;
   }
 
   let {
@@ -113,13 +117,15 @@
     hideSubtitle = false,
     lockedPair = null,
     actionLabels = "swap",
+    inputTokenId = $bindable(null),
+    outputTokenId = $bindable(null),
+    reserveRouteInfoSpace = false,
+    sideControl,
   }: SwapFormProps = $props();
 
   let inputAmountHumanReadable = $state("");
   let outputAmountHumanReadable = $state("");
   let isSwapping = $state(false);
-  let inputTokenId = $state<string | null>(null);
-  let outputTokenId = $state<string | null>(null);
   const inputToken = $derived.by(() =>
     inputTokenId ? ($tokenHubStore.tokensById[inputTokenId] ?? null) : null,
   );
@@ -133,6 +139,7 @@
   let swapSlippageMode = $state<SlippageMode>(initialSwapSettings.mode);
   let swapSlippageValue = $state(initialSwapSettings.value);
   let swapSettingsOpen = $state(false);
+  let ignorePriceImpact = $state(false);
 
   const swapSettingsDisplay = $derived(
     swapSlippageMode === "auto" ? "Auto" : `${swapSlippageValue}%`,
@@ -848,7 +855,7 @@
   });
 
   const showPriceImpactWarning = $derived(
-    priceImpact !== null && priceImpact > 2.5,
+    !ignorePriceImpact && priceImpact !== null && priceImpact > 2.5,
   );
 
   const priceImpactSevere = $derived(priceImpact !== null && priceImpact > 5);
@@ -861,7 +868,9 @@
 
   const priceImpactConfirmationTier = $derived.by(
     (): PriceImpactConfirmationTier => {
-      if (priceImpact === null || priceImpact <= 10) return "none";
+      if (ignorePriceImpact || priceImpact === null || priceImpact <= 10) {
+        return "none";
+      }
       if (priceImpact <= 20) return "checkbox";
       if (priceImpact <= 90) return "confirm";
       return "extreme";
@@ -1499,8 +1508,14 @@
   <p class="subtitle">{randomPhrase}</p>
 {/if}
 
-<div class="swap-card" class:disabled={!$walletStore.isConnected} class:compact>
-  <TradeSettingsRow
+<div class="swap-card-shell" class:with-side-control={sideControl}>
+  <div
+    class="swap-card"
+    class:disabled={!$walletStore.isConnected}
+    class:compact
+    class:reserve-route-info-space={reserveRouteInfoSpace}
+  >
+    <TradeSettingsRow
     bind:open={swapSettingsOpen}
     settingsLabel={swapSettingsDisplay}
     dialogLabel="Swap settings"
@@ -1539,6 +1554,8 @@
       {presetsVisible}
       presets={amountPresets}
       onPresetsChange={handlePresetsChange}
+      {ignorePriceImpact}
+      onIgnorePriceImpactChange={(ignore) => (ignorePriceImpact = ignore)}
     />
   </TradeSettingsRow>
 
@@ -1904,6 +1921,10 @@
         {/if}
       </div>
     </div>
+  {:else if reserveRouteInfoSpace}
+    <div class="route-info route-info-placeholder">
+      <span>Enter an amount to view route details.</span>
+    </div>
   {/if}
 
   {#if showPriceImpactWarning}
@@ -2026,6 +2047,12 @@
         {primaryActionLabel}
       {/if}
     </button>
+  {/if}
+
+  </div>
+
+  {#if sideControl}
+    {@render sideControl()}
   {/if}
 </div>
 
@@ -2209,6 +2236,11 @@
     font-weight: 400;
   }
 
+
+  .swap-card-shell {
+    width: 100%;
+  }
+
   .swap-card {
     width: 100%;
     background: var(--bg-card);
@@ -2230,6 +2262,26 @@
     border-radius: 1rem;
     gap: 0.55rem;
     box-shadow: none;
+  }
+
+  @media (min-width: 1180px) {
+    .swap-card-shell.with-side-control {
+      display: flex;
+      align-items: stretch;
+      border-radius: 1.25rem;
+      box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.3),
+        0 2px 4px -2px rgba(0, 0, 0, 0.2),
+        0 0 0 1px rgba(59, 130, 246, 0.05);
+    }
+
+    .swap-card-shell.with-side-control .swap-card {
+      flex: 1 1 auto;
+      min-width: 0;
+      border-right: 0;
+      border-radius: 1.25rem 0 0 1.25rem;
+      box-shadow: none;
+    }
   }
 
   .swap-card.disabled .input-wrapper {
@@ -2575,6 +2627,19 @@
     --route-badge-height: 1.45rem;
     gap: 0.35rem;
     padding: 0.6rem 0.72rem;
+  }
+
+  .swap-card.reserve-route-info-space .route-info {
+    box-sizing: border-box;
+    height: 5.1875rem;
+  }
+
+  .route-info-placeholder {
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    text-align: center;
   }
 
   .route-row {

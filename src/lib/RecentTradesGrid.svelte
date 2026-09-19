@@ -3,22 +3,25 @@
   import { Check, Copy, ExternalLink, Funnel, X } from "lucide-svelte";
   import { onMount } from "svelte";
   import { cubicOut } from "svelte/easing";
+  import { fade, fly } from "svelte/transition";
+  import { focusFirstElement, trapFocusKeydown } from "$lib/a11y";
   import { tokenHubStore } from "$lib/tokenHubStore";
   import { formatCompact, formatRelativeDate } from "$lib/utils";
   import {
     DEFAULT_LAUNCH_TRADES_VIEWER_CONFIG,
     loadLaunchTradesViewerConfigWithMeta,
     saveLaunchTradesViewerConfig,
-  } from "./launchTradesConfig";
+  } from "./launch/launchTradesConfig";
   import type {
     LaunchTradeHistoricalResponse,
     LaunchTradeHistorical,
     LaunchTradeSwapEvent,
     LaunchTradesColumnKey,
+    LaunchTradesExplorer,
     LaunchTradesColumnWidths,
     LaunchTradesViewerConfig,
     LaunchTradeType,
-  } from "./types";
+  } from "./launch/types";
 
   const TRADE_EVENTS_API =
     "https://prices.intear.tech/trades";
@@ -72,11 +75,12 @@
   let relativeTimeTick = $state(0);
   let isResizing = $state(false);
   let shouldCapDefaultColumns = $state(false);
-  let viewportWidth = $state(0);
   let sideFilter = $state<TradeSideFilter>("both");
   let minUsdFilter = $state<number | null>(null);
   let traderFilter = $state("");
   let filterModal = $state<FilterModal>(null);
+  let filterModalRef = $state<HTMLDivElement | null>(null);
+  let previouslyFocusedElement: HTMLElement | null = null;
   let draftMinUsd = $state<number | null>(null);
   let draftTrader = $state("");
   let afterMillisFilter = $state<number | null>(null);
@@ -97,15 +101,12 @@
   let activeResizeCleanup: (() => void) | null = null;
   const usdInflightKeys = new Set<string>();
 
-  const isSmallViewport = $derived(viewportWidth <= 480);
   // The REST endpoint applies all active filters. Keeping the previous page visible
   // until its replacement arrives prevents the document from collapsing and scrolling.
   const filteredTrades = $derived(trades);
 
   const gridTemplateColumns = $derived.by(() => {
-    const widths = isSmallViewport
-      ? applyMobileColumnLayout(normalizeColumnWidths(settings.columnWidths))
-      : settings.columnWidths;
+    const widths = settings.columnWidths;
     return `${widths.time}% ${widths.type}% ${widths.amount}% ${widths.trader}% ${widths.txn}%`;
   });
 
@@ -169,19 +170,12 @@
     settings = loaded.config;
     shouldCapDefaultColumns = loaded.usedDefaultColumnWidths;
     hasRestoredSettings = true;
-    viewportWidth = window.innerWidth;
-
-    const handleResize = () => {
-      viewportWidth = window.innerWidth;
-    };
-    window.addEventListener("resize", handleResize, { passive: true });
 
     relativeTickerTimer = setInterval(() => {
       relativeTimeTick += 1;
     }, 1_000);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
       activeTokenAccountId = null;
       disconnectTradeSocket();
       if (reconnectTimer !== null) clearTimeout(reconnectTimer);
@@ -388,12 +382,44 @@
     filterModal = kind;
   }
 
+  function closeFilterModal(): void {
+    filterModal = null;
+  }
+
+  function handleFilterModalKeydown(event: KeyboardEvent): void {
+    if (!filterModalRef) return;
+
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      closeFilterModal();
+      return;
+    }
+
+    trapFocusKeydown(event, filterModalRef);
+  }
+
+  $effect(() => {
+    if (!filterModal) return;
+
+    previouslyFocusedElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    queueMicrotask(() => {
+      if (filterModalRef) focusFirstElement(filterModalRef);
+    });
+
+    return () => {
+      previouslyFocusedElement?.focus();
+      previouslyFocusedElement = null;
+    };
+  });
+
   function applyFilterModal(): void {
     minUsdFilter = draftMinUsd;
     traderFilter = draftTrader.trim();
     afterMillisFilter = draftAfterTime ? new Date(draftAfterTime).getTime() : null;
     beforeMillisFilter = draftBeforeTime ? new Date(draftBeforeTime).getTime() : null;
-    filterModal = null;
+    closeFilterModal();
     resetAndFetchTrades();
   }
 
@@ -649,16 +675,44 @@
     });
   }
 
+  function getExplorerLabel(explorer: LaunchTradesExplorer): string {
+    if (explorer === "nearblocks") return "Nearblocks";
+    if (explorer === "pikespeak") return "Pikespeak";
+    return "near.rocks";
+  }
+
+  function getExplorerAbbreviation(explorer: LaunchTradesExplorer): string {
+    if (explorer === "nearblocks") return "NB";
+    if (explorer === "pikespeak") return "PP";
+    return "NR";
+  }
+
+  function getNextExplorer(
+    explorer: LaunchTradesExplorer,
+  ): LaunchTradesExplorer {
+    if (explorer === "nearblocks") return "pikespeak";
+    if (explorer === "pikespeak") return "nearrocks";
+    return "nearblocks";
+  }
+
   function buildTraderLink(accountId: string): string {
-    return settings.traderExplorer === "nearblocks"
-      ? `https://nearblocks.io/address/${accountId}`
-      : `https://pikespeak.ai/wallet-explorer/${accountId}`;
+    if (settings.traderExplorer === "nearblocks") {
+      return `https://nearblocks.io/address/${accountId}`;
+    }
+    if (settings.traderExplorer === "pikespeak") {
+      return `https://pikespeak.ai/wallet-explorer/${accountId}`;
+    }
+    return `https://near.rocks/account/${accountId}`;
   }
 
   function buildTxnLink(transactionId: string): string {
-    return settings.txnExplorer === "nearblocks"
-      ? `https://nearblocks.io/txns/${transactionId}`
-      : `https://pikespeak.ai/transaction-viewer/${transactionId}`;
+    if (settings.txnExplorer === "nearblocks") {
+      return `https://nearblocks.io/txns/${transactionId}`;
+    }
+    if (settings.txnExplorer === "pikespeak") {
+      return `https://pikespeak.ai/transaction-viewer/${transactionId}`;
+    }
+    return `https://near.rocks/tx/${transactionId}`;
   }
 
   function updateAndPersistSettings(nextSettings: LaunchTradesViewerConfig) {
@@ -678,16 +732,14 @@
   function toggleTraderExplorer() {
     updateAndPersistSettings({
       ...settings,
-      traderExplorer:
-        settings.traderExplorer === "nearblocks" ? "pikespeak" : "nearblocks",
+      traderExplorer: getNextExplorer(settings.traderExplorer),
     });
   }
 
   function toggleTxnExplorer() {
     updateAndPersistSettings({
       ...settings,
-      txnExplorer:
-        settings.txnExplorer === "nearblocks" ? "pikespeak" : "nearblocks",
+      txnExplorer: getNextExplorer(settings.txnExplorer),
     });
   }
 
@@ -706,30 +758,6 @@
     };
   }
 
-  function applyMobileColumnLayout(
-    widths: LaunchTradesColumnWidths,
-  ): LaunchTradesColumnWidths {
-    const distributionKeys: Array<keyof LaunchTradesColumnWidths> = [
-      "time",
-      "type",
-      "amount",
-      "trader",
-      "txn",
-    ];
-    const distributionBase = distributionKeys.reduce(
-      (sum, key) => sum + widths[key],
-      0,
-    );
-
-    const adjusted: LaunchTradesColumnWidths = {
-      ...widths,
-    };
-    for (const key of distributionKeys) {
-      adjusted[key] += widths[key] / distributionBase;
-    }
-
-    return normalizeColumnWidths(adjusted);
-  }
 
   function applyDefaultColumnCaps(
     widths: LaunchTradesColumnWidths,
@@ -800,7 +828,6 @@
   }
 
   function startColumnResize(event: PointerEvent, boundaryIndex: number) {
-    if (isSmallViewport) return;
     if (!gridRef) return;
 
     activeResizeCleanup?.();
@@ -904,7 +931,7 @@
     <div
       class="trades-grid"
       bind:this={gridRef}
-      style={`--launch-trades-columns: ${gridTemplateColumns};`}
+      style={`--recent-trades-user-columns: ${gridTemplateColumns};`}
     >
       <div class="trade-header trade-grid">
         <div class="header-cell">
@@ -969,7 +996,7 @@
         </div>
 
         <div class="header-cell">
-          <span>Type</span>
+          <span class="type-header-label">Type</span>
           <button
             type="button"
             class="side-filter-btn"
@@ -1018,18 +1045,15 @@
             type="button"
             class="header-source-btn"
             onclick={toggleTraderExplorer}
-            aria-label="Toggle trader explorer"
-            title={settings.traderExplorer === "nearblocks"
-              ? "Nearblocks trader links enabled"
-              : "Pikespeak trader links enabled"}
+            aria-label={`Change trader explorer; current: ${getExplorerLabel(settings.traderExplorer)}`}
+            title={`${getExplorerLabel(settings.traderExplorer)} trader links enabled`}
           >
-            {isSmallViewport
-              ? settings.traderExplorer === "nearblocks"
-                ? "NB"
-                : "PP"
-              : settings.traderExplorer === "nearblocks"
-                ? "Nearblocks"
-                : "Pikespeak"}
+            <span class="source-long">
+              {getExplorerLabel(settings.traderExplorer)}
+            </span>
+            <span class="source-short" aria-hidden="true">
+              {getExplorerAbbreviation(settings.traderExplorer)}
+            </span>
           </button>
           <button
             type="button"
@@ -1040,17 +1064,15 @@
         </div>
 
         <div class="header-cell header-cell-last">
-          <span>Txn</span>
+          <span class="txn-header-label">Txn</span>
           <button
             type="button"
             class="header-source-btn"
             onclick={toggleTxnExplorer}
-            aria-label="Toggle transaction explorer"
-            title={settings.txnExplorer === "nearblocks"
-              ? "Nearblocks transaction links enabled"
-              : "Pikespeak transaction links enabled"}
+            aria-label={`Change transaction explorer; current: ${getExplorerLabel(settings.txnExplorer)}`}
+            title={`${getExplorerLabel(settings.txnExplorer)} transaction links enabled`}
           >
-            {settings.txnExplorer === "nearblocks" ? "NB" : "PP"}
+            {getExplorerAbbreviation(settings.txnExplorer)}
           </button>
         </div>
       </div>
@@ -1151,17 +1173,20 @@
   <div
     class="filter-modal-backdrop"
     role="presentation"
-    onclick={() => (filterModal = null)}
-    onkeydown={(event) => event.key === "Escape" && (filterModal = null)}
+    onclick={closeFilterModal}
+    onkeydown={(event) => event.key === "Escape" && closeFilterModal()}
+    transition:fade={{ duration: 150 }}
   >
     <div
       class="filter-modal"
+      bind:this={filterModalRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="trade-filter-title"
       tabindex="-1"
       onclick={(event) => event.stopPropagation()}
-      onkeydown={(event) => event.key === "Escape" && (filterModal = null)}
+      onkeydown={handleFilterModalKeydown}
+      transition:fly={{ y: 20, duration: 200 }}
     >
       <div class="filter-modal-header">
         <h2 id="trade-filter-title">
@@ -1171,33 +1196,39 @@
               ? "Filter by amount"
               : "Filter by trader"}
         </h2>
-        <button type="button" class="modal-close-btn" onclick={() => (filterModal = null)} aria-label="Close filter">
-          <X size={18} />
+        <button type="button" class="modal-close-btn" onclick={closeFilterModal} aria-label="Close filter">
+          <X size={22} strokeWidth={2} />
         </button>
       </div>
-      {#if filterModal === "time"}
-        <div class="time-filter-fields">
-          <label for="after-time">After</label>
-          <input id="after-time" type="datetime-local" bind:value={draftAfterTime} />
-          <label for="before-time">Before</label>
-          <input id="before-time" type="datetime-local" bind:value={draftBeforeTime} />
-        </div>
-      {:else if filterModal === "amount"}
-        <span class="filter-label">Minimum USD amount</span>
-        <div class="amount-filter-grid" aria-label="Minimum USD amount">
-          {#each USD_THRESHOLDS as threshold, index}
-            <button
-              type="button"
-              class:active={draftMinUsd === threshold}
-              class:last-amount-filter={index === USD_THRESHOLDS.length - 1}
-              onclick={() => (draftMinUsd = threshold)}
-            >${threshold.toLocaleString()}+</button>
-          {/each}
-        </div>
-      {:else}
-        <label for="trader-account">Trader account</label>
-        <input id="trader-account" bind:value={draftTrader} placeholder="account.near" />
-      {/if}
+
+      <div class="filter-modal-body">
+        {#if filterModal === "time"}
+          <div class="time-filter-fields">
+            <label for="after-time">After</label>
+            <input id="after-time" type="datetime-local" bind:value={draftAfterTime} />
+            <label for="before-time">Before</label>
+            <input id="before-time" type="datetime-local" bind:value={draftBeforeTime} />
+          </div>
+        {:else if filterModal === "amount"}
+          <span class="filter-label">Minimum USD amount</span>
+          <div class="amount-filter-grid" aria-label="Minimum USD amount">
+            {#each USD_THRESHOLDS as threshold, index}
+              <button
+                type="button"
+                class:active={draftMinUsd === threshold}
+                class:last-amount-filter={index === USD_THRESHOLDS.length - 1}
+                onclick={() => (draftMinUsd = threshold)}
+              >${threshold.toLocaleString()}+</button>
+            {/each}
+          </div>
+        {:else}
+          <div class="trader-filter-field">
+            <label for="trader-account">Trader account</label>
+            <input id="trader-account" bind:value={draftTrader} placeholder="account.near" />
+          </div>
+        {/if}
+      </div>
+
       <div class="filter-modal-actions">
         <button type="button" class="filter-clear-btn" onclick={() => {
           if (filterModal === "time") {
@@ -1214,6 +1245,8 @@
 
 <style>
   .recent-trades-card {
+    container-type: inline-size;
+    box-sizing: border-box;
     width: 100%;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -1276,6 +1309,8 @@
   }
 
   .trades-grid {
+    --recent-trades-columns: var(--recent-trades-user-columns);
+    box-sizing: border-box;
     min-width: 440px;
     width: 100%;
     border: 1px solid var(--border-color);
@@ -1286,7 +1321,7 @@
 
   .trade-grid {
     display: grid;
-    grid-template-columns: var(--launch-trades-columns);
+    grid-template-columns: var(--recent-trades-columns);
     align-items: center;
   }
 
@@ -1312,6 +1347,10 @@
 
   .header-cell-last {
     justify-content: flex-end;
+  }
+
+  .source-short {
+    display: none;
   }
 
   .header-icon-btn,
@@ -1455,8 +1494,11 @@
 
   .type-cell,
   .amount-cell {
+    overflow: hidden;
     font-family: "JetBrains Mono", monospace;
     font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .type-filter-cell {
@@ -1479,9 +1521,12 @@
   }
 
   .time-cell {
+    overflow: hidden;
     font-family: "JetBrains Mono", monospace;
     font-size: 0.78rem;
     color: var(--text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .trader-cell {
@@ -1593,61 +1638,91 @@
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
   }
 
   .filter-modal {
-    width: min(100%, 380px);
+    width: 100%;
+    max-width: 440px;
+    max-height: 90vh;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
+    overflow: hidden;
     border: 1px solid var(--border-color);
-    border-radius: 0.8rem;
+    border-radius: 1.25rem;
     background: var(--bg-card);
     color: var(--text-primary);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
   }
 
-  .filter-modal-header,
-  .filter-modal-actions {
+  .filter-modal-header {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .filter-modal-actions {
-    margin-top: 1.5rem;
+    display: flex;
+    flex-shrink: 0;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border-color);
   }
 
   .filter-modal h2 {
     margin: 0;
-    font-size: 1rem;
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    font-weight: 700;
+  }
+
+  .filter-modal-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+    padding: 1.5rem;
   }
 
   .filter-modal label,
   .filter-label {
-    color: var(--text-secondary);
-    font-size: 0.8rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
   }
 
-  .time-filter-fields {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: center;
-    gap: 0.65rem 0.75rem;
+  .time-filter-fields,
+  .trader-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .time-filter-fields label:not(:first-child) {
+    margin-top: 0.25rem;
   }
 
   .filter-modal input {
     width: 100%;
     box-sizing: border-box;
     border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    padding: 0.6rem;
+    border-radius: 0.625rem;
+    padding: 0.75rem 1rem;
     background: var(--bg-input);
     color: var(--text-primary);
+    font: inherit;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+
+  .filter-modal input:focus {
+    border-color: var(--accent-primary);
   }
 
   .amount-filter-grid {
@@ -1679,20 +1754,15 @@
     grid-column: 1 / -1;
   }
 
-  .modal-close-btn,
   .filter-clear-btn,
   .filter-apply-btn {
+    flex: 1;
     border-radius: 0.75rem;
-    padding: 0.8rem 1.25rem;
+    padding: 0.875rem 1.5rem;
     font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-  }
-
-  .filter-clear-btn,
-  .filter-apply-btn {
-    flex: 1;
   }
 
   .filter-clear-btn {
@@ -1707,11 +1777,24 @@
   }
 
   .modal-close-btn {
+    width: 2.25rem;
+    height: 2.25rem;
     display: inline-flex;
-    padding: 0.3rem;
-    border: 1px solid var(--border-color);
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0.5rem;
     background: transparent;
     color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .modal-close-btn:hover {
+    background: var(--bg-input);
+    color: var(--text-primary);
   }
 
   .filter-apply-btn {
@@ -1724,9 +1807,75 @@
     background: var(--accent-hover);
   }
 
+  @container (max-width: 700px) {
+    .trades-grid {
+      --recent-trades-columns: 19% 16% 16% 41.5% 7.5%;
+    }
+
+    .column-resizer,
+    .source-long,
+    .txn-header-label {
+      display: none;
+    }
+
+    .source-short {
+      display: inline;
+    }
+
+    .header-cell,
+    .trade-cell {
+      padding-left: 0.45rem;
+      padding-right: 0.45rem;
+    }
+
+    .header-cell {
+      gap: 0.25rem;
+      overflow: hidden;
+      font-size: 0.7rem;
+      white-space: nowrap;
+    }
+
+    .trade-cell {
+      font-size: 0.78rem;
+    }
+
+    .trader-cell {
+      gap: 0.3rem;
+    }
+  }
+
   @media (--tablet) {
     .recent-trades-card {
-      padding: 0.78rem;
+      padding-inline: 0.75rem;
+    }
+
+    .filter-modal-backdrop {
+      align-items: flex-end;
+      padding: 0;
+    }
+
+    .filter-modal {
+      max-width: 100%;
+      max-height: 95vh;
+      border-bottom: none;
+      border-radius: 1.25rem 1.25rem 0 0;
+    }
+
+    .filter-modal-header {
+      padding: 1rem 1.25rem;
+    }
+
+    .filter-modal h2 {
+      font-size: 1.125rem;
+    }
+
+    .filter-modal-body {
+      padding: 1.25rem;
+    }
+
+    .filter-modal-actions {
+      padding: 1rem 1.25rem;
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
     }
   }
 

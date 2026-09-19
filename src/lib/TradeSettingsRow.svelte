@@ -154,7 +154,7 @@
   .swap-settings-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 99;
+    z-index: 199;
     background: rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(1px);
     border: none;
@@ -167,9 +167,9 @@
     position: absolute;
     top: calc(100% + 0.5rem);
     right: 0;
-    z-index: 100;
-    width: 20.3412rem;
-    max-width: calc(max(100vw - 7rem, 13rem));
+    z-index: 200;
+    width: 21rem;
+    max-width: calc(100vw - 2rem);
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 0.875rem;

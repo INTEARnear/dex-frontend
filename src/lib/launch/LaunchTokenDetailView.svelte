@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import { Check, Copy, Globe, Pencil } from "lucide-svelte";
   import { siTelegram, siTwitch, siX } from "simple-icons";
-  import LaunchRecentTradesGrid from "./LaunchRecentTradesGrid.svelte";
+  import RecentTradesGrid from "$lib/RecentTradesGrid.svelte";
   import TwitchLiveEmbed from "./TwitchLiveEmbed.svelte";
   import PoolFeeBreakdown from "$lib/pool/PoolFeeBreakdown.svelte";
   import { assetIdToTokenId } from "$lib/pool/shared";
@@ -383,7 +383,7 @@
     </section>
   </div>
 
-  <LaunchRecentTradesGrid tokenAccountId={token.account_id} />
+  <RecentTradesGrid tokenAccountId={token.account_id} />
 </div>
 
 <style>

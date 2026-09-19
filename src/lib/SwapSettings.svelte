@@ -12,6 +12,8 @@
     presetsVisible: boolean;
     presets: AmountPreset[];
     onPresetsChange: (visible: boolean, presets: AmountPreset[]) => void;
+    ignorePriceImpact?: boolean;
+    onIgnorePriceImpactChange?: (ignore: boolean) => void;
   }
 
   let {
@@ -21,6 +23,8 @@
     presetsVisible,
     presets,
     onPresetsChange,
+    ignorePriceImpact = false,
+    onIgnorePriceImpactChange,
   }: Props = $props();
 
   const PRESETS = [0.1, 0.5, 1, 5];
@@ -180,6 +184,28 @@
       {/each}
     </div>
   {/if}
+
+  {#if onIgnorePriceImpactChange}
+    <div class="divider"></div>
+
+    <label class="checkbox-setting">
+      <input
+        type="checkbox"
+        checked={ignorePriceImpact}
+        onchange={(event) =>
+          onIgnorePriceImpactChange(
+            (event.currentTarget as HTMLInputElement).checked,
+          )}
+      />
+      <span>Ignore price impact</span>
+    </label>
+    {#if ignorePriceImpact}
+      <p class="ignore-price-impact-warning" role="alert">
+        Price impact warnings and confirmations are disabled. You may receive
+        significantly less value than you pay.
+      </p>
+    {/if}
+  {/if}
 </div>
 
 <style>
@@ -208,6 +234,7 @@
   .slippage-options {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.625rem;
     flex-wrap: wrap;
   }
@@ -284,6 +311,31 @@
     font-weight: 500;
     pointer-events: none;
     flex-shrink: 0;
+  }
+
+  .checkbox-setting {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .checkbox-setting input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+  }
+
+  .ignore-price-impact-warning {
+    margin: -0.125rem 0 0 1.5rem;
+    color: var(--status-warning-text);
+    font-size: 0.75rem;
+    line-height: 1.4;
   }
 
   /* --- Amount presets config --- */

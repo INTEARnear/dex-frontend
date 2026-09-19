@@ -58,7 +58,7 @@ export interface LaunchTradeHistoricalResponse {
 
 export type LaunchTradeType = "BUY" | "SELL";
 export type LaunchTradesTimeMode = "relative" | "absolute";
-export type LaunchTradesExplorer = "nearblocks" | "pikespeak";
+export type LaunchTradesExplorer = "nearblocks" | "pikespeak" | "nearrocks";
 export type LaunchTradesColumnKey =
   | "time"
   | "type"

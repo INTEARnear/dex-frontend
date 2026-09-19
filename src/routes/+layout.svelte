@@ -29,13 +29,15 @@
   let { children } = $props();
 
   const isWidePage = $derived(
-    page.url.pathname === "/pools" ||
+    page.url.pathname === "/terminal" ||
+      page.url.pathname === "/pools" ||
       page.url.pathname === "/pool" ||
       page.url.pathname === "/stats" ||
       page.url.pathname === "/launch",
   );
   const productLabel = $derived.by(() => {
     if (page.url.pathname === "/") return "DEX Aggregator";
+    if (page.url.pathname === "/terminal") return "Terminal";
     if (page.url.pathname === "/launch") return "Launch";
     if (page.url.pathname === "/pools") return "Plach";
     return "DEX";
@@ -89,8 +91,10 @@
   <nav class="desktop-nav">
     <a
       href="/"
-      class:active={page.url.pathname === "/"}
-      aria-current={page.url.pathname === "/" ? "page" : undefined}>Swap</a
+      class:active={page.url.pathname === "/" || page.url.pathname === "/terminal"}
+      aria-current={page.url.pathname === "/" || page.url.pathname === "/terminal"
+        ? "page"
+        : undefined}>Swap</a
     >
     <a
       href="/pools"
@@ -140,7 +144,10 @@
   </div>
 </div>
 
-<main class:wide={isWidePage}>
+<main
+  class:wide={isWidePage}
+  class:swap-with-toggle={page.url.pathname === "/"}
+>
   <header>
     <h1>Intear <span class="accent">{productLabel}</span></h1>
   </header>
@@ -149,8 +156,10 @@
     <div class="mobile-nav-row">
       <a
         href="/"
-        class:active={page.url.pathname === "/"}
-        aria-current={page.url.pathname === "/" ? "page" : undefined}>Swap</a
+        class:active={page.url.pathname === "/" || page.url.pathname === "/terminal"}
+        aria-current={page.url.pathname === "/" || page.url.pathname === "/terminal"
+          ? "page"
+          : undefined}>Swap</a
       >
       <a
         href="/pools"
@@ -261,6 +270,12 @@
     max-width: 1400px;
     flex: 1;
     justify-content: flex-start;
+  }
+
+  @media (min-width: 1180px) {
+    main.swap-with-toggle {
+      max-width: 524px;
+    }
   }
 
   .top-bar {
