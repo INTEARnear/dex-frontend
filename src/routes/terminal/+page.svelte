@@ -6,28 +6,18 @@
   import SwapForm from "$lib/SwapForm.svelte";
   import { tokenHubStore } from "$lib/tokenHubStore";
 
-  const STABLECOIN_SYMBOLS = new Set(["USDC", "USDt"]);
-  const NEAR_SYMBOLS = new Set(["NEAR", "wNEAR"]);
+  const STABLECOINS = ["17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1", "usdt.tether-token.near"];
+  const NEAR_TOKENS = ["near", "wrap.near"];
 
   let inputTokenId = $state<string | null>(null);
   let outputTokenId = $state<string | null>(null);
   let chartTheme = $state<"light" | "dark">("dark");
 
-  function tokenHasSymbol(
-    tokenId: string | null,
-    symbols: ReadonlySet<string>,
-  ): boolean {
-    if (!tokenId) return false;
-    return symbols.has(
-      $tokenHubStore.tokensById[tokenId]?.metadata.symbol ?? "",
-    );
-  }
-
   const chartTokenId = $derived.by(() => {
-    if (tokenHasSymbol(inputTokenId, STABLECOIN_SYMBOLS)) return outputTokenId;
-    if (tokenHasSymbol(outputTokenId, STABLECOIN_SYMBOLS)) return inputTokenId;
-    if (tokenHasSymbol(inputTokenId, NEAR_SYMBOLS)) return outputTokenId;
-    if (tokenHasSymbol(outputTokenId, NEAR_SYMBOLS)) return inputTokenId;
+    if (STABLECOINS.includes(inputTokenId)) return outputTokenId;
+    if (STABLECOINS.includes(outputTokenId)) return inputTokenId;
+    if (NEAR_TOKENS.includes(inputTokenId)) return outputTokenId;
+    if (NEAR_TOKENS.includes(outputTokenId)) return inputTokenId;
     return outputTokenId;
   });
   const chartToken = $derived(
