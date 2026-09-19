@@ -557,9 +557,7 @@ function createTokenHubStore() {
 
     const request = (async () => {
       try {
-        const response = await fetch(
-          `${PRICES_API}/token?token_id=${tokenId}`,
-        );
+        const response = await fetch(`${PRICES_API}/token?token_id=${tokenId}`);
         if (response.status === 404) {
           notFound[tokenId] = true;
         }

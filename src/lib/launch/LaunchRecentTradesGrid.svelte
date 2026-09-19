@@ -1,6 +1,6 @@
 <script lang="ts">
   import { flip } from "svelte/animate";
-  import { Check, Copy, ExternalLink } from "lucide-svelte";
+  import { Check, Copy, ExternalLink, Funnel, X } from "lucide-svelte";
   import { onMount } from "svelte";
   import { cubicOut } from "svelte/easing";
   import { tokenHubStore } from "$lib/tokenHubStore";
@@ -44,6 +44,9 @@
     trader: 240,
     txn: 74,
   };
+  const USD_THRESHOLDS = [10, 50, 100, 500, 1_000, 5_000, 10_000] as const;
+  type TradeSideFilter = "both" | "buy" | "sell";
+  type FilterModal = "time" | "amount" | "trader" | null;
 
   const historicalPriceCache = new Map<string, number | null>();
   const historicalPriceInflight = new Map<string, Promise<number | null>>();
@@ -70,6 +73,18 @@
   let isResizing = $state(false);
   let shouldCapDefaultColumns = $state(false);
   let viewportWidth = $state(0);
+  let sideFilter = $state<TradeSideFilter>("both");
+  let minUsdFilter = $state<number | null>(null);
+  let traderFilter = $state("");
+  let filterModal = $state<FilterModal>(null);
+  let draftMinUsd = $state<number | null>(null);
+  let draftTrader = $state("");
+  let afterMillisFilter = $state<number | null>(null);
+  let beforeMillisFilter = $state<number | null>(null);
+  let draftAfterTime = $state("");
+  let draftBeforeTime = $state("");
+  let nextCursor = $state<string | null>(null);
+  let isLoadingMore = $state(false);
 
   let currentSocket: WebSocket | null = null;
   let reconnectTimer: number | null = null;
@@ -83,6 +98,9 @@
   const usdInflightKeys = new Set<string>();
 
   const isSmallViewport = $derived(viewportWidth <= 480);
+  // The REST endpoint applies all active filters. Keeping the previous page visible
+  // until its replacement arrives prevents the document from collapsing and scrolling.
+  const filteredTrades = $derived(trades);
 
   const gridTemplateColumns = $derived.by(() => {
     const widths = isSmallViewport
@@ -127,7 +145,8 @@
     tokenHubStore.ensureTokenById(accountId);
     tokenHubStore.ensureTokenById("usdt.tether-token.near");
 
-    fetchInitialTrades(accountId, requestId);
+    nextCursor = null;
+    fetchTrades(accountId, requestId, false);
     connectTradeSocket(accountId, requestId);
   });
 
@@ -236,14 +255,29 @@
     };
   }
 
-  async function fetchInitialTrades(
+  function buildTradesUrl(accountId: string, cursor: string | null): string {
+    const params = new URLSearchParams({
+      token: accountId,
+      order: "newest",
+      limit: "50",
+    });
+    if (sideFilter !== "both") params.set("side", sideFilter);
+    if (traderFilter) params.set("trader", traderFilter);
+    if (minUsdFilter !== null) params.set("min_usd", String(minUsdFilter));
+    if (afterMillisFilter !== null) params.set("after_millis", String(afterMillisFilter));
+    if (beforeMillisFilter !== null) params.set("before_millis", String(beforeMillisFilter));
+    if (cursor) params.set("cursor", cursor);
+    return `${TRADE_EVENTS_API}?${params.toString()}`;
+  }
+
+  async function fetchTrades(
     accountId: string,
     requestId: number,
+    append: boolean,
   ): Promise<void> {
+    if (append) isLoadingMore = true;
     try {
-      const response = await fetch(
-        `${TRADE_EVENTS_API}?token=${accountId}&order=newest&limit=50`,
-      );
+      const response = await fetch(buildTradesUrl(accountId, append ? nextCursor : null));
       if (!response.ok) {
         throw new Error(
           `Failed to fetch recent trades: HTTP ${response.status}`,
@@ -253,11 +287,13 @@
       const payload = (await response.json()) as LaunchTradeHistoricalResponse;
       if (requestId !== activeRequestId || activeTokenAccountId !== tokenAccountId)
         return;
+      if (!append) trades = [];
       mergeTrades(payload.trades.map(mapApiTradeToSwapEvent));
+      nextCursor = payload.next_cursor ?? null;
 
       const usdUpdates: Record<string, number | null> = {};
       for (const historicalTrade of payload.trades) {
-        if (historicalTrade.usd_value !== undefined) {
+        if (historicalTrade.usd_value != null) {
           usdUpdates[historicalTrade.transaction_id] = Number(historicalTrade.usd_value);
         }
       }
@@ -275,7 +311,95 @@
     } finally {
       if (requestId !== activeRequestId || accountId !== tokenAccountId) return;
       isLoading = false;
+      isLoadingMore = false;
     }
+  }
+
+  function matchesActiveFilters(trade: LaunchTradeSwapEvent): boolean {
+    if (sideFilter !== "both" && getTradeType(trade).toLowerCase() !== sideFilter)
+      return false;
+    if (traderFilter && trade.trader !== traderFilter) return false;
+    const timestampMillis = Number(trade.block_timestamp_nanosec) / 1000000;
+    if (afterMillisFilter !== null && timestampMillis <= afterMillisFilter) return false;
+    if (beforeMillisFilter !== null && timestampMillis >= beforeMillisFilter) return false;
+    return true;
+  }
+
+  async function resetAndFetchTrades(): Promise<void> {
+    const requestId = ++activeRequestId;
+    isLoading = true;
+    loadError = null;
+    nextCursor = null;
+    disconnectTradeSocket();
+    await fetchTrades(tokenAccountId, requestId, false);
+    connectTradeSocket(tokenAccountId, requestId);
+  }
+
+  async function loadNextPage(): Promise<void> {
+    if (!nextCursor || isLoading || isLoadingMore) return;
+    await fetchTrades(tokenAccountId, activeRequestId, true);
+  }
+
+  function paginationSentinel(node: HTMLElement, enabled: boolean) {
+    let observer: IntersectionObserver | null = null;
+    const observe = (shouldObserve: boolean) => {
+      observer?.disconnect();
+      observer = null;
+      if (!shouldObserve) return;
+      observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadNextPage();
+      }, { rootMargin: "160px 0px" });
+      observer.observe(node);
+    };
+    observe(enabled);
+    return {
+      update: observe,
+      destroy: () => observer?.disconnect(),
+    };
+  }
+
+  function cycleSideFilter(): void {
+    switch (sideFilter) {
+      case "both":
+        sideFilter = "buy";
+        break;
+      case "buy":
+        sideFilter = "sell";
+        break;
+      case "sell":
+        sideFilter = "both";
+        break;
+    }
+    resetAndFetchTrades();
+  }
+
+  function toDateTimeLocal(timestamp: number | null): string {
+    if (timestamp === null) return "";
+    const date = new Date(timestamp);
+    const localDate = new Date(timestamp - date.getTimezoneOffset() * 60_000);
+    return localDate.toISOString().slice(0, 16);
+  }
+
+  function openFilterModal(kind: Exclude<FilterModal, null>): void {
+    draftMinUsd = minUsdFilter;
+    draftTrader = traderFilter;
+    draftAfterTime = toDateTimeLocal(afterMillisFilter);
+    draftBeforeTime = toDateTimeLocal(beforeMillisFilter);
+    filterModal = kind;
+  }
+
+  function applyFilterModal(): void {
+    minUsdFilter = draftMinUsd;
+    traderFilter = draftTrader.trim();
+    afterMillisFilter = draftAfterTime ? new Date(draftAfterTime).getTime() : null;
+    beforeMillisFilter = draftBeforeTime ? new Date(draftBeforeTime).getTime() : null;
+    filterModal = null;
+    resetAndFetchTrades();
+  }
+
+  function toggleTraderFilter(trader: string): void {
+    traderFilter = traderFilter === trader ? "" : trader;
+    resetAndFetchTrades();
   }
 
   function disconnectTradeSocket() {
@@ -328,7 +452,7 @@
       socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data) as LaunchTradeSwapEvent[];
-          mergeTrades(payload);
+          mergeTrades(payload.filter(matchesActiveFilters));
         } catch {
           // do nothing
         }
@@ -498,8 +622,8 @@
     return `$${formatCompact(usdValue / 1_000_000_000_000)}T`;
   }
 
-  function formatTradeTime(timestampNanosec: string): string {
-    const date = new Date(Number(timestampNanosec) / 1_000_000);
+  function formatTradeTime(timestampMillis: number): string {
+    const date = new Date(timestampMillis);
     if (settings.timeMode === "relative") {
       void relativeTimeTick;
       return formatRelativeDate(date);
@@ -758,7 +882,7 @@
     const requestId = activeRequestId;
     isLoading = true;
     loadError = null;
-    await fetchInitialTrades(tokenAccountId, requestId);
+    await fetchTrades(tokenAccountId, requestId, false);
   }
 </script>
 
@@ -785,6 +909,14 @@
       <div class="trade-header trade-grid">
         <div class="header-cell">
           <span>Time</span>
+          <button
+            type="button"
+            class="filter-btn"
+            class:active={afterMillisFilter !== null || beforeMillisFilter !== null}
+            onclick={() => openFilterModal("time")}
+            aria-label="Filter by time range"
+            title="Filter time range"
+          ><Funnel size={14} strokeWidth={2} /></button>
           <button
             type="button"
             class="header-icon-btn"
@@ -840,6 +972,14 @@
           <span>Type</span>
           <button
             type="button"
+            class="side-filter-btn"
+            class:active={sideFilter !== "both"}
+            onclick={cycleSideFilter}
+            aria-label={`Filter trade type: ${sideFilter}`}
+            title="Cycle trade type filter"
+          >{sideFilter.toUpperCase()}</button>
+          <button
+            type="button"
             class="column-resizer"
             aria-label="Resize Type and Amount columns"
             onpointerdown={(event) => startColumnResize(event, 1)}
@@ -850,6 +990,14 @@
           <span>Amount</span>
           <button
             type="button"
+            class="filter-btn"
+            class:active={minUsdFilter !== null}
+            onclick={() => openFilterModal("amount")}
+            aria-label="Filter by minimum USD amount"
+            title="Filter amount"
+          ><Funnel size={14} strokeWidth={2} /></button>
+          <button
+            type="button"
             class="column-resizer"
             aria-label="Resize Amount and Trader columns"
             onpointerdown={(event) => startColumnResize(event, 2)}
@@ -858,6 +1006,14 @@
 
         <div class="header-cell">
           <span>Trader</span>
+          <button
+            type="button"
+            class="filter-btn"
+            class:active={Boolean(traderFilter)}
+            onclick={() => openFilterModal("trader")}
+            aria-label="Filter by trader"
+            title="Filter trader"
+          ><Funnel size={14} strokeWidth={2} /></button>
           <button
             type="button"
             class="header-source-btn"
@@ -899,13 +1055,13 @@
         </div>
       </div>
 
-      {#if isLoading && !trades?.length}
+      {#if isLoading && !filteredTrades.length}
         <div class="table-state">Loading recent trades...</div>
-      {:else if !trades?.length}
-        <div class="table-state">No recent trades yet.</div>
+      {:else if !filteredTrades.length}
+        <div class="table-state">No trades match these filters.</div>
       {:else}
         <div class="trade-body">
-          {#each trades as trade (trade.transaction_id)}
+          {#each filteredTrades as trade, index (trade.transaction_id)}
             {@const tradeType = getTradeType(trade)}
             {@const tradeKey = trade.transaction_id}
             <article
@@ -913,11 +1069,21 @@
               class:buy={tradeType === "BUY"}
               class:sell={tradeType === "SELL"}
               animate:flip={{ duration: 180, easing: cubicOut }}
+              use:paginationSentinel={index === 39}
             >
               <div class="trade-cell time-cell neutral-cell">
-                {formatTradeTime(trade.block_timestamp_nanosec)}
+                {formatTradeTime(Number(trade.block_timestamp_nanosec) / 1000000)}
               </div>
-              <div class="trade-cell type-cell">{tradeType}</div>
+              <button
+                type="button"
+                class="trade-cell type-cell type-filter-cell"
+                onclick={() => {
+                  sideFilter = tradeType.toLowerCase() as "buy" | "sell";
+                  resetAndFetchTrades();
+                }}
+                aria-label={`Show only ${tradeType} trades`}
+                title={`Filter by ${tradeType}`}
+              >{tradeType}</button>
               <div class="trade-cell amount-cell">
                 {formatUsdAmount(usdByTradeKey[tradeKey])}
               </div>
@@ -945,6 +1111,18 @@
                     <Copy size={17} strokeWidth={2} />
                   {/if}
                 </button>
+                <button
+                  type="button"
+                  class="trader-filter-btn"
+                  class:active={traderFilter === trade.trader}
+                  onclick={() => toggleTraderFilter(trade.trader)}
+                  aria-label={traderFilter === trade.trader
+                    ? `Remove trader filter for ${trade.trader}`
+                    : `Filter by trader ${trade.trader}`}
+                  title={traderFilter === trade.trader
+                    ? "Remove trader filter"
+                    : "Show trades by this trader"}
+                ><Funnel size={14} strokeWidth={2} /></button>
               </div>
               <div class="trade-cell txn-cell neutral-cell">
                 <a
@@ -960,11 +1138,79 @@
               </div>
             </article>
           {/each}
+          {#if isLoadingMore}
+            <div class="loading-more">Loading more trades...</div>
+          {/if}
         </div>
       {/if}
     </div>
   </div>
 </section>
+
+{#if filterModal}
+  <div
+    class="filter-modal-backdrop"
+    role="presentation"
+    onclick={() => (filterModal = null)}
+    onkeydown={(event) => event.key === "Escape" && (filterModal = null)}
+  >
+    <div
+      class="filter-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="trade-filter-title"
+      tabindex="-1"
+      onclick={(event) => event.stopPropagation()}
+      onkeydown={(event) => event.key === "Escape" && (filterModal = null)}
+    >
+      <div class="filter-modal-header">
+        <h2 id="trade-filter-title">
+          {filterModal === "time"
+            ? "Filter by time"
+            : filterModal === "amount"
+              ? "Filter by amount"
+              : "Filter by trader"}
+        </h2>
+        <button type="button" class="modal-close-btn" onclick={() => (filterModal = null)} aria-label="Close filter">
+          <X size={18} />
+        </button>
+      </div>
+      {#if filterModal === "time"}
+        <div class="time-filter-fields">
+          <label for="after-time">After</label>
+          <input id="after-time" type="datetime-local" bind:value={draftAfterTime} />
+          <label for="before-time">Before</label>
+          <input id="before-time" type="datetime-local" bind:value={draftBeforeTime} />
+        </div>
+      {:else if filterModal === "amount"}
+        <span class="filter-label">Minimum USD amount</span>
+        <div class="amount-filter-grid" aria-label="Minimum USD amount">
+          {#each USD_THRESHOLDS as threshold, index}
+            <button
+              type="button"
+              class:active={draftMinUsd === threshold}
+              class:last-amount-filter={index === USD_THRESHOLDS.length - 1}
+              onclick={() => (draftMinUsd = threshold)}
+            >${threshold.toLocaleString()}+</button>
+          {/each}
+        </div>
+      {:else}
+        <label for="trader-account">Trader account</label>
+        <input id="trader-account" bind:value={draftTrader} placeholder="account.near" />
+      {/if}
+      <div class="filter-modal-actions">
+        <button type="button" class="filter-clear-btn" onclick={() => {
+          if (filterModal === "time") {
+            draftAfterTime = "";
+            draftBeforeTime = "";
+          } else if (filterModal === "amount") draftMinUsd = null;
+          else draftTrader = "";
+        }}>Clear</button>
+        <button type="button" class="filter-apply-btn" onclick={applyFilterModal}>Apply</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .recent-trades-card {
@@ -1102,6 +1348,39 @@
     background: var(--bg-card);
   }
 
+  .filter-btn,
+  .side-filter-btn {
+    border: 1px solid var(--border-color);
+    border-radius: 0.38rem;
+    background: transparent;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.35rem;
+    cursor: pointer;
+  }
+
+  .filter-btn {
+    width: 1.35rem;
+    padding: 0;
+  }
+
+  .side-filter-btn {
+    padding: 0 0.3rem;
+    font: inherit;
+    font-size: 0.62rem;
+  }
+
+  .filter-btn:hover,
+  .side-filter-btn:hover,
+  .filter-btn.active,
+  .side-filter-btn.active {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: var(--bg-card);
+  }
+
   .column-resizer {
     position: absolute;
     top: 0;
@@ -1180,6 +1459,21 @@
     font-weight: 600;
   }
 
+  .type-filter-cell {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .type-filter-cell:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
   .neutral-cell {
     color: var(--text-secondary);
   }
@@ -1213,6 +1507,7 @@
     text-underline-offset: 2px;
   }
 
+  .trader-filter-btn,
   .copy-btn {
     flex-shrink: 0;
     border: none;
@@ -1231,9 +1526,24 @@
       background 0.2s ease;
   }
 
+  .trader-filter-btn {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+  }
+
+  .trader-filter-btn:hover,
+  .trader-filter-btn.active,
   .copy-btn:hover {
     color: var(--text-primary);
     background: var(--bg-input);
+  }
+
+  .trader-filter-btn.active {
+    color: var(--accent-primary);
   }
 
   .copy-btn.copied {
@@ -1266,11 +1576,152 @@
     background: var(--bg-input);
   }
 
-  .table-state {
+  .table-state,
+  .loading-more {
     padding: 0.9rem;
     text-align: center;
     color: var(--text-muted);
     font-size: 0.85rem;
+  }
+
+
+  .filter-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(3px);
+  }
+
+  .filter-modal {
+    width: min(100%, 380px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.8rem;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  }
+
+  .filter-modal-header,
+  .filter-modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .filter-modal-actions {
+    margin-top: 1.5rem;
+  }
+
+  .filter-modal h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .filter-modal label,
+  .filter-label {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+  }
+
+  .time-filter-fields {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.65rem 0.75rem;
+  }
+
+  .filter-modal input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.6rem;
+    background: var(--bg-input);
+    color: var(--text-primary);
+  }
+
+  .amount-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+  }
+
+  .amount-filter-grid button {
+    border: 1px solid var(--border-color);
+    border-radius: 0.6rem;
+    padding: 0.65rem 0.4rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .amount-filter-grid button:hover,
+  .amount-filter-grid button.active {
+    border-color: var(--accent-primary);
+    background: var(--bg-input);
+    color: var(--accent-primary);
+  }
+
+  .amount-filter-grid .last-amount-filter {
+    grid-column: 1 / -1;
+  }
+
+  .modal-close-btn,
+  .filter-clear-btn,
+  .filter-apply-btn {
+    border-radius: 0.75rem;
+    padding: 0.8rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .filter-clear-btn,
+  .filter-apply-btn {
+    flex: 1;
+  }
+
+  .filter-clear-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  .filter-clear-btn:hover {
+    background: var(--bg-input);
+    border-color: var(--text-muted);
+  }
+
+  .modal-close-btn {
+    display: inline-flex;
+    padding: 0.3rem;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  .filter-apply-btn {
+    border: none;
+    background: var(--accent-button-small);
+    color: var(--text-on-accent);
+  }
+
+  .filter-apply-btn:hover {
+    background: var(--accent-hover);
   }
 
   @media (--tablet) {

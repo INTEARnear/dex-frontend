@@ -36,6 +36,7 @@ export interface LaunchTradeHistorical {
   amount: string;
   amount_in: string;
   amount_out: string;
+  counterparty: string;
   height: number;
   id: number;
   pool_id: string;
@@ -47,7 +48,7 @@ export interface LaunchTradeHistorical {
   token_out: string;
   trader: string;
   transaction_id: string;
-  usd_value?: string;
+  usd_value: string | null;
 }
 
 export interface LaunchTradeHistoricalResponse {
