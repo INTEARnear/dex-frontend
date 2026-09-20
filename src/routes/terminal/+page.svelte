@@ -14,10 +14,10 @@
   let chartTheme = $state<"light" | "dark">("dark");
 
   const chartTokenId = $derived.by(() => {
-    if (STABLECOINS.includes(inputTokenId)) return outputTokenId;
-    if (STABLECOINS.includes(outputTokenId)) return inputTokenId;
-    if (NEAR_TOKENS.includes(inputTokenId)) return outputTokenId;
-    if (NEAR_TOKENS.includes(outputTokenId)) return inputTokenId;
+    if (inputTokenId && STABLECOINS.includes(inputTokenId)) return outputTokenId;
+    if (outputTokenId && STABLECOINS.includes(outputTokenId)) return inputTokenId;
+    if (inputTokenId && NEAR_TOKENS.includes(inputTokenId)) return outputTokenId;
+    if (outputTokenId && NEAR_TOKENS.includes(outputTokenId)) return inputTokenId;
     return outputTokenId;
   });
   const chartToken = $derived(

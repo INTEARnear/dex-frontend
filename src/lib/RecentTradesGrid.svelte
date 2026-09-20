@@ -44,7 +44,8 @@
     txn: 70,
   };
   const MAX_COLUMN_WIDTH_PX: Partial<Record<LaunchTradesColumnKey, number>> = {
-    trader: 240,
+    time: 100,
+    type: 100,
     txn: 74,
   };
   const USD_THRESHOLDS = [10, 50, 100, 500, 1_000, 5_000, 10_000] as const;
@@ -676,9 +677,9 @@
   }
 
   function getExplorerLabel(explorer: LaunchTradesExplorer): string {
-    if (explorer === "nearblocks") return "Nearblocks";
+    if (explorer === "nearblocks") return "NearBlocks";
     if (explorer === "pikespeak") return "Pikespeak";
-    return "near.rocks";
+    return "NEAR Rocks";
   }
 
   function getExplorerAbbreviation(explorer: LaunchTradesExplorer): string {
@@ -774,7 +775,7 @@
     };
 
     let freedPx = 0;
-    for (const key of ["trader", "txn"] as (keyof LaunchTradesColumnWidths)[]) {
+    for (const key of Object.keys(px) as (keyof LaunchTradesColumnWidths)[]) {
       const maxPx = MAX_COLUMN_WIDTH_PX[key]!;
       if (px[key] > maxPx) {
         freedPx += px[key] - maxPx;
