@@ -169,6 +169,7 @@
     flex: 1;
     overflow: auto;
     border-radius: 1rem;
+    clip-path: inset(0 round 1rem);
     scrollbar-gutter: stable;
   }
 

@@ -9,6 +9,16 @@
   const PRICE_EVENTS_WS =
     "wss://ws-events-v3.intear.tech/events/price_token";
   const USDT_DECIMALS = 6;
+  const CHART_SCALE_STORAGE_KEY = "token-chart-scale";
+  const SUPPORTED_RESOLUTIONS = [
+    "1",
+    "5",
+    "15",
+    "60",
+    "240",
+    "1D",
+    "1W",
+  ];
 
   interface ChartBar {
     time: number;
@@ -64,6 +74,12 @@
   }
 
   interface TradingViewChart {
+    onIntervalChanged(): {
+      subscribe(
+        context: null,
+        callback: (interval: string) => void,
+      ): void;
+    };
     refreshMarks(): void;
   }
 
@@ -252,6 +268,25 @@
     return error instanceof Error ? error.message : "Unknown chart data error";
   }
 
+  function loadChartScale(): string {
+    try {
+      const scale = localStorage.getItem(CHART_SCALE_STORAGE_KEY);
+      return scale && SUPPORTED_RESOLUTIONS.includes(scale) ? scale : "1";
+    } catch {
+      return "1";
+    }
+  }
+
+  function saveChartScale(scale: string): void {
+    if (!SUPPORTED_RESOLUTIONS.includes(scale)) return;
+
+    try {
+      localStorage.setItem(CHART_SCALE_STORAGE_KEY, scale);
+    } catch {
+      // Storage can be unavailable in privacy-restricted browser contexts.
+    }
+  }
+
   function createDatafeed(options: {
     metadata: TokenMetadata;
     getPriceUsd: () => number | null;
@@ -307,7 +342,7 @@
             supports_marks: true,
             supports_timescale_marks: false,
             supports_time: true,
-            supported_resolutions: ["1", "5", "15", "60", "240", "1D", "1W"],
+            supported_resolutions: SUPPORTED_RESOLUTIONS,
           });
         }, 0);
       },
@@ -624,6 +659,14 @@
   let isLoading = $state(true);
   let loadError = $state<string | null>(null);
   let activeWidget: TradingViewWidget | null = null;
+  let stableAccountId = $state("");
+  let stableTheme = $state<"light" | "dark">("dark");
+
+  $effect(() => {
+    const nextTheme = theme;
+    if (tokenAccountId !== stableAccountId) stableAccountId = tokenAccountId;
+    if (nextTheme !== stableTheme) stableTheme = nextTheme;
+  });
 
   $effect(() => {
     const selectedTrader = traderFilter?.trim() ?? "";
@@ -644,8 +687,9 @@
 
   $effect(() => {
     const container = chartContainer;
-    const accountId = tokenAccountId.toLowerCase();
-    const selectedTheme = theme;
+    const accountId = stableAccountId;
+    const selectedTheme = stableTheme;
+    const selectedScale = loadChartScale();
     const suppliedMetadata = untrack(() => ({
       name: tokenName,
       symbol: tokenSymbol,
@@ -675,7 +719,7 @@
         widget = new window.TradingView.widget({
           autosize: true,
           symbol: accountId,
-          interval: "1",
+          interval: selectedScale,
           container,
           datafeed,
           library_path: CHARTING_LIBRARY_PATH,
@@ -693,6 +737,10 @@
           theme: selectedTheme,
         });
         activeWidget = widget;
+        widget.onChartReady(() => {
+          if (!widget || widget !== activeWidget) return;
+          widget.activeChart().onIntervalChanged().subscribe(null, saveChartScale);
+        });
         isLoading = false;
       })
       .catch((error: unknown) => {

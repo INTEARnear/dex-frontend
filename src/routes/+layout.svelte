@@ -259,6 +259,40 @@
 {/if}
 
 <style>
+  :global(*) {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--accent-primary), var(--text-muted) 35%)
+      color-mix(in oklab, var(--bg-input), transparent 25%);
+  }
+
+  :global(*::-webkit-scrollbar) {
+    width: 0.625rem;
+    height: 0.625rem;
+  }
+
+  :global(*::-webkit-scrollbar-track) {
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--bg-input), transparent 25%);
+  }
+
+  :global(*::-webkit-scrollbar-thumb) {
+    min-width: 2rem;
+    min-height: 2rem;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--accent-primary), var(--text-muted) 35%);
+    background-clip: padding-box;
+  }
+
+  :global(*::-webkit-scrollbar-thumb:hover) {
+    background: var(--accent-primary);
+    background-clip: padding-box;
+  }
+
+  :global(*::-webkit-scrollbar-corner) {
+    background: transparent;
+  }
+
   :global(#app:has(main.terminal)) {
     padding: 1rem;
   }
