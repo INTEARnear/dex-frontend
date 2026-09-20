@@ -4,7 +4,9 @@
   import { ChevronLeft } from "lucide-svelte";
   import RecentTradesGrid from "$lib/RecentTradesGrid.svelte";
   import SwapForm from "$lib/SwapForm.svelte";
+  import TokenChart from "$lib/TokenChart.svelte";
   import { tokenHubStore } from "$lib/tokenHubStore";
+  import type { LaunchTradeChartMarker } from "$lib/launch/types";
 
   const STABLECOINS = ["17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1", "usdt.tether-token.near"];
   const NEAR_TOKENS = ["near", "wrap.near"];
@@ -12,6 +14,8 @@
   let inputTokenId = $state<string | null>(null);
   let outputTokenId = $state<string | null>(null);
   let chartTheme = $state<"light" | "dark">("dark");
+  let chartTraderFilter = $state<string | null>(null);
+  let chartTraderTrades = $state<LaunchTradeChartMarker[]>([]);
 
   const chartTokenId = $derived.by(() => {
     if (inputTokenId && STABLECOINS.includes(inputTokenId)) return outputTokenId;
@@ -22,11 +26,6 @@
   });
   const chartToken = $derived(
     chartTokenId ? ($tokenHubStore.tokensById[chartTokenId] ?? null) : null,
-  );
-  const chartSrc = $derived(
-    chartTokenId
-      ? `https://chart.intear.tech/?token=${encodeURIComponent(chartTokenId)}&search=false&theme=${chartTheme}`
-      : null,
   );
 
   function resolveTheme(): "light" | "dark" {
@@ -61,14 +60,19 @@
 
 <div class="terminal-layout">
   <section class="chart-panel" aria-label="Token chart">
-    {#if chartSrc}
-      <iframe
-        src={chartSrc}
-        title={`${chartToken?.metadata.symbol ?? "Selected token"} chart`}
-        class="chart-frame"
-        loading="lazy"
-        referrerpolicy="strict-origin-when-cross-origin"
-      ></iframe>
+    {#if chartTokenId && chartToken}
+      <TokenChart
+        tokenAccountId={chartTokenId}
+        tokenName={chartToken.metadata.name}
+        tokenSymbol={chartToken.metadata.symbol}
+        tokenDecimals={chartToken.metadata.decimals}
+        tokenIcon={chartToken.metadata.icon ?? null}
+        tokenPriceUsd={chartToken.price_usd}
+        traderFilter={chartTraderFilter}
+        traderTrades={chartTraderTrades}
+        theme={chartTheme}
+        title={`${chartToken.metadata.symbol} chart`}
+      />
     {:else}
       <div class="panel-placeholder">Select a token to view its chart.</div>
     {/if}
@@ -96,7 +100,11 @@
 
     <section class="trades-panel" aria-label="Recent trades">
       {#if chartTokenId}
-        <RecentTradesGrid tokenAccountId={chartTokenId} />
+        <RecentTradesGrid
+          tokenAccountId={chartTokenId}
+          onTraderFilterChange={(trader) => (chartTraderFilter = trader)}
+          onTraderTradesChange={(trades) => (chartTraderTrades = trades)}
+        />
       {:else}
         <div class="panel-placeholder">Select a token to view recent trades.</div>
       {/if}
@@ -115,6 +123,7 @@
 
   .right-column {
     min-width: 0;
+    height: calc(100vh - 2rem);
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -154,18 +163,10 @@
     overflow: hidden;
   }
 
-  .chart-frame {
-    display: block;
-    width: 100%;
-    height: 100%;
-    min-height: 720px;
-    border: 1.2px solid var(--border-color);
-    border-radius: 0.375rem 1rem 1rem 1rem;
-  }
-
   .trades-panel {
     min-width: 0;
-    max-height: 520px;
+    min-height: 0;
+    flex: 1;
     overflow: auto;
     border-radius: 1rem;
     scrollbar-gutter: stable;

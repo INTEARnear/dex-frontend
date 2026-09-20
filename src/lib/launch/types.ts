@@ -56,6 +56,13 @@ export interface LaunchTradeHistoricalResponse {
   trades: LaunchTradeHistorical[];
 }
 
+export interface LaunchTradeChartMarker {
+  side: "buy" | "sell";
+  timestampMillis: number;
+  transactionId: string;
+  usdValue: number | null | undefined;
+}
+
 export type LaunchTradeType = "BUY" | "SELL";
 export type LaunchTradesTimeMode = "relative" | "absolute";
 export type LaunchTradesExplorer = "nearblocks" | "pikespeak" | "nearrocks";

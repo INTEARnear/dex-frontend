@@ -3,6 +3,7 @@
   import { Check, Copy, Globe, Pencil } from "lucide-svelte";
   import { siTelegram, siTwitch, siX } from "simple-icons";
   import RecentTradesGrid from "$lib/RecentTradesGrid.svelte";
+  import TokenChart from "$lib/TokenChart.svelte";
   import TwitchLiveEmbed from "./TwitchLiveEmbed.svelte";
   import PoolFeeBreakdown from "$lib/pool/PoolFeeBreakdown.svelte";
   import { assetIdToTokenId } from "$lib/pool/shared";
@@ -10,7 +11,7 @@
   import type { TokenInfo, XykFeeConfiguration, XykPool } from "$lib/types";
   import { DEX_BACKEND_API, getTokenIcon } from "$lib/utils";
   import { walletStore } from "$lib/walletStore";
-  import type { LaunchApiTokenData } from "./types";
+  import type { LaunchApiTokenData, LaunchTradeChartMarker } from "./types";
 
   interface Props {
     token: TokenInfo;
@@ -33,6 +34,8 @@
   let contentPanelElement = $state<HTMLElement | null>(null);
   let snappedChartPanelHeight = $state<number | null>(null);
   let copiedContractAddress = $state(false);
+  let chartTraderFilter = $state<string | null>(null);
+  let chartTraderTrades = $state<LaunchTradeChartMarker[]>([]);
   let copyResetTimer: number | null = null;
 
   interface OldestLaunchPoolFeeInfo {
@@ -64,9 +67,6 @@
     return new Date(asMs).toLocaleString();
   });
 
-  const chartSrc = $derived(
-    `https://chart.intear.tech/?token=${token.account_id}&search=false&theme=${chartTheme}`,
-  );
   const tokenIconSrc = $derived(getTokenIcon(token));
 
   function findOldestLaunchPoolFee(
@@ -206,13 +206,18 @@
         ? undefined
         : `--chart-panel-height:${snappedChartPanelHeight}px;`}
     >
-      <iframe
-        src={chartSrc}
+      <TokenChart
+        tokenAccountId={token.account_id}
+        tokenName={token.metadata.name}
+        tokenSymbol={token.metadata.symbol}
+        tokenDecimals={token.metadata.decimals}
+        tokenIcon={tokenIconSrc}
+        tokenPriceUsd={token.price_usd}
+        traderFilter={chartTraderFilter}
+        traderTrades={chartTraderTrades}
+        theme={chartTheme}
         title={`${token.metadata.symbol} launch chart`}
-        class="chart-frame"
-        loading="lazy"
-        referrerpolicy="strict-origin-when-cross-origin"
-      ></iframe>
+      />
     </section>
 
     <section class="content-panel" bind:this={contentPanelElement}>
@@ -383,7 +388,11 @@
     </section>
   </div>
 
-  <RecentTradesGrid tokenAccountId={token.account_id} />
+  <RecentTradesGrid
+    tokenAccountId={token.account_id}
+    onTraderFilterChange={(trader) => (chartTraderFilter = trader)}
+    onTraderTradesChange={(trades) => (chartTraderTrades = trades)}
+  />
 </div>
 
 <style>
@@ -406,13 +415,6 @@
     height: var(--chart-panel-height, 100%);
   }
 
-  .chart-frame {
-    width: 100%;
-    height: 100%;
-    border: 1.2px solid var(--border-color);
-    border-radius: 0.375rem 1rem 1rem 1rem;
-    display: block;
-  }
 
   .content-panel {
     display: flex;
@@ -706,9 +708,6 @@
       min-height: 460px;
     }
 
-    .chart-frame {
-      min-height: 460px;
-    }
   }
 
   @media(min-width: 480px) and (max-width: 1200px) {
@@ -728,10 +727,6 @@
       width: 100%;
     }
 
-    .chart-frame {
-      min-height: 380px;
-      width: 100%;
-    }
 
     .token-meta-card {
       padding: 0.8rem;

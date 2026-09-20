@@ -146,6 +146,7 @@
 
 <main
   class:wide={isWidePage}
+  class:terminal={page.url.pathname === "/terminal"}
   class:swap-with-toggle={page.url.pathname === "/"}
 >
   <header>
@@ -194,10 +195,11 @@
   {@render children()}
 </main>
 
-<footer>
-  <div class="footer-links">
-    <a
-      href="https://x.com/intea_rs"
+{#if page.url.pathname !== "/terminal"}
+  <footer>
+    <div class="footer-links">
+      <a
+        href="https://x.com/intea_rs"
       target="_blank"
       rel="noopener noreferrer"
       aria-label="X"
@@ -252,10 +254,19 @@
     >
       <BookOpen size={20} />
     </a>
-  </div>
-</footer>
+    </div>
+  </footer>
+{/if}
 
 <style>
+  :global(#app:has(main.terminal)) {
+    padding: 1rem;
+  }
+
+  :global(body:has(main.terminal) #support-chat-button) {
+    display: none;
+  }
+
   main {
     display: flex;
     flex-direction: column;
@@ -270,6 +281,10 @@
     max-width: 1400px;
     flex: 1;
     justify-content: flex-start;
+  }
+
+  main.terminal {
+    max-width: 1680px;
   }
 
   @media (min-width: 1180px) {

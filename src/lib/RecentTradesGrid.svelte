@@ -16,6 +16,7 @@
     LaunchTradeHistoricalResponse,
     LaunchTradeHistorical,
     LaunchTradeSwapEvent,
+    LaunchTradeChartMarker,
     LaunchTradesColumnKey,
     LaunchTradesExplorer,
     LaunchTradesColumnWidths,
@@ -57,9 +58,15 @@
 
   interface Props {
     tokenAccountId: string;
+    onTraderFilterChange?: (trader: string | null) => void;
+    onTraderTradesChange?: (trades: LaunchTradeChartMarker[]) => void;
   }
 
-  let { tokenAccountId }: Props = $props();
+  let {
+    tokenAccountId,
+    onTraderFilterChange,
+    onTraderTradesChange,
+  }: Props = $props();
 
   let trades = $state<LaunchTradeSwapEvent[]>([]);
   let usdByTradeKey = $state<Record<string, number | null>>({});
@@ -105,6 +112,33 @@
   // The REST endpoint applies all active filters. Keeping the previous page visible
   // until its replacement arrives prevents the document from collapsing and scrolling.
   const filteredTrades = $derived(trades);
+  let lastPublishedChartTrades = "";
+
+  $effect(() => {
+    const trader = traderFilter;
+    const chartTrades: LaunchTradeChartMarker[] = trader
+      ? trades
+          .filter((trade) => trade.trader === trader)
+          .map((trade) => ({
+            side:
+              Number(trade.balance_changes[tokenAccountId]) > 0 ? "buy" : "sell",
+            timestampMillis:
+              Number(trade.block_timestamp_nanosec) / 1_000_000,
+            transactionId: trade.transaction_id,
+            usdValue: usdByTradeKey[trade.transaction_id],
+          }))
+      : [];
+    const signature = chartTrades
+      .map(
+        (trade) =>
+          `${trade.transactionId}:${trade.side}:${trade.timestampMillis}:${trade.usdValue}`,
+      )
+      .join("|");
+    if (signature === lastPublishedChartTrades) return;
+
+    lastPublishedChartTrades = signature;
+    onTraderTradesChange?.(chartTrades);
+  });
 
   const gridTemplateColumns = $derived.by(() => {
     const widths = settings.columnWidths;
@@ -415,9 +449,14 @@
     };
   });
 
+  function setTraderFilter(trader: string): void {
+    traderFilter = trader;
+    onTraderFilterChange?.(trader || null);
+  }
+
   function applyFilterModal(): void {
     minUsdFilter = draftMinUsd;
-    traderFilter = draftTrader.trim();
+    setTraderFilter(draftTrader.trim());
     afterMillisFilter = draftAfterTime ? new Date(draftAfterTime).getTime() : null;
     beforeMillisFilter = draftBeforeTime ? new Date(draftBeforeTime).getTime() : null;
     closeFilterModal();
@@ -425,7 +464,7 @@
   }
 
   function toggleTraderFilter(trader: string): void {
-    traderFilter = traderFilter === trader ? "" : trader;
+    setTraderFilter(traderFilter === trader ? "" : trader);
     resetAndFetchTrades();
   }
 
@@ -1092,7 +1131,7 @@
               class:buy={tradeType === "BUY"}
               class:sell={tradeType === "SELL"}
               animate:flip={{ duration: 180, easing: cubicOut }}
-              use:paginationSentinel={index === 39}
+              use:paginationSentinel={index === filteredTrades.length - 10}
             >
               <div class="trade-cell time-cell neutral-cell">
                 {formatTradeTime(Number(trade.block_timestamp_nanosec) / 1000000)}
