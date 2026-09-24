@@ -17,12 +17,12 @@
   import { GAS_RESERVE_NEAR, assertOutcomesSucceeded } from "../pool/shared";
   import { humanReadableToRawAmount, rawAmountToHumanReadable } from "../utils";
   import type { LaunchDataArgs } from "./types";
-  import type { XykFeeAmount, XykFeeEntry } from "$lib/types";
+  import { LAUNCH_CONTRACT_ID } from "./launchContracts";
+  import type { XykFeeAmount, XykFeeReceiver } from "$lib/types";
   import type { FinalExecutionOutcome } from "@hot-labs/near-connect/build/types";
 
-  const LAUNCH_CONTRACT_ID = "launch.intear.near";
   const NEAR_DECIMALS = 24;
-  const BYTES_OVERHEAD = 4000;
+  const BYTES_OVERHEAD = 4500;
   const COST_PER_BYTE_YOCTO = 10n ** 19n; // 0.00001 NEAR
   const ONE_NEAR_YOCTO = 10n ** 24n;
   const ICON_SIZE = 128;
@@ -31,6 +31,8 @@
   const MAX_TOTAL_SUPPLY = 1_000_000_000_000_000_000n;
   const DEFAULT_TOTAL_SUPPLY = "1000000000";
 
+  type LaunchFeeEntry = [XykFeeReceiver | "Holders", XykFeeAmount];
+
   interface LaunchTokenArgs {
     name: string;
     symbol: string;
@@ -38,7 +40,7 @@
     decimals: number;
     total_supply: string;
     short_id: boolean;
-    fees: XykFeeEntry[] | null;
+    fees: LaunchFeeEntry[] | null;
     launch_data: LaunchDataArgs;
     first_buy: string | null;
   }
@@ -98,15 +100,20 @@
   function buildDefaultFeeReceivers(
     connectedAccountId: string | null,
   ): FeeReceiverDraft[] {
+    const holders: FeeReceiverDraft = {
+      receiver: "Holders",
+      amount: { kind: "fixed", percentage: "0.7" },
+    };
     if (connectedAccountId) {
       return [
         {
           receiver: { Account: connectedAccountId },
-          amount: { kind: "fixed", percentage: "1" },
+          amount: { kind: "fixed", percentage: "0.3" },
         },
+        holders,
       ];
     }
-    return [];
+    return [holders];
   }
 
   let feeReceivers = $state<FeeReceiverDraft[]>(buildDefaultFeeReceivers(null));
@@ -396,17 +403,17 @@
     };
   }
 
-  function toLaunchFeeEntries(receivers: FeeReceiverDraft[]): XykFeeEntry[] {
-    return receivers.flatMap((item) => {
+  function toLaunchFeeEntries(receivers: FeeReceiverDraft[]): LaunchFeeEntry[] {
+    return receivers.flatMap((item): LaunchFeeEntry[] => {
       const amount = toLaunchFeeAmount(item.amount);
       if (!amount) return [];
 
-      if (item.receiver === "Pool") {
-        return [["Pool", amount]];
+      if (item.receiver === "Pool" || item.receiver === "Holders") {
+        return [[item.receiver, amount]];
       }
       const account = item.receiver.Account;
       if (!account) return [];
-      return [[{ Account: account }, amount]] as XykFeeEntry[];
+      return [[{ Account: account }, amount]];
     });
   }
 
@@ -719,6 +726,7 @@
         <FeeReceiversEditor
           {accountId}
           initialReceivers={buildDefaultFeeReceivers(accountId)}
+          allowHolders
           onChange={handleFeeEditorChange}
         />
 

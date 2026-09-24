@@ -2,20 +2,15 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
-  import { get } from "svelte/store";
   import Spinner from "../../lib/Spinner.svelte";
   import { tokenHubStore } from "../../lib/tokenHubStore";
   import type { TokenInfo } from "../../lib/types";
-  import { DEX_BACKEND_API, formatCompact } from "../../lib/utils";
+  import { formatCompact } from "../../lib/utils";
   import { walletStore } from "../../lib/walletStore";
   import LaunchListView from "$lib/launch/LaunchListView.svelte";
   import LaunchTokenDetailView from "$lib/launch/LaunchTokenDetailView.svelte";
-  import type {
-    LaunchApiResponse,
-    LaunchSortBy,
-    LaunchApiTokenData,
-    LaunchToken,
-  } from "$lib/launch/types";
+  import type { LaunchInfo, LaunchSortBy } from "$lib/launch/types";
+  import { fetchLaunchInfo, isLaunchToken } from "$lib/launch/launchContracts";
   import CreateTokenModal from "$lib/launch/CreateTokenModal.svelte";
   import EditTokenModal from "$lib/launch/EditTokenModal.svelte";
   import { scoreTermAgainstToken } from "$lib/tokenSearch";
@@ -38,7 +33,8 @@
     ownedFirst: boolean;
   }
 
-  interface ScoredLaunchToken extends LaunchToken {
+  interface ScoredLaunchToken {
+    token: TokenInfo;
     searchScore: number;
   }
 
@@ -61,9 +57,6 @@
   }
 
   const selectedTokenId = $derived(page.url.searchParams.get("token"));
-  let launchDataByTokenId = $state<Record<string, LaunchApiTokenData>>({});
-  let isLaunchApiLoading = $state(true);
-  let launchApiError = $state<string | null>(null);
   let hasTokenApiReturned = $state(false);
 
   let sortBy = $state<LaunchSortBy>("volume");
@@ -74,38 +67,24 @@
   let hasRestoredSortSettings = $state(false);
 
   const launchTokens = $derived.by(() =>
-    $tokenHubStore.tokens.filter(
-      (token) => launchDataByTokenId[token.account_id] !== undefined,
-    ),
+    $tokenHubStore.tokens.filter((token) => isLaunchToken(token.account_id)),
   );
 
-  const combinedError = $derived(
-    launchApiError ?? $tokenHubStore.errors.tokens,
-  );
-  const isInitialLoading = $derived(!hasTokenApiReturned || isLaunchApiLoading);
+  const combinedError = $derived($tokenHubStore.errors.tokens);
+  const isInitialLoading = $derived(!hasTokenApiReturned);
 
   const visibleLaunchTokens = $derived.by(() => {
-    const launchEntries = launchTokens
-      .map((token) => ({
-        token,
-        launchData: launchDataByTokenId[token.account_id] ?? null,
-      }))
-      .filter(
-        (launchToken): launchToken is LaunchToken =>
-          launchToken.launchData !== null,
-      );
-
     const scoredEntries: ScoredLaunchToken[] =
       searchQuery.trim().length === 0
-        ? launchEntries.map((entry) => ({ ...entry, searchScore: 0 }))
-        : launchEntries
-            .map((entry) => {
+        ? launchTokens.map((token) => ({ token, searchScore: 0 }))
+        : launchTokens
+            .map((token) => {
               const searchScore = scoreTermAgainstToken(searchQuery, {
-                name: entry.token.metadata.name,
-                symbol: entry.token.metadata.symbol,
+                name: token.metadata.name,
+                symbol: token.metadata.symbol,
               });
               if (searchScore === null) return null;
-              return { ...entry, searchScore };
+              return { token, searchScore };
             })
             .filter((entry): entry is ScoredLaunchToken => entry !== null && entry.searchScore > 0);
 
@@ -119,25 +98,43 @@
       return compareLaunchTokensForSort(left.token, right.token);
     });
 
-    return scoredEntries.map(({ token, launchData }) => ({
-      token,
-      launchData,
-    }));
+    return scoredEntries.map(({ token }) => token);
   });
 
   const selectedToken = $derived.by(() => {
-    if (!selectedTokenId) return null;
+    if (!selectedTokenId || !isLaunchToken(selectedTokenId)) return null;
     return $tokenHubStore.tokensById[selectedTokenId] ?? null;
   });
-  const selectedLaunchData = $derived.by(() => {
-    if (!selectedTokenId) return null;
-    return launchDataByTokenId[selectedTokenId] ?? null;
+  const showTokenDetail = $derived(selectedToken !== null);
+
+  // Description, social links and creator are only read from the launch
+  // contract for the token that is open, not for the whole list
+  let selectedLaunchData = $state<LaunchInfo | null>(null);
+  let activeLaunchInfoRequestId = 0;
+
+  async function loadSelectedLaunchData(tokenId: string): Promise<void> {
+    const requestId = ++activeLaunchInfoRequestId;
+    try {
+      const launchInfo = await fetchLaunchInfo(tokenId);
+      if (requestId !== activeLaunchInfoRequestId) return;
+      selectedLaunchData = launchInfo;
+    } catch (error) {
+      if (requestId !== activeLaunchInfoRequestId) return;
+      console.error(`Failed to fetch launch data of ${tokenId}:`, error);
+    }
+  }
+
+  $effect(() => {
+    const tokenId = selectedTokenId;
+    selectedLaunchData = null;
+    activeLaunchInfoRequestId += 1;
+    if (tokenId && isLaunchToken(tokenId)) {
+      void loadSelectedLaunchData(tokenId);
+    }
   });
-  const showTokenDetail = $derived(
-    selectedToken !== null && selectedLaunchData !== null,
-  );
+
   const isSelectedTokenPending = $derived(
-    selectedTokenId !== null && !showTokenDetail,
+    selectedTokenId !== null && isLaunchToken(selectedTokenId) && !showTokenDetail,
   );
 
   const attemptedIconLoads = new Set<string>();
@@ -192,10 +189,9 @@
     left: TokenInfo,
     right: TokenInfo,
   ): number {
-    const leftLaunch = launchDataByTokenId[left.account_id] ?? null;
-    const rightLaunch = launchDataByTokenId[right.account_id] ?? null;
-    const leftLaunchedAtNs = leftLaunch?.launched_at_ns ?? 0;
-    const rightLaunchedAtNs = rightLaunch?.launched_at_ns ?? 0;
+    // Block height at which the token was created
+    const leftLaunchedAt = left.created_at ?? 0;
+    const rightLaunchedAt = right.created_at ?? 0;
 
     if (ownedFirst && $walletStore.isConnected) {
       const leftOwned = hasOwnedBalance(left);
@@ -208,8 +204,8 @@
     }
 
     if (sortBy === "newest") {
-      if (leftLaunchedAtNs !== rightLaunchedAtNs)
-        return rightLaunchedAtNs - leftLaunchedAtNs;
+      if (leftLaunchedAt !== rightLaunchedAt)
+        return rightLaunchedAt - leftLaunchedAt;
     } else if (sortBy === "marketCap") {
       const mcapDiff = (getMarketCap(right) ?? -1) - (getMarketCap(left) ?? -1);
       if (Math.abs(mcapDiff) > 0.000001) return mcapDiff;
@@ -222,8 +218,8 @@
     if (Math.abs(mcapDiff) > 0.000001) return mcapDiff;
     const volumeDiff = right.volume_usd_24h - left.volume_usd_24h;
     if (Math.abs(volumeDiff) > 0.000001) return volumeDiff;
-    if (leftLaunchedAtNs !== rightLaunchedAtNs)
-      return rightLaunchedAtNs - leftLaunchedAtNs;
+    if (leftLaunchedAt !== rightLaunchedAt)
+      return rightLaunchedAt - leftLaunchedAt;
     return left.metadata.name.localeCompare(right.metadata.name);
   }
 
@@ -243,50 +239,6 @@
     showCreateTokenModal = true;
   }
 
-  async function fetchLaunchData(options?: {
-    background?: boolean;
-  }): Promise<void> {
-    const background = options?.background ?? false;
-    if (!background) {
-      launchApiError = null;
-      isLaunchApiLoading = true;
-    }
-
-    try {
-      const response = await fetch(`${DEX_BACKEND_API}/launch/launch-data`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch launch data: HTTP ${response.status}`);
-      }
-      const launchData = (await response.json()) as LaunchApiResponse;
-      launchDataByTokenId = launchData;
-      launchApiError = null;
-      hydrateUnknownLaunchTokens(launchData);
-    } catch (error) {
-      if (!background) {
-        launchApiError =
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch launch data";
-        launchDataByTokenId = {};
-      }
-    } finally {
-      if (!background) {
-        isLaunchApiLoading = false;
-      }
-    }
-  }
-
-  async function hydrateUnknownLaunchTokens(launchData: LaunchApiResponse) {
-    const tokensById = get(tokenHubStore).tokensById;
-    const unknownTokenIds = Object.keys(launchData).filter(
-      (tokenId) => tokensById[tokenId] === undefined,
-    );
-    if (unknownTokenIds.length === 0) return;
-    await Promise.allSettled(
-      unknownTokenIds.map((tokenId) => tokenHubStore.ensureTokenById(tokenId)),
-    );
-  }
-
   async function fetchTokenData(options?: {
     background?: boolean;
   }): Promise<void> {
@@ -300,7 +252,7 @@
   }
 
   async function reloadPageData(): Promise<void> {
-    await Promise.all([fetchTokenData(), fetchLaunchData()]);
+    await fetchTokenData();
   }
 
   onMount(() => {
@@ -323,18 +275,10 @@
     }
   });
 
-  let launchDataRefreshInFlight = $state(false);
   let tokenDataRefreshInFlight = $state(false);
   let selectedTokenRefreshInFlight = $state(false);
   $effect(() => {
     const refreshTimer = setInterval(() => {
-      if (!launchDataRefreshInFlight) {
-        launchDataRefreshInFlight = true;
-        fetchLaunchData({ background: true }).finally(() => {
-          launchDataRefreshInFlight = false;
-        });
-      }
-
       if (!tokenDataRefreshInFlight) {
         tokenDataRefreshInFlight = true;
         fetchTokenData({ background: true }).finally(() => {
@@ -344,6 +288,7 @@
 
       if (
         selectedTokenId &&
+        isLaunchToken(selectedTokenId) &&
         !showTokenDetail &&
         !selectedTokenRefreshInFlight
       ) {
@@ -371,7 +316,7 @@
       <p>{combinedError}</p>
       <button type="button" onclick={() => reloadPageData()}>Retry</button>
     </div>
-  {:else if showTokenDetail && selectedToken && selectedLaunchData}
+  {:else if showTokenDetail && selectedToken}
     <LaunchTokenDetailView
       token={selectedToken}
       launchData={selectedLaunchData}
@@ -423,7 +368,7 @@
     onClose={() => (showEditTokenModal = false)}
     onSuccess={() => {
       showEditTokenModal = false;
-      fetchLaunchData({ background: false });
+      void loadSelectedLaunchData(selectedToken.account_id);
     }}
   />
 {/if}

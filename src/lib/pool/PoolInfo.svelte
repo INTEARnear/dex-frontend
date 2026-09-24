@@ -8,7 +8,9 @@
     DEX_CONTRACT_ID,
     DEX_ID,
     assertOutcomesSucceeded,
+    assetIdToTokenId,
   } from "./shared";
+  import { isLaunchV2Token } from "../launch/launchContracts";
   import { formatApy, formatLiquidity } from "../utils";
   import {
     XykLockPoolArgsSchema,
@@ -53,6 +55,14 @@
     !!poolData?.ownerId && poolData.ownerId === accountId,
   );
   const isLocked = $derived(poolData?.locked ?? false);
+  // Fees sent to a launch-v2 token's own account are shared with its holders
+  const holdersAccountId = $derived.by(() => {
+    for (const asset of poolData?.assets ?? []) {
+      const tokenId = assetIdToTokenId(asset.asset_id);
+      if (tokenId && isLaunchV2Token(tokenId)) return tokenId;
+    }
+    return null;
+  });
 
   let showLockModal = $state(false);
   let isLocking = $state(false);
@@ -195,7 +205,10 @@
       <span class="stat-label">Liquidity</span>
       <span class="stat-value">{formatLiquidity(liquidityUsd)}</span>
     </div>
-    <PoolFeeBreakdown configuration={poolData?.fee_configuration ?? null} />
+    <PoolFeeBreakdown
+      configuration={poolData?.fee_configuration ?? null}
+      {holdersAccountId}
+    />
     {#if isPrivate && isOwner}
       {#if !isLocked}
         <button class="edit-fees-btn" onclick={onEditFees}>Edit Fees</button>

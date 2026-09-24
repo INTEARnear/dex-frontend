@@ -1,29 +1,38 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { Check, Copy, Globe, Pencil } from "lucide-svelte";
+  import { fade } from "svelte/transition";
+  import { Check, Copy, Globe, LoaderCircle, Pencil } from "lucide-svelte";
   import { siTelegram, siTwitch, siX } from "simple-icons";
   import RecentTradesGrid from "$lib/RecentTradesGrid.svelte";
   import TokenChart from "$lib/TokenChart.svelte";
   import TwitchLiveEmbed from "./TwitchLiveEmbed.svelte";
   import PoolFeeBreakdown from "$lib/pool/PoolFeeBreakdown.svelte";
-  import { assetIdToTokenId } from "$lib/pool/shared";
+  import { assertOutcomesSucceeded, assetIdToTokenId } from "$lib/pool/shared";
   import SwapForm from "$lib/SwapForm.svelte";
+  import ErrorModal from "$lib/ErrorModal.svelte";
   import type { TokenInfo, XykFeeConfiguration, XykPool } from "$lib/types";
-  import { DEX_BACKEND_API, getTokenIcon } from "$lib/utils";
+  import { DEX_BACKEND_API, getTokenIcon, viewFunction } from "$lib/utils";
   import { walletStore } from "$lib/walletStore";
-  import type { LaunchApiTokenData, LaunchTradeChartMarker } from "./types";
+  import { isLaunchV2Token } from "./launchContracts";
+  import type { LaunchInfo, LaunchTradeChartMarker } from "./types";
 
   interface Props {
     token: TokenInfo;
-    launchData: LaunchApiTokenData;
+    /** Null while it's loading from the launch contract, or if the contract has none */
+    launchData: LaunchInfo | null;
     marketCap: string;
     onEditClick: () => void;
   }
 
   let { token, launchData, marketCap, onEditClick }: Props = $props();
 
+  const REWARDS_REFRESH_INTERVAL_MS = 10_000;
+  const MIN_CLAIMABLE_REWARDS_YOCTO = 10n ** 22n; // 0.01 NEAR
+  const NEAR_YOCTO_PER_MILLI = 10n ** 21n;
+
   const canEdit = $derived(
     $walletStore.isConnected &&
+      launchData !== null &&
       $walletStore.accountId === launchData.launched_by,
   );
 
@@ -45,6 +54,101 @@
 
   const launchFeeByTokenId = new Map<string, OldestLaunchPoolFeeInfo | null>();
 
+  // Deriveds only notify on change, so price refreshes of `token` don't restart polling
+  const tokenAccountId = $derived(token.account_id);
+  const hasHolderRewards = $derived(isLaunchV2Token(tokenAccountId));
+  const connectedAccountId = $derived($walletStore.accountId);
+  let claimableRewardsYocto = $state<bigint | null>(null);
+  let isClaimingRewards = $state(false);
+  let claimRewardsError = $state<string | null>(null);
+  let activeRewardsRequestId = 0;
+
+  const canClaimRewards = $derived(
+    claimableRewardsYocto !== null &&
+      claimableRewardsYocto >= MIN_CLAIMABLE_REWARDS_YOCTO,
+  );
+
+  const claimableRewardsLabel = $derived.by(() => {
+    if (claimableRewardsYocto === null) return "0";
+    // Round down to 0.001 NEAR so the label never promises more than is claimable
+    const milliNear = claimableRewardsYocto / NEAR_YOCTO_PER_MILLI;
+    const whole = milliNear / 1000n;
+    const fraction = (milliNear % 1000n).toString().padStart(3, "0");
+    return `${whole}.${fraction}`;
+  });
+
+  async function fetchClaimableRewards(
+    rewardsTokenId: string,
+    accountId: string,
+  ): Promise<void> {
+    const requestId = ++activeRewardsRequestId;
+    try {
+      const rewards = await viewFunction<string>(rewardsTokenId, "get_rewards", {
+        account_id: accountId,
+      });
+      if (requestId !== activeRewardsRequestId) return;
+      claimableRewardsYocto = BigInt(rewards);
+    } catch (error) {
+      if (requestId !== activeRewardsRequestId) return;
+      console.error("Failed to fetch claimable rewards:", error);
+    }
+  }
+
+  $effect(() => {
+    const rewardsTokenId = tokenAccountId;
+    const accountId = connectedAccountId;
+    claimableRewardsYocto = null;
+    activeRewardsRequestId += 1;
+    if (!hasHolderRewards || !accountId) return;
+
+    void fetchClaimableRewards(rewardsTokenId, accountId);
+    const timer = setInterval(() => {
+      void fetchClaimableRewards(rewardsTokenId, accountId);
+    }, REWARDS_REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  });
+
+  async function claimRewards(): Promise<void> {
+    const wallet = $walletStore.wallet;
+    const accountId = connectedAccountId;
+    if (!wallet || !accountId || isClaimingRewards) return;
+
+    const rewardsTokenId = tokenAccountId;
+    isClaimingRewards = true;
+    try {
+      const outcomes = await wallet.signAndSendTransactions({
+        transactions: [
+          {
+            receiverId: rewardsTokenId,
+            actions: [
+              {
+                type: "FunctionCall" as const,
+                params: {
+                  methodName: "claim_rewards",
+                  args: {},
+                  gas: "30" + "0".repeat(12), // 30 TGas
+                  deposit: "0",
+                },
+              },
+            ],
+          },
+        ],
+      });
+      assertOutcomesSucceeded(outcomes);
+    } catch (error) {
+      claimRewardsError =
+        error instanceof Error ? error.message : "Failed to claim rewards";
+    } finally {
+      isClaimingRewards = false;
+      if (
+        tokenAccountId === rewardsTokenId &&
+        connectedAccountId === accountId
+      ) {
+        void fetchClaimableRewards(rewardsTokenId, accountId);
+      }
+    }
+  }
+
   function resolveTheme(): "light" | "dark" {
     return document.documentElement.dataset.theme === "light"
       ? "light"
@@ -62,6 +166,7 @@
   }
 
   const launchTimestamp = $derived.by(() => {
+    if (!launchData) return null;
     const nanos = launchData.launched_at_ns;
     const asMs = Math.floor(nanos / 1_000_000);
     return new Date(asMs).toLocaleString();
@@ -127,7 +232,7 @@
     }
   }
 
-  function hasAnySocialLinks(data: LaunchApiTokenData): boolean {
+  function hasAnySocialLinks(data: LaunchInfo): boolean {
     return Boolean(data.x || data.telegram || data.twitch || data.website);
   }
 
@@ -195,7 +300,7 @@
 
 <div class="detail-view">
   <TwitchLiveEmbed
-    twitchUrl={launchData.twitch}
+    twitchUrl={launchData?.twitch ?? null}
     tokenSymbol={token.metadata.symbol}
   />
 
@@ -244,16 +349,39 @@
                 <p class="token-mcap">mcap {marketCap}</p>
               </div>
             </div>
-            <p class="token-description">{launchData.description}</p>
+            {#if launchData?.description}
+              <p class="token-description">{launchData.description}</p>
+            {/if}
           </div>
 
-          <aside class="token-fee-column">
-            {#if isLaunchPoolFeeLoading}
-              <p class="token-fee-loading">Loading fee...</p>
-            {:else}
-              <PoolFeeBreakdown configuration={oldestLaunchPoolFeeConfiguration} label="Main Pool Fee" />
+          <div class="token-side-column">
+            <aside class="token-fee-column">
+              {#if isLaunchPoolFeeLoading}
+                <p class="token-fee-loading">Loading fee...</p>
+              {:else}
+                <PoolFeeBreakdown
+                  configuration={oldestLaunchPoolFeeConfiguration}
+                  label="Main Pool Fee"
+                  holdersAccountId={hasHolderRewards ? token.account_id : null}
+                />
+              {/if}
+            </aside>
+            {#if hasHolderRewards && canClaimRewards}
+              <button
+                type="button"
+                class="claim-rewards-btn"
+                onclick={claimRewards}
+                disabled={isClaimingRewards}
+                title="Claim your share of trading fees paid to holders"
+                transition:fade={{ duration: 200 }}
+              >
+                {#if isClaimingRewards}
+                  <LoaderCircle size={14} class="spinning" />
+                {/if}
+                Claim {claimableRewardsLabel} NEAR
+              </button>
             {/if}
-          </aside>
+          </div>
         </div>
         <div class="token-contract-row">
           <span class="token-contract-label">CA</span>
@@ -286,7 +414,7 @@
               Edit
             </button>
           {/if}
-          {#if hasAnySocialLinks(launchData)}
+          {#if launchData && hasAnySocialLinks(launchData)}
             <div class="token-links">
               {#if launchData.x}
                 <a
@@ -359,19 +487,21 @@
             </div>
           {/if}
 
-          <p class="launch-meta">
-            Launched by
-            <a
-              href={`https://nearblocks.io/address/${launchData.launched_by}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={launchData.launched_by}
-            >
-              {launchData.launched_by}
-            </a>
-            at
-            <span>{launchTimestamp}</span>
-          </p>
+          {#if launchData}
+            <p class="launch-meta">
+              Launched by
+              <a
+                href={`https://nearblocks.io/address/${launchData.launched_by}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={launchData.launched_by}
+              >
+                {launchData.launched_by}
+              </a>
+              at
+              <span>{launchTimestamp}</span>
+            </p>
+          {/if}
         </div>
       </article>
 
@@ -394,6 +524,14 @@
     onTraderTradesChange={(trades) => (chartTraderTrades = trades)}
   />
 </div>
+
+<ErrorModal
+  isOpen={claimRewardsError !== null}
+  onClose={() => (claimRewardsError = null)}
+  title="Claim Failed"
+  message={claimRewardsError ?? ""}
+  isTransaction={true}
+/>
 
 <style>
   .detail-view {
@@ -448,12 +586,63 @@
     gap: 0.8rem;
   }
 
+  .token-side-column {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
   .token-fee-column {
     min-width: 0;
     border: 1px solid var(--border-color);
     border-radius: 0.75rem;
     background: var(--bg-secondary);
     padding: 0.7rem;
+  }
+
+  .claim-rewards-btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.75rem;
+    border: none;
+    border-radius: 0.75rem;
+    background: var(--accent-button-small);
+    box-shadow: 0 0 18px var(--accent-glow);
+    color: var(--text-on-accent);
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: "JetBrains Mono", monospace;
+    cursor: pointer;
+    transition:
+      background 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .claim-rewards-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+    box-shadow: 0 0 24px var(--accent-glow);
+  }
+
+  .claim-rewards-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .claim-rewards-btn :global(.spinning) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .token-fee-loading {

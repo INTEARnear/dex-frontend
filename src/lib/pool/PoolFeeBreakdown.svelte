@@ -11,9 +11,23 @@
   interface Props {
     configuration: XykFeeConfiguration | null;
     label?: string;
+    /** Account whose fee receiver entry is shown as "Holders" (the token of a launch-v2 pool). */
+    holdersAccountId?: string | null;
   }
 
-  let { configuration, label = "Fee" }: Props = $props();
+  let { configuration, label = "Fee", holdersAccountId = null }: Props =
+    $props();
+
+  function receiverLabel(receiver: XykFeeReceiver): string {
+    if (
+      holdersAccountId !== null &&
+      receiver !== "Pool" &&
+      receiver.Account === holdersAccountId
+    ) {
+      return "Holders";
+    }
+    return feeReceiverToLabel(receiver);
+  }
 
   function shouldDisplayFeeReceiver(receiver: XykFeeReceiver): boolean {
     if (receiver !== "Pool") {
@@ -65,10 +79,10 @@
   const feeBreakdown = $derived.by(() => {
     const feeByReceiver = new Map<string, number>();
     for (const entry of visibleEvaluatedFees) {
-      const receiverLabel = feeReceiverToLabel(entry.receiver);
+      const receiverName = receiverLabel(entry.receiver);
       feeByReceiver.set(
-        receiverLabel,
-        (feeByReceiver.get(receiverLabel) ?? 0) + entry.feePercent,
+        receiverName,
+        (feeByReceiver.get(receiverName) ?? 0) + entry.feePercent,
       );
     }
     return Array.from(feeByReceiver, ([receiver, feePercent]) => ({
@@ -96,8 +110,8 @@
     if (!hasUnfinishedScheduledFees) return [];
     return visibleEvaluatedFees.map((entry, index) => {
       const baseRow = {
-        key: `${feeReceiverToLabel(entry.receiver)}-${index}`,
-        receiver: feeReceiverToLabel(entry.receiver),
+        key: `${receiverLabel(entry.receiver)}-${index}`,
+        receiver: receiverLabel(entry.receiver),
       };
       if (
         entry.kind === "scheduled" &&

@@ -113,9 +113,18 @@ export function feeFractionToPercentage(feeFraction: number): string {
   return (feeFraction / FEE_FRACTION_SCALE).toString();
 }
 
+/**
+ * Fee receiver as edited in the UI. "Holders" is only accepted by the launch
+ * contract, which turns it into a receiver that shares fees with token holders.
+ */
+export type XykFeeReceiverDraft = XykFeeReceiver | "Holders";
+
 export function toSchemaFeeReceiver(
-  receiver: XykFeeReceiver,
+  receiver: XykFeeReceiverDraft,
 ): SchemaXykFeeReceiver {
+  if (receiver === "Holders") {
+    throw new Error("Holders fee receiver is only supported for launches");
+  }
   return receiver === "Pool" ? { Pool: {} } : { Account: receiver.Account };
 }
 

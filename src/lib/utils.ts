@@ -4,6 +4,49 @@ import type { Token } from "./types";
 export const PRICES_API = "https://prices.intear.tech";
 export const ROUTER_API = "https://router.intear.tech";
 export const DEX_BACKEND_API = "https://dex-backend.intear.tech";
+export const NEAR_RPC_URL = "https://rpc.intea.rs";
+
+/**
+ * Call a view method of a NEAR contract through RPC and parse its JSON result.
+ */
+export async function viewFunction<T>(
+  contractId: string,
+  methodName: string,
+  args: Record<string, unknown> = {},
+): Promise<T> {
+  const response = await fetch(NEAR_RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "dontcare",
+      method: "query",
+      params: {
+        request_type: "call_function",
+        finality: "optimistic",
+        account_id: contractId,
+        method_name: methodName,
+        args_base64: btoa(JSON.stringify(args)),
+      },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`RPC request failed: HTTP ${response.status}`);
+  }
+  const body = (await response.json()) as {
+    result?: { result?: number[]; error?: string };
+    error?: unknown;
+  };
+  if (body.error || !body.result?.result) {
+    throw new Error(
+      `View call ${contractId}.${methodName} failed: ${JSON.stringify(
+        body.error ?? body.result?.error,
+      )}`,
+    );
+  }
+  const text = new TextDecoder().decode(new Uint8Array(body.result.result));
+  return JSON.parse(text) as T;
+}
 
 export function formatApy(apy: number): string {
   if (apy === 0) return "0%";

@@ -1,14 +1,11 @@
 <script lang="ts">
-  import { Globe } from "lucide-svelte";
-  import { siTelegram, siTwitch, siX } from "simple-icons";
   import ListPageToolbar from "$lib/ListPageToolbar.svelte";
   import type { TokenInfo } from "$lib/types";
   import { getTokenIcon } from "$lib/utils";
   import { walletStore } from "$lib/walletStore";
-  import type { LaunchToken } from "./types";
 
   interface Props {
-    visibleLaunchTokens: LaunchToken[];
+    visibleLaunchTokens: TokenInfo[];
     selectedTokenId: string | null;
     sortByLabel: string;
     searchQuery: string;
@@ -34,10 +31,6 @@
   }: Props = $props();
 
   const walletConnected = $derived($walletStore.isConnected);
-
-  function hasAnySocialLinks(data: LaunchToken["launchData"]): boolean {
-    return Boolean(data.x || data.telegram || data.twitch || data.website);
-  }
 
   const sortFilterToggles = $derived.by(() => [
     {
@@ -72,144 +65,46 @@
   </div>
 
   <div class="token-list">
-    {#each visibleLaunchTokens as launchToken (launchToken.token.account_id)}
-      {@const iconSrc = getTokenIcon(launchToken.token)}
+    {#each visibleLaunchTokens as token (token.account_id)}
+      {@const iconSrc = getTokenIcon(token)}
       <div
         class="token-card"
-        class:selected={selectedTokenId === launchToken.token.account_id}
+        class:selected={selectedTokenId === token.account_id}
       >
         <a
           class="token-card-link-overlay"
-          href={`/launch?token=${launchToken.token.account_id}`}
-          aria-label={`Open ${launchToken.token.metadata.name}`}
+          href={`/launch?token=${token.account_id}`}
+          aria-label={`Open ${token.metadata.name}`}
         ></a>
         <div class="token-icon-shell">
           {#if iconSrc}
             <img
               src={iconSrc}
-              alt={`${launchToken.token.metadata.symbol} token`}
+              alt={`${token.metadata.symbol} token`}
               class="token-icon-image"
             />
           {:else}
             <div class="token-icon-placeholder">
-              {launchToken.token.metadata.symbol.charAt(0) || "?"}
+              {token.metadata.symbol.charAt(0) || "?"}
             </div>
           {/if}
         </div>
         <div class="token-content">
           <div class="name-and-symbol">
             <div class="name-row">
-              <span class="token-name">{launchToken.token.metadata.name}</span>
+              <span class="token-name">{token.metadata.name}</span>
               <span class="token-mcap-inline">
-                mcap {formatMarketCap(launchToken.token)}
+                mcap {formatMarketCap(token)}
               </span>
-              <a
-                href={`https://nearblocks.io/address/${launchToken.launchData.launched_by}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="launched-by-inline"
-                title={launchToken.launchData.launched_by}
-              >
-                {launchToken.launchData.launched_by}
-              </a>
             </div>
-            <span class="token-symbol-row"
-              >{launchToken.token.metadata.symbol}</span
-            >
+            <span class="token-symbol-row">{token.metadata.symbol}</span>
           </div>
           <div class="meta-row">
-            <p class="token-description">
-              {launchToken.launchData.description}
-            </p>
             <div class="token-right">
-              <div class="launched-by-row">
-                <span class="launched-by-label">by</span>
-                <a
-                  href={`https://nearblocks.io/address/${launchToken.launchData.launched_by}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="launched-by-btn"
-                  title={launchToken.launchData.launched_by}
-                >
-                  {launchToken.launchData.launched_by}
-                </a>
-              </div>
               <span class="mcap-mobile-label">mcap</span>
               <span class="mcap-mobile-value">
-                {formatMarketCap(launchToken.token)}
+                {formatMarketCap(token)}
               </span>
-              {#if hasAnySocialLinks(launchToken.launchData)}
-                <div class="token-links">
-                  {#if launchToken.launchData.x !== null}
-                    <a
-                      href={launchToken.launchData.x}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="token-link-btn"
-                      aria-label="Token X"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        role="img"
-                      >
-                        <path d={siX.path} />
-                      </svg>
-                    </a>
-                  {/if}
-                  {#if launchToken.launchData.telegram !== null}
-                    <a
-                      href={launchToken.launchData.telegram}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="token-link-btn"
-                      aria-label="Token Telegram"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        role="img"
-                      >
-                        <path d={siTelegram.path} />
-                      </svg>
-                    </a>
-                  {/if}
-                  {#if launchToken.launchData.twitch !== null}
-                    <a
-                      href={launchToken.launchData.twitch}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="token-link-btn"
-                      aria-label="Token Twitch"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        role="img"
-                      >
-                        <path d={siTwitch.path} />
-                      </svg>
-                    </a>
-                  {/if}
-                  {#if launchToken.launchData.website !== null}
-                    <a
-                      href={launchToken.launchData.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="token-link-btn"
-                      aria-label="Token Website"
-                    >
-                      <Globe size={14} />
-                    </a>
-                  {/if}
-                </div>
-              {/if}
             </div>
           </div>
         </div>
@@ -389,47 +284,12 @@
     text-transform: uppercase;
   }
 
-  .launched-by-inline {
-    display: none;
-    max-width: 45%;
-    color: var(--text-primary);
-    text-decoration: none;
-    font-weight: 500;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.74rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    padding: 0;
-    position: relative;
-    z-index: 2;
-  }
-
-  .launched-by-inline:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
   .meta-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 0.8rem;
     min-width: 0;
-  }
-
-  .token-description {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 0.86rem;
-    line-height: 1.35;
-    flex: 1;
-    min-width: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    line-clamp: 3;
-    overflow: hidden;
   }
 
   .token-right {
@@ -440,81 +300,9 @@
     align-items: flex-end;
   }
 
-  .launched-by-row {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 0.25rem;
-    min-width: 0;
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .launched-by-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    flex-shrink: 0;
-  }
-
-  .launched-by-btn {
-    min-width: 0;
-    padding: 0.2rem 0.42rem;
-    color: var(--text-primary);
-    text-decoration: none;
-    font-weight: 500;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.78rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    position: relative;
-    z-index: 2;
-  }
-
-  .launched-by-btn:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
   .mcap-mobile-label,
   .mcap-mobile-value {
     display: none;
-  }
-
-  .token-links {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 0.35rem;
-    margin-top: 0.35rem;
-    flex-shrink: 0;
-  }
-
-  .token-link-btn {
-    text-decoration: none;
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 0.45rem;
-    width: 1.55rem;
-    height: 1.55rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    position: relative;
-    z-index: 2;
-    transition:
-      border-color 0.2s ease,
-      color 0.2s ease,
-      background 0.2s ease;
-  }
-
-  .token-link-btn:hover {
-    border-color: var(--accent-primary);
-    color: var(--text-primary);
-    background: var(--bg-input);
   }
 
   @media (max-width: 1024px) {
@@ -571,12 +359,6 @@
       min-height: 64px;
     }
 
-    .token-description {
-      font-size: 0.8rem;
-      -webkit-line-clamp: 2;
-      line-clamp: 2;
-    }
-
     .token-right {
       min-width: max-content;
       max-width: max-content;
@@ -584,14 +366,6 @@
     }
 
     .token-mcap-inline {
-      display: none;
-    }
-
-    .launched-by-inline {
-      display: inline-block;
-    }
-
-    .launched-by-row {
       display: none;
     }
 
@@ -612,11 +386,6 @@
       white-space: nowrap;
       text-align: right;
       width: max-content;
-    }
-
-    .token-links {
-      gap: 0.3rem;
-      margin-top: 0.2rem;
     }
 
   }

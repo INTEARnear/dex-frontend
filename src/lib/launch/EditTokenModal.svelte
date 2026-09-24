@@ -8,14 +8,13 @@
   import ErrorModal from "../ErrorModal.svelte";
   import LaunchDataFields from "./LaunchDataFields.svelte";
   import { assertOutcomesSucceeded } from "../pool/shared";
-  import type { LaunchDataArgs, LaunchApiTokenData } from "./types";
-
-  const LAUNCH_CONTRACT_ID = "launch.intear.near";
+  import type { LaunchDataArgs, LaunchInfo } from "./types";
+  import { getLaunchContractId } from "./launchContracts";
 
   interface Props {
     isOpen: boolean;
     tokenAccountId: string;
-    initialLaunchData: LaunchApiTokenData;
+    initialLaunchData: LaunchInfo;
     onClose: () => void;
     onSuccess: () => void;
   }
@@ -152,7 +151,7 @@
 
       const transactions = [
         {
-          receiverId: LAUNCH_CONTRACT_ID,
+          receiverId: getLaunchContractId(tokenAccountId),
           actions: [
             {
               type: "FunctionCall" as const,

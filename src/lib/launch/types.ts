@@ -1,5 +1,3 @@
-import type { TokenInfo } from "../types";
-
 export type LaunchSortBy = "newest" | "marketCap" | "volume";
 
 export interface LaunchDataArgs {
@@ -10,16 +8,10 @@ export interface LaunchDataArgs {
   description: string | null;
 }
 
-export interface LaunchApiTokenData extends LaunchDataArgs {
+/** Result of the launch contract's `get_launch_data` view method. */
+export interface LaunchInfo extends LaunchDataArgs {
   launched_by: string;
   launched_at_ns: number;
-}
-
-export type LaunchApiResponse = Record<string, LaunchApiTokenData>;
-
-export interface LaunchToken {
-  token: TokenInfo;
-  launchData: LaunchApiTokenData;
 }
 
 export interface LaunchTradeSwapEvent {

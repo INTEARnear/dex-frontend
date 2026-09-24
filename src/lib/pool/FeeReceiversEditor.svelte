@@ -1,8 +1,15 @@
 <script lang="ts">
   import { fly } from "svelte/transition";
   import { tokenHubStore } from "../tokenHubStore";
-  import type { XykFeeReceiver } from "../types";
-  import { User, CirclePlus, Wallet, Plus, X, ArrowRight } from "lucide-svelte";
+  import {
+    User,
+    Users,
+    CirclePlus,
+    Wallet,
+    Plus,
+    X,
+    ArrowRight,
+  } from "lucide-svelte";
   import ScheduledFeeChart, {
     type ScheduledFeeChartPoint,
   } from "./ScheduledFeeChart.svelte";
@@ -11,6 +18,7 @@
     nowDateTimeLocal,
     timestampNanosToDateTimeLocal,
     tryDateTimeLocalToTimestampNanos,
+    type XykFeeReceiverDraft,
   } from "./feeUtils";
 
   export type FeeAmountDraft =
@@ -29,7 +37,7 @@
       };
 
   export interface FeeReceiverDraft {
-    receiver: XykFeeReceiver;
+    receiver: XykFeeReceiverDraft;
     amount: FeeAmountDraft;
   }
 
@@ -54,8 +62,12 @@
   interface Props {
     accountId: string | null;
     initialReceivers?: FeeReceiverDraft[];
+    /** Offer the "Holders" receiver type. Only the launch contract supports it. */
+    allowHolders?: boolean;
     onChange: (state: FeeReceiversEditorState) => void;
   }
+
+  type ReceiverType = "account" | "pool" | "holders";
 
   function getScheduledDurationNs(amount: FeeAmountDraft): number | null {
     if (amount.kind !== "scheduled") return null;
@@ -119,6 +131,7 @@
     initialReceivers = [
       { receiver: "Pool", amount: { kind: "fixed", percentage: "0.1" } },
     ],
+    allowHolders = false,
     onChange,
   }: Props = $props();
 
@@ -130,9 +143,22 @@
   }
 
   function isAccountReceiver(
-    receiver: XykFeeReceiver,
+    receiver: XykFeeReceiverDraft,
   ): receiver is { Account: string } {
     return typeof receiver !== "string" && "Account" in receiver;
+  }
+
+  function getReceiverType(receiver: XykFeeReceiverDraft): ReceiverType {
+    if (receiver === "Pool") return "pool";
+    if (receiver === "Holders") return "holders";
+    return "account";
+  }
+
+  function getNextReceiverType(receiver: XykFeeReceiverDraft): ReceiverType {
+    const current = getReceiverType(receiver);
+    if (current === "account") return "pool";
+    if (current === "pool" && allowHolders) return "holders";
+    return "account";
   }
 
   function toFormItem(draft: FeeReceiverDraft): FeeReceiverFormItem {
@@ -140,7 +166,7 @@
       id: createFeeReceiverId(),
       receiver: draft.receiver,
       amount: normalizeAmount(draft.amount),
-      isValid: draft.receiver === "Pool" ? true : null,
+      isValid: isAccountReceiver(draft.receiver) ? null : true,
       isChecking: false,
       warning: null,
       validationRequestId: 0,
@@ -279,13 +305,13 @@
     feeReceivers = feeReceivers.filter((_, i) => i !== index);
   }
 
-  function setReceiverType(index: number, type: "account" | "pool") {
+  function setReceiverType(index: number, type: ReceiverType) {
     const current = feeReceivers[index];
     if (!current) return;
 
-    if (type === "pool") {
+    if (type === "pool" || type === "holders") {
       feeReceivers[index] = {
-        receiver: "Pool",
+        receiver: type === "pool" ? "Pool" : "Holders",
         amount: current.amount,
         isValid: true,
         isChecking: false,
@@ -541,6 +567,8 @@
       let key: string;
       if (item.receiver === "Pool") {
         key = "pool";
+      } else if (item.receiver === "Holders") {
+        key = "holders";
       } else {
         const acc = item.receiver.Account;
         if (!acc) continue;
@@ -582,7 +610,7 @@
 
   const areAllReceiversValid = $derived.by(() =>
     feeReceivers.every((item) => {
-      if (item.receiver === "Pool") {
+      if (!isAccountReceiver(item.receiver)) {
         return isAmountValid(item.amount);
       }
       return (
@@ -626,15 +654,16 @@
                 type="button"
                 class="type-selector"
                 class:is-pool={item.receiver === "Pool"}
+                class:is-holders={item.receiver === "Holders"}
                 onclick={() =>
-                  setReceiverType(
-                    index,
-                    item.receiver === "Pool" ? "account" : "pool",
-                  )}
+                  setReceiverType(index, getNextReceiverType(item.receiver))}
               >
                 {#if item.receiver === "Pool"}
                   <CirclePlus size={16} />
                   <span>Pool</span>
+                {:else if item.receiver === "Holders"}
+                  <Users size={16} />
+                  <span>Holders</span>
                 {:else}
                   <User size={16} />
                   <span>Account</span>
@@ -969,16 +998,25 @@
     flex: 1;
   }
 
+  .type-selector.is-holders {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: var(--text-secondary);
+    flex: 1;
+  }
+
   .receiver-type {
     flex-shrink: 0;
     display: flex;
   }
 
-  .receiver-row:has(.type-selector.is-pool) .receiver-type {
+  .receiver-row:has(.type-selector.is-pool) .receiver-type,
+  .receiver-row:has(.type-selector.is-holders) .receiver-type {
     flex: 1;
   }
 
-  .receiver-row:has(.type-selector.is-pool) .receiver-target {
+  .receiver-row:has(.type-selector.is-pool) .receiver-target,
+  .receiver-row:has(.type-selector.is-holders) .receiver-target {
     display: none;
   }
 
@@ -1363,7 +1401,7 @@
   }
 
   @media (--mobile) {
-    .type-selector:not(.is-pool) span {
+    .type-selector:not(.is-pool):not(.is-holders) span {
       display: none;
     }
 
