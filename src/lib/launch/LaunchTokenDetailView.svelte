@@ -26,7 +26,7 @@
 
   let { token, launchData, marketCap, onEditClick }: Props = $props();
 
-  const REWARDS_REFRESH_INTERVAL_MS = 10_000;
+  const REWARDS_REFRESH_INTERVAL_MS = 500;
   const MIN_CLAIMABLE_REWARDS_YOCTO = 10n ** 22n; // 0.01 NEAR
   const NEAR_YOCTO_PER_MILLI = 10n ** 21n;
 

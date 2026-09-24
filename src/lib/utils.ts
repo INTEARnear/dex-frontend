@@ -4,7 +4,7 @@ import type { Token } from "./types";
 export const PRICES_API = "https://prices.intear.tech";
 export const ROUTER_API = "https://router.intear.tech";
 export const DEX_BACKEND_API = "https://dex-backend.intear.tech";
-export const NEAR_RPC_URL = "https://rpc.intea.rs";
+export const NEAR_RPC_URL = "https://rpc.intea.rs/2tH3NjuAtbWdCCw336MBnMHrRuoKrFFsaHF4M9HkHPUdw8gZxF2zzbZqtf";
 
 /**
  * Call a view method of a NEAR contract through RPC and parse its JSON result.
